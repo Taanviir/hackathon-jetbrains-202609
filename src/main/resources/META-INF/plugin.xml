@@ -1,0 +1,27 @@
+<idea-plugin>
+  <id>dev.intellijev</id>
+  <name>IntelliJev</name>
+  <vendor email="team@intellijev.dev" url="https://github.com">IntelliJev</vendor>
+  <description><![CDATA[
+    Transparent local prototype for task context and related-bug discovery.
+  ]]></description>
+
+  <depends>com.intellij.modules.platform</depends>
+  <depends>com.intellij.java</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <toolWindow id="IntelliJev" anchor="right" factoryClass="dev.intellijev.ui.IntelliJevToolWindowFactory"/>
+    <projectService serviceImplementation="dev.intellijev.core.IntelliJevProjectService"/>
+    <applicationService serviceImplementation="dev.intellijev.core.IntelliJevSettings"/>
+  </extensions>
+
+  <actions>
+    <action id="dev.intellijev.OpenPanelAction" class="dev.intellijev.actions.OpenPanelAction" text="Open IntelliJev" description="Open the IntelliJev decision workspace"/>
+    <action id="dev.intellijev.FindContextAction" class="dev.intellijev.actions.FindContextAction" text="Find task context" description="Find relevant project context for a task">
+      <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+    </action>
+    <action id="dev.intellijev.FindBugTwinsAction" class="dev.intellijev.actions.FindBugTwinsAction" text="Find related bugs from selected fix" description="Find implementations that may share this bug">
+      <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+    </action>
+  </actions>
+</idea-plugin>
