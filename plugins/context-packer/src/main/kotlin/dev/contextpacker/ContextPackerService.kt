@@ -46,6 +46,14 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
     private data class Cached(val stamp: Long, val doc: FileDoc)
 
     private val cache = ConcurrentHashMap<String, Cached>()
+
+    /**
+     * Pass 1 reads the spike's regex sketches by default: they're what every number in
+     * spike/RESULTS.md was measured with, and they take under a second for 2,000 files. Structure
+     * View sketches read better but cost ~19 ms a file cold (Kotlin analysis), 40 s+ on a fresh IDE,
+     * and are unmeasured. CONTEXT_PACKER_PSI_SKETCH=1 turns them on.
+     */
+    private val psiSketches = System.getenv("CONTEXT_PACKER_PSI_SKETCH") == "1"
     @Volatile private var jev: JevClient? = null
 
     /** Jev input tokens spent in this IDE session, against a cap so a looping agent can't drain an account. */
@@ -127,7 +135,7 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         cache[file.path]?.takeIf { it.stamp == stamp }?.let { return it.doc }
         val text = document?.text ?: runCatching { VfsUtilCore.loadText(file) }.getOrNull() ?: return null
         val path = base?.let { VfsUtilCore.getRelativePath(file, it) } ?: file.path
-        val sketch = try {
+        val sketch = if (!psiSketches) RegexSketcher.sketch(path, text) else try {
             PsiManager.getInstance(project).findFile(file)?.let { Sketcher.sketch(it, path, text) }
         } catch (e: CancellationException) {
             throw e
