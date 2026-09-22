@@ -1,6 +1,10 @@
 package dev.contextpacker.laya
 
 import com.sun.net.httpserver.HttpServer
+import dev.contextpacker.pack.FileDoc
+import dev.contextpacker.pack.PackConfig
+import dev.contextpacker.pack.Packer
+import dev.contextpacker.pack.ScorerUnavailableException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
@@ -23,6 +27,7 @@ import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class LayaRelevanceTest {
     private data class Request(
@@ -159,7 +164,7 @@ class LayaRelevanceTest {
     @Test
     fun `reports non 200 responses without retrying`() {
         val scorer = LayaRelevance(serve { 503 to """{"detail":"unavailable"}""" })
-        val error = assertThrows(LayaException::class.java) {
+        val error = assertThrows(ScorerUnavailableException::class.java) {
             runBlocking { scorer.score("task", listOf("src/A.kt" to "source")) }
         }
         assertTrue(error.message.orEmpty().contains("HTTP 503"))
@@ -171,7 +176,7 @@ class LayaRelevanceTest {
     fun `reports connection failures as local Laya errors`() {
         val unusedPort = ServerSocket(0).use { it.localPort }
         val scorer = LayaRelevance("http://127.0.0.1:$unusedPort/api/predict?token=private-token", timeout = Duration.ofSeconds(2))
-        val error = assertThrows(LayaException::class.java) {
+        val error = assertThrows(ScorerUnavailableException::class.java) {
             runBlocking { scorer.score("task", listOf("src/A.kt" to "source")) }
         }
         assertTrue(error.message.orEmpty().contains("Could not score with local Laya"))
@@ -180,6 +185,43 @@ class LayaRelevanceTest {
         assertNotNull(scorer.calls.single().error)
         assertFalse(scorer.calls.single().error.orEmpty().contains("private-token"))
         assertFalse(scorer.calls.single().usageKnown)
+    }
+
+    @Test
+    fun `server outage cancels the pack queue and a later pack can recover`() {
+        val available = AtomicBoolean(false)
+        val scorer = LayaRelevance(serve { if (available.get()) 200 to answer("0.6") else 503 to "{}" })
+        val docs = (1..20).map { FileDoc("src/File$it.kt", "sketch", "source") }
+        val packer = Packer(scorer, PackConfig(batch = 1, pool = 2, perCall = 1))
+        assertThrows(ScorerUnavailableException::class.java) {
+            runBlocking { withTimeout(5_000) { packer.pack("change files", docs) } }
+        }
+        assertEquals("queued requests must be cancelled after the first outage", 1, requests.size)
+        available.set(true)
+        val recovered = runBlocking { packer.pack("change files", docs.take(2)) }
+        assertEquals(0, recovered.failedBatches)
+        assertEquals(2, recovered.files.size)
+    }
+
+    @Test
+    fun `request timeout aborts queued scoring instead of waiting once per file`() {
+        val release = CountDownLatch(1)
+        val endpoint = serve {
+            release.await(3, TimeUnit.SECONDS)
+            200 to answer("0.6")
+        }
+        val scorer = LayaRelevance(endpoint, timeout = Duration.ofMillis(150))
+        val docs = (1..20).map { FileDoc("src/File$it.kt", "sketch", "source") }
+        try {
+            assertThrows(ScorerUnavailableException::class.java) {
+                runBlocking {
+                    withTimeout(2_000) { Packer(scorer, PackConfig(batch = 1)).pack("change files", docs) }
+                }
+            }
+            assertEquals(1, requests.size)
+        } finally {
+            release.countDown()
+        }
     }
 
     @Test

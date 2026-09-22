@@ -8,6 +8,9 @@ import com.intellij.ui.content.ContentFactory
 
 class ContextPackerToolWindowFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        toolWindow.contentManager.addContent(ContentFactory.getInstance().createContent(PackerPanel(project), "", false))
+        val panel = PackerPanel(project)
+        val content = ContentFactory.getInstance().createContent(panel, "", false)
+        content.setDisposer(panel)
+        toolWindow.contentManager.addContent(content)
     }
 }

@@ -47,6 +47,9 @@ fun interface RelevanceScorer {
     suspend fun score(task: String, items: List<Pair<String, String>>): Map<String, Double>
 }
 
+/** A provider-wide failure: cancel the pack rather than retrying the same outage for every file. */
+open class ScorerUnavailableException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
+
 /**
  * The pipeline measured in spike/RESULTS.md. Jev alone on sketches loses to keyword search, but as a
  * re-ranker over a pooled shortlist, reading full source and fused with BM25, it lifts recall@10 on
@@ -123,6 +126,8 @@ class Packer(private val scorer: RelevanceScorer, private val config: PackConfig
                     }
                     Result.success(response)
                 } catch (e: CancellationException) {
+                    throw e
+                } catch (e: ScorerUnavailableException) {
                     throw e
                 } catch (e: Exception) {
                     Result.failure(e)
