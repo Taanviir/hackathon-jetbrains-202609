@@ -68,6 +68,15 @@ class LayaServerTest(unittest.TestCase):
         self.server.server_close()
         self.thread.join(timeout=2)
 
+    def enable_cache(self, capacity: int) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=2)
+        self.server = laya_server.create_server(self.model, port=0, response_cache=capacity)
+        self.port = self.server.server_address[1]
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
     def request(self, method: str, path: str, payload: object = None, headers: dict | None = None):
         body = None if payload is None else json.dumps(payload).encode("utf-8")
         options = dict(headers or {})
@@ -185,8 +194,141 @@ class LayaServerTest(unittest.TestCase):
         self.assertEqual(1, self.model.max_active)
         self.assertEqual(1, len(set(self.model.thread_ids)), "all inference must reuse one persistent worker thread")
 
+    def test_default_has_no_response_cache_or_cache_metadata(self) -> None:
+        first = self.request("POST", "/api/predict", PAYLOAD)[1]
+        second = self.request("POST", "/api/predict", PAYLOAD)[1]
+        self.assertEqual(2, len(self.model.calls))
+        for result in (first, second):
+            self.assertEqual(23, result["usage"]["input_tokens"])
+            self.assertNotIn("cache_hit", result)
+            self.assertNotIn("cached_input_tokens", result["usage"])
+        self.assertNotIn("response_cache", self.request("GET", "/api/health")[1])
+
+    def test_exact_repeat_avoids_inference_and_reports_saved_tokens(self) -> None:
+        self.enable_cache(2)
+        first = self.request("POST", "/api/predict", PAYLOAD)[1]
+        second = self.request("POST", "/api/predict", PAYLOAD)[1]
+        self.assertEqual(1, len(self.model.calls))
+        self.assertEqual(False, first["cache_hit"])
+        self.assertEqual(0, first["usage"]["cached_input_tokens"])
+        self.assertEqual(23, first["usage"]["input_tokens"])
+        self.assertEqual(True, second["cache_hit"])
+        self.assertEqual(23, second["usage"]["cached_input_tokens"])
+        self.assertEqual({"input_tokens": 0, "output_tokens": 0, "cached_input_tokens": 23}, second["usage"])
+        self.assertEqual({"capacity": 2, "hits": 1, "entries": 1}, self.request("GET", "/api/health")[1]["response_cache"])
+        keys = list(self.server.response_cache_entries)
+        self.assertEqual(64, len(keys[0]))
+        self.assertNotIn(PAYLOAD["state"], keys[0])
+
+    def test_health_cache_snapshot_does_not_wait_for_inference(self) -> None:
+        self.enable_cache(2)
+        entered = threading.Event()
+        release = threading.Event()
+        normal_predict = self.model.predict
+
+        def slow_predict(state, questions):
+            entered.set()
+            release.wait(5)
+            return normal_predict(state, questions)
+
+        self.model.predict = slow_predict
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            prediction = pool.submit(self.request, "POST", "/api/predict", PAYLOAD)
+            try:
+                self.assertTrue(entered.wait(2))
+                health = pool.submit(self.request, "GET", "/api/health")
+                self.assertEqual({"capacity": 2, "hits": 0, "entries": 0}, health.result(timeout=1)[1]["response_cache"])
+            finally:
+                release.set()
+            self.assertEqual(200, prediction.result(timeout=2)[0])
+
+    def test_different_source_or_question_order_misses(self) -> None:
+        self.enable_cache(4)
+        first = self.request("POST", "/api/predict", PAYLOAD)[1]
+        changed_source = {**PAYLOAD, "state": "a different source body"}
+        second = self.request("POST", "/api/predict", changed_source)[1]
+        two_questions = {**PAYLOAD, "questions": {
+            "one": QUESTION["relevant"],
+            "two": {"type": "noul", "instructions": "Is this safe?"},
+        }}
+        third = self.request("POST", "/api/predict", two_questions)[1]
+        reordered = {**two_questions, "questions": dict(reversed(list(two_questions["questions"].items())))}
+        fourth = self.request("POST", "/api/predict", reordered)[1]
+        self.assertTrue(all(not result["cache_hit"] for result in (first, second, third, fourth)))
+        self.assertEqual(4, len(self.model.calls))
+
+    def test_lru_evicts_oldest_exact_response(self) -> None:
+        self.enable_cache(2)
+        changed = {**PAYLOAD, "state": "another source"}
+        third_source = {**PAYLOAD, "state": "third source"}
+        self.request("POST", "/api/predict", PAYLOAD)
+        self.request("POST", "/api/predict", changed)
+        self.assertEqual(True, self.request("POST", "/api/predict", PAYLOAD)[1]["cache_hit"])
+        self.request("POST", "/api/predict", third_source)
+        repeated = self.request("POST", "/api/predict", changed)[1]
+        self.assertEqual(False, repeated["cache_hit"])
+        self.assertEqual(4, len(self.model.calls))
+        self.assertEqual({"capacity": 2, "hits": 1, "entries": 2}, self.request("GET", "/api/health")[1]["response_cache"])
+
+    def test_simultaneous_exact_requests_infer_once(self) -> None:
+        self.enable_cache(2)
+        self.model.delay = 0.03
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            results = list(pool.map(lambda _: self.request("POST", "/api/predict", PAYLOAD)[1], range(5)))
+        self.assertEqual(1, len(self.model.calls))
+        self.assertEqual(1, sum(not result["cache_hit"] for result in results))
+        self.assertEqual(4, sum(result["cache_hit"] for result in results))
+
+    def test_failed_or_nonfinite_result_is_not_cached(self) -> None:
+        self.enable_cache(2)
+        normal_predict = self.model.predict
+        attempts = 0
+
+        def flaky(state, questions):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise RuntimeError("private source text")
+            if attempts == 2:
+                result = normal_predict(state, questions)
+                result["answers"]["relevant"]["noul"] = float("nan")
+                return result
+            if attempts == 3:
+                return {"error": "model could not answer"}
+            return normal_predict(state, questions)
+
+        self.model.predict = flaky
+        self.assertEqual(500, self.request("POST", "/api/predict", PAYLOAD)[0])
+        self.assertEqual(500, self.request("POST", "/api/predict", PAYLOAD)[0])
+        self.assertEqual(200, self.request("POST", "/api/predict", PAYLOAD)[0])
+        fourth = self.request("POST", "/api/predict", PAYLOAD)[1]
+        fifth = self.request("POST", "/api/predict", PAYLOAD)[1]
+        self.assertEqual(4, attempts)
+        self.assertEqual(False, fourth["cache_hit"])
+        self.assertEqual(True, fifth["cache_hit"])
+        self.assertEqual(1, self.request("GET", "/api/health")[1]["response_cache"]["entries"])
+
+    def test_cached_response_is_detached_from_model_and_prior_result(self) -> None:
+        self.enable_cache(2)
+        shared = self.model.predict(PAYLOAD["state"], QUESTION)
+        self.model.calls.clear()
+        self.model.predict = lambda _state, _questions: shared
+        first = self.server.prediction_response(PAYLOAD["state"], QUESTION)
+        first["answers"]["relevant"]["noul"] = 0.1
+        shared["answers"]["relevant"]["noul"] = 0.2
+        second = self.server.prediction_response(PAYLOAD["state"], QUESTION)
+        self.assertEqual(0.75, second["answers"]["relevant"]["noul"])
+        self.assertEqual(23, shared["usage"]["input_tokens"])
+        self.assertEqual(0, second["usage"]["input_tokens"])
+
 
 class CliTest(unittest.TestCase):
+    def test_response_cache_capacity_is_bounded(self) -> None:
+        for capacity in (-1, 1025):
+            with self.subTest(capacity=capacity), redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    laya_server.main(["--response-cache", str(capacity)])
+
     def test_cli_sets_cache_and_offline_mode_before_loading(self) -> None:
         class NoopServer:
             server_address = (laya_server.HOST, 8770)

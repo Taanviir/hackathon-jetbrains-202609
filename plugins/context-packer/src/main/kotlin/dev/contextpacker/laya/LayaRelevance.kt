@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
@@ -64,6 +65,8 @@ class LayaRelevance(
         val started = System.nanoTime()
         var tokens = 0
         var usageKnown = false
+        var cacheHit = false
+        var cachedTokens = 0
         try {
             val response = http.sendAsync(request, HttpResponse.BodyHandlers.ofString()).await()
             if (response.statusCode() != 200) throw ScorerUnavailableException(
@@ -74,14 +77,18 @@ class LayaRelevance(
             val parsedTokens = tokenValue?.takeUnless { it.isString }?.intOrNull?.takeIf { it >= 0 }
             tokens = parsedTokens ?: 0
             usageKnown = parsedTokens != null
+            cacheHit = (root["cache_hit"] as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull == true
+            val cachedValue = (root["usage"] as? JsonObject)?.get("cached_input_tokens") as? JsonPrimitive
+            cachedTokens = if (cacheHit) cachedValue?.takeUnless { it.isString }?.intOrNull?.takeIf { it >= 0 } ?: 0 else 0
             val probability = root["answers"]?.jsonObject?.get("relevant")?.jsonObject
                 ?.get("noul")?.jsonPrimitive?.takeUnless { it.isString }?.doubleOrNull
             if (probability == null || !probability.isFinite() || probability !in 0.0..1.0) {
                 throw LayaException("Local Laya returned no valid relevance probability.")
             }
-            calls += CallStat(elapsed(started), tokens, 1, null, usageKnown)
+            calls += CallStat(elapsed(started), tokens, 1, null, usageKnown, cacheHit, cachedTokens)
             return probability
         } catch (e: CancellationException) {
+            calls += CallStat(elapsed(started), 0, 1, "Local Laya request cancelled", usageKnown = false)
             throw e
         } catch (e: Exception) {
             val failure = when (e) {
@@ -91,7 +98,7 @@ class LayaRelevance(
                 )
                 else -> LayaException("Local Laya returned an invalid response (${e::class.simpleName}).", e)
             }
-            calls += CallStat(elapsed(started), tokens, 1, failure.message, usageKnown)
+            calls += CallStat(elapsed(started), tokens, 1, failure.message, usageKnown, cacheHit, cachedTokens)
             throw failure
         }
     }

@@ -180,6 +180,8 @@ data class CallStat(
     val questions: Int,
     val error: String?,
     val usageKnown: Boolean = true,
+    val cacheHit: Boolean = false,
+    val cachedInputTokens: Int = 0,
 )
 
 class JevException(val status: Int?, message: String) : RuntimeException(message)

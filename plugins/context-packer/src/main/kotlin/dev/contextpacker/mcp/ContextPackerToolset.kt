@@ -89,6 +89,9 @@ class ContextPackerToolset : McpToolset {
                 ?: "token usage and API fee are unavailable. ")
         })
         if (r.failedBatches > 0) append("WARNING: ${r.failedBatches} scoring batches failed; ranking is incomplete. ")
+        if (report.provider == DecisionProvider.LAYA) {
+            append("${report.jevCalls} local HTTP requests; ${report.cachedRequests} served from the optional response cache. ")
+        }
         append(when (report.provider) {
             DecisionProvider.KEYWORDS -> "Ranks come from BM25 over paths and full source. "
             DecisionProvider.LAYA -> "Scores combine model relevance and keyword rank. "

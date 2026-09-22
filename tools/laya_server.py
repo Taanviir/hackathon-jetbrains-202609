@@ -10,7 +10,9 @@ module does not import Laya, load weights, or access the network.
 from __future__ import annotations
 
 import argparse
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import json
 import os
 import re
@@ -26,6 +28,8 @@ DEFAULT_PORT = 8770
 DEFAULT_REVISION = "1c5edc17a7acd8701df6fc341c0d179f1c62c982"
 MAX_BODY = 1 << 20
 MAX_QUESTIONS = 32
+MAX_RESPONSE_CACHE = 1024
+MAX_CACHED_RESULT_BYTES = 64 << 10
 DEFAULT_CACHE = Path(__file__).resolve().parents[1] / "plugins" / "context-packer" / ".cache" / "laya"
 
 
@@ -111,16 +115,86 @@ class EnglishModel:
 class LocalServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, model: object, port: int = DEFAULT_PORT) -> None:
+    def __init__(self, model: object, port: int = DEFAULT_PORT, response_cache: int = 0) -> None:
+        if not 0 <= response_cache <= MAX_RESPONSE_CACHE:
+            raise ValueError(f"response_cache must be between 0 and {MAX_RESPONSE_CACHE}")
         super().__init__((HOST, port), Handler)
         self.model = model
         self.inference_lock = threading.Lock()
+        self.cache_lock = threading.Lock()
+        self.cache_capacity = response_cache
+        self.cache_hits = 0
+        # Keys contain only SHA-256 digests. Values are JSON snapshots, never mutable model objects.
+        self.response_cache_entries: OrderedDict[str, str] = OrderedDict()
         # HTTP connections get separate threads. Keep all PyTorch inference on one persistent
         # worker to avoid repeatedly constructing per-thread CPU runtime resources.
         self.inference_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="laya-inference")
 
     def predict(self, state: str | dict, questions: dict) -> dict:
         return self.inference_worker.submit(self.model.predict, state, questions).result()
+
+    def prediction_response(self, state: str | dict, questions: dict) -> dict:
+        with self.inference_lock:
+            started = time.perf_counter()
+            key = None
+            if self.cache_capacity:
+                # The effective model is always English. Compact JSON preserves state/question
+                # object order, unlike sort_keys=True; only the digest stays in memory as a key.
+                effective = json.dumps(["english", state, questions], ensure_ascii=False, separators=(",", ":"))
+                key = hashlib.sha256(effective.encode("utf-8")).hexdigest()
+                with self.cache_lock:
+                    snapshot = self.response_cache_entries.get(key)
+                    if snapshot is not None:
+                        self.response_cache_entries.move_to_end(key)
+                        self.cache_hits += 1
+                if snapshot is not None:
+                    result = json.loads(snapshot)
+                    usage = result.get("usage")
+                    tokens = usage.get("input_tokens") if isinstance(usage, dict) else None
+                    result["usage"] = {
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "cached_input_tokens": tokens if type(tokens) is int and tokens >= 0 else None,
+                    }
+                    result["cache_hit"] = True
+                    result.setdefault("routing", {"model": "english"})
+                    result["latency_ms"] = round((time.perf_counter() - started) * 1_000, 1)
+                    result["device"] = self.model.device
+                    return result
+
+            result = dict(self.predict(state, questions))
+            elapsed_ms = round((time.perf_counter() - started) * 1_000, 1)
+            if self.cache_capacity:
+                # Validate and detach before caching. Non-finite or non-JSON model output is a
+                # request failure, and never poisons a later exact-match request.
+                snapshot = json.dumps(result, ensure_ascii=False, allow_nan=False)
+                result = json.loads(snapshot)
+                answers = result.get("answers")
+                cacheable = isinstance(answers, dict) and all(isinstance(answers.get(qid), dict) for qid in questions) and "error" not in result
+                if cacheable and len(snapshot.encode("utf-8")) <= MAX_CACHED_RESULT_BYTES:
+                    with self.cache_lock:
+                        self.response_cache_entries[key] = snapshot
+                        self.response_cache_entries.move_to_end(key)
+                        if len(self.response_cache_entries) > self.cache_capacity:
+                            self.response_cache_entries.popitem(last=False)
+                result["cache_hit"] = False
+                usage = result.get("usage")
+                if not isinstance(usage, dict):
+                    usage = {}
+                    result["usage"] = usage
+                usage["cached_input_tokens"] = 0
+            result.setdefault("routing", {"model": "english"})
+            result["latency_ms"] = elapsed_ms
+            result["device"] = self.model.device
+            return result
+
+    def cache_status(self) -> dict:
+        with self.cache_lock:
+            return {
+                "capacity": self.cache_capacity,
+                "hits": self.cache_hits,
+                "entries": len(self.response_cache_entries),
+            }
 
     def server_close(self) -> None:
         super().server_close()
@@ -167,13 +241,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/health":
             model = self.server.model
-            self._send(200, {
+            body = {
                 "models": {"english": "ready"},
                 "version": model.version,
                 "torch": model.torch_version,
                 "device": model.device,
                 "checkpoint": getattr(model, "checkpoint", None),
-            })
+            }
+            if self.server.cache_capacity:
+                body["response_cache"] = self.server.cache_status()
+            self._send(200, body)
         elif self.path == "/api/predict":
             self._send(405, {"error": "method not allowed"})
         else:
@@ -226,13 +303,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(400, {"error": "invalid prediction request"})
             return
         try:
-            with self.server.inference_lock:
-                started = time.perf_counter()
-                result = dict(self.server.predict(state, questions))
-                elapsed_ms = round((time.perf_counter() - started) * 1_000, 1)
-            result.setdefault("routing", {"model": "english"})
-            result["latency_ms"] = elapsed_ms
-            result["device"] = self.server.model.device
+            result = self.server.prediction_response(state, questions)
             self._send(200, result)
         except Exception:
             self._send(500, {"error": "prediction failed"})
@@ -242,9 +313,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(405, {"error": "method not allowed"})
 
 
-def create_server(model: object, port: int = DEFAULT_PORT) -> LocalServer:
+def create_server(model: object, port: int = DEFAULT_PORT, response_cache: int = 0) -> LocalServer:
     """Inject a fake model in tests without importing Laya or loading any weights."""
-    return LocalServer(model, port)
+    return LocalServer(model, port, response_cache)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -253,11 +324,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--revision", default=DEFAULT_REVISION, help="40-character model checkpoint commit (pinned by default)")
     parser.add_argument("--download", action="store_true", help="allow fetching English weights into --cache")
+    parser.add_argument("--response-cache", type=int, default=0, metavar="N", help="cache 0 to 1024 exact responses in memory (default: off)")
     args = parser.parse_args(argv)
     if not 1 <= args.port <= 65_535:
         parser.error("--port must be between 1 and 65535")
     if not re.fullmatch(r"[0-9a-fA-F]{40}", args.revision):
         parser.error("--revision must be a 40-character checkpoint commit, not a moving branch")
+    if not 0 <= args.response_cache <= MAX_RESPONSE_CACHE:
+        parser.error(f"--response-cache must be between 0 and {MAX_RESPONSE_CACHE}")
     cache = args.cache.expanduser().resolve()
     cache.mkdir(parents=True, exist_ok=True)
     os.environ["HF_HOME"] = str(cache)
@@ -273,7 +347,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as error:
         print(f"Could not load English Laya ({type(error).__name__}). Check --cache or pass --download.", file=sys.stderr)
         return 1
-    with create_server(model, args.port) as server:
+    with create_server(model, args.port, args.response_cache) as server:
         print(f"English Laya ready at http://{HOST}:{server.server_address[1]}", flush=True)
         try:
             server.serve_forever()
