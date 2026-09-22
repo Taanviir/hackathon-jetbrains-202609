@@ -2,14 +2,15 @@ package dev.contextpacker.llm
 
 import kotlinx.coroutines.future.await
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.net.URI
 import java.net.http.HttpClient
@@ -42,13 +43,20 @@ class ChatClient(
         val response = http.sendAsync(request, HttpResponse.BodyHandlers.ofString()).await()
         check(response.statusCode() == 200) { "LLM call failed, HTTP ${response.statusCode()}: ${response.body().take(300)}" }
         val root = Json.parseToJsonElement(response.body()).jsonObject
-        val usage = root["usage"]?.jsonObject
+        val choice = (root["choices"] as? JsonArray)?.firstOrNull() as? JsonObject
+        val message = choice?.get("message") as? JsonObject
+        val content = (message?.get("content") as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
+        check(!content.isNullOrBlank()) { "The coding model returned no text answer. Check the model configuration and try again." }
+        val usage = root["usage"] as? JsonObject
+        fun tokenCount(name: String): Int? = (usage?.get(name) as? JsonPrimitive)
+            ?.takeUnless { it.isString }?.intOrNull?.takeIf { it >= 0 }
         return ChatReply(
-            content = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.get("message")?.jsonObject
-                ?.get("content")?.jsonPrimitive?.contentOrNull.orEmpty(),
-            promptTokens = usage?.get("prompt_tokens")?.jsonPrimitive?.intOrNull ?: 0,
-            completionTokens = usage?.get("completion_tokens")?.jsonPrimitive?.intOrNull ?: 0,
-            cost = usage?.get("cost")?.jsonPrimitive?.doubleOrNull,
+            content = content,
+            promptTokens = tokenCount("prompt_tokens"),
+            completionTokens = tokenCount("completion_tokens"),
+            cost = (usage?.get("cost") as? JsonPrimitive)?.takeUnless { it.isString }?.doubleOrNull
+                ?.takeIf { it.isFinite() && it >= 0 },
+            truncated = (choice?.get("finish_reason") as? JsonPrimitive)?.contentOrNull == "length",
         )
     }
 
@@ -58,4 +66,10 @@ class ChatClient(
     }
 }
 
-data class ChatReply(val content: String, val promptTokens: Int, val completionTokens: Int, val cost: Double?)
+data class ChatReply(
+    val content: String,
+    val promptTokens: Int?,
+    val completionTokens: Int?,
+    val cost: Double?,
+    val truncated: Boolean = false,
+)
