@@ -140,6 +140,23 @@ class LayaRelevanceTest {
     }
 
     @Test
+    fun `cached answers retain scores and separate reused tokens from inference usage`() = runBlocking {
+        var requestNumber = 0
+        val scorer = LayaRelevance(serve {
+            200 to if (requestNumber++ == 0) answer("0.75") else
+                """{"answers":{"relevant":{"noul":0.75}},"usage":{"input_tokens":0,"cached_input_tokens":17},"cache_hit":true}"""
+        })
+        val first = scorer.score("retry", listOf("src/Retry.kt" to "fun retry() {}"))
+        val second = scorer.score("retry", listOf("src/Retry.kt" to "fun retry() {}"))
+
+        assertEquals(first, second)
+        assertEquals(listOf(false, true), scorer.calls.map { it.cacheHit })
+        assertEquals(listOf(17, 0), scorer.calls.map { it.inputTokens })
+        assertEquals(listOf(0, 17), scorer.calls.map { it.cachedInputTokens })
+        assertTrue(scorer.calls.all { it.usageKnown })
+    }
+
+    @Test
     fun `rejects missing malformed and out of range probabilities`() {
         val bodies = listOf(
             """{"answers":{}}""",
@@ -236,7 +253,7 @@ class LayaRelevanceTest {
     }
 
     @Test
-    fun `cancellation propagates without recording an ordinary failure`() = runBlocking {
+    fun `cancellation propagates and records dispatched request with unknown usage`() = runBlocking {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
         val endpoint = serve {
@@ -252,7 +269,9 @@ class LayaRelevanceTest {
             }
             scoring.cancelAndJoin()
             assertTrue(scoring.isCancelled)
-            assertTrue(scorer.calls.isEmpty())
+            assertEquals(1, scorer.calls.size)
+            assertFalse(scorer.calls.single().usageKnown)
+            assertEquals("Local Laya request cancelled", scorer.calls.single().error)
         } finally {
             release.countDown()
             scoring.cancelAndJoin()

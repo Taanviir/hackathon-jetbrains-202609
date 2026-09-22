@@ -53,6 +53,25 @@ Invoke-RestMethod http://127.0.0.1:8770/api/health
 The response must contain `models.english: ready`. Starting a second server on the
 same port fails; use the existing instance or stop its terminal first.
 
+### Optional exact-response cache
+
+By default, every `/api/predict` request runs local inference, including repeated
+requests. To reuse identical results during an editing session, start the server
+with `--response-cache 128` (any capacity from 0 to 1024; 0 disables it). This is
+an in-memory least-recently-used cache, separate from `--cache` for model weights.
+It matches the effective English model, state and ordered question definitions
+exactly. Keys retain only SHA-256 hashes, and entries are limited to 64 KiB each.
+Nothing persists after the server exits or a different checkpoint is loaded.
+
+With this option enabled, responses include `cache_hit`. On a hit, the server
+skips inference, reports `usage.input_tokens: 0` for that request, and puts the
+original inferred input size in `usage.cached_input_tokens`. A miss reports
+`cache_hit: false`, `usage.cached_input_tokens: 0`, and its actual input tokens;
+`/api/health` shows cache capacity,
+hits and current entries. Failed or non-finite model results are never cached.
+The default-off response shape and benchmark protocol are unchanged. A cache hit
+still makes a local HTTP request, but incurs no new model inference.
+
 Optional environment variables:
 
 | Variable | Default |

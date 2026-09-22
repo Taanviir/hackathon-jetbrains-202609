@@ -299,7 +299,8 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             else -> "tokens unavailable"
         }
         val calls = if (report.provider == DecisionProvider.KEYWORDS) "full-corpus BM25 · no model calls"
-            else "${report.jevCalls} ${report.provider.name} calls"
+            else "${report.jevCalls} ${report.provider.name} requests" +
+                if (report.cachedRequests > 0) " · ${report.cachedRequests} cached" else ""
         status.text = listOfNotNull(
             if (report.source == "tool window") null else "Asked by ${report.source}",
             "%d of %,d files · %.1f s".format(r.files.size, r.candidates, report.totalMs / 1000.0),
@@ -311,7 +312,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         } else {
             "sketch %d ms · pass 1 + BM25 %d ms · remaining pass 2 %d ms · stage 3 %d ms · %s · scored %d candidates%s".format(
                 report.sketchMs, r.pass1Ms, r.pass2Ms, r.stage3Ms, report.jevModel, report.scoredCandidates,
-                if (report.provider == DecisionProvider.LAYA) " after keyword prefilter; sequential passes; local compute cost excluded"
+                if (report.provider == DecisionProvider.LAYA) " after keyword prefilter; sequential passes; ${report.cachedRequests} cache hits (${report.cachedInputTokens} input tokens reused); local compute cost excluded"
                 else "; passes overlap; phase times measure elapsed wall time",
             )
         }

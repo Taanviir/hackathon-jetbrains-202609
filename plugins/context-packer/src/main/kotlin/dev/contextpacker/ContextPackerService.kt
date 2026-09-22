@@ -50,6 +50,8 @@ data class PackReport(
     val provider: DecisionProvider = DecisionProvider.JEV,
     val scoredCandidates: Int = result.candidates,
     val usageKnown: Boolean = true,
+    val cachedRequests: Int = 0,
+    val cachedInputTokens: Long = 0,
 ) {
     /** API fee estimate only. Local hardware/electricity are not included. */
     val costUsd: Double? get() = when {
@@ -203,6 +205,8 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
             provider = selectedProvider,
             scoredCandidates = scoringDocs.size,
             usageKnown = calls.all { it.usageKnown },
+            cachedRequests = calls.count { it.cacheHit && it.error == null },
+            cachedInputTokens = calls.filter { it.cacheHit && it.error == null }.sumOf { it.cachedInputTokens.toLong() },
         ).let(::publish)
     }
 
