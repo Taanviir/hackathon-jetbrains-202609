@@ -83,9 +83,27 @@ def bm25_rank(task: str, files: dict[str, str], k1=1.2, b=0.75) -> list[str]:
 # ---------------------------------------------------------------- Jev
 
 GATEWAY_URL = "https://ai-gateway.vercel.sh/v4/ai/evaluation-model"
-# Hard stop so no run can quietly spend someone's credits. Shared by every Jev in the process.
-TOKEN_BUDGET = int(os.environ.get("JEV_TOKEN_BUDGET", 5_000_000))
-SPENT = {"tokens": 0}
+# Hard stop so no run can quietly spend someone's credits. The ledger persists across runs, so
+# restarting a script doesn't reset it. Delete the file only on purpose, e.g. after a top-up.
+LEDGER = koog.ROOT / ".cache" / "jev_ledger.json"
+TOKEN_BUDGET = int(os.environ.get("JEV_TOKEN_BUDGET", 24_000_000))  # about $1.00 at $0.042/M
+
+
+def _load_ledger() -> dict:
+    try:
+        return json.loads(LEDGER.read_text())
+    except (OSError, ValueError):
+        return {"tokens": 0, "calls": 0}
+
+
+SPENT = _load_ledger()
+
+
+def _record(tokens: int):
+    SPENT["tokens"] += tokens
+    SPENT["calls"] = SPENT.get("calls", 0) + 1
+    LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    LEDGER.write_text(json.dumps(SPENT))
 
 
 class BudgetExceeded(RuntimeError):
@@ -93,12 +111,13 @@ class BudgetExceeded(RuntimeError):
 
 
 class Jev:
-    """Vercel AI Gateway when AI_GATEWAY_API_KEY is set, TypeSafe's own API otherwise. Never OpenRouter."""
+    """TypeSafe's own API. Vercel AI Gateway only with JEV_BACKEND=gateway (it's heavily rate-limited). Never OpenRouter."""
 
     def __init__(self, model: str, concurrency: int):
-        self.gateway_key = os.environ.get("AI_GATEWAY_API_KEY", "").strip() or None
+        use_gateway = os.environ.get("JEV_BACKEND", "").lower() == "gateway"
+        self.gateway_key = (os.environ.get("AI_GATEWAY_API_KEY", "").strip() or None) if use_gateway else None
         if self.gateway_key:
-            self.model = {"jev-latest": "typesafe-ai/jev-latest", "jev-preview": "typesafe-ai/jev-preview"}.get(model, model)
+            self.model = {"jev-latest": "typesafe-ai/jev"}.get(model, model)
             self.http = httpx.AsyncClient(timeout=30.0, headers={
                 "Authorization": f"Bearer {self.gateway_key}", "ai-gateway-protocol-version": "0.0.1",
                 "ai-gateway-auth-method": "api-key", "ai-evaluation-model-specification-version": "4",
@@ -129,13 +148,14 @@ class Jev:
             t0 = time.perf_counter()
             try:
                 if SPENT["tokens"] >= TOKEN_BUDGET:
-                    raise BudgetExceeded(f"token budget of {TOKEN_BUDGET:,} reached; set JEV_TOKEN_BUDGET to raise it")
+                    raise BudgetExceeded(f"Jev budget of {TOKEN_BUDGET:,} tokens reached ({LEDGER}); "
+                                         "raise JEV_TOKEN_BUDGET deliberately to continue")
                 if self.gateway_key:
                     answers, tokens, model = await self._gateway(state, questions)
                 else:
                     r = await self.client.system_one(state=state, questions=questions)
                     answers, tokens, model = r.answers, r.usage.input_tokens, r.model
-                SPENT["tokens"] += tokens or 0
+                _record(tokens or 0)
                 self.calls.append({"ms": (time.perf_counter() - t0) * 1000, "in": tokens or 0,
                                    "q": len(questions), "model": model})
                 return answers

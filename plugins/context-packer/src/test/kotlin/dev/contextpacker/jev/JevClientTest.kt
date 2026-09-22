@@ -113,11 +113,11 @@ class JevClientTest {
         assertEquals(0.96, response.noul("f000")!!, 1e-9)
         assertEquals(0.03, response.noul("f001")!!, 1e-9)
         assertEquals(400, response.inputTokens)
-        assertEquals("typesafe-ai/jev-latest", response.model)
+        assertEquals("typesafe-ai/jev", response.model)
 
         val h = headers.single()
         assertEquals("Bearer gw", h.getFirst("Authorization"))
-        assertEquals("typesafe-ai/jev-latest", h.getFirst("ai-model-id"))
+        assertEquals("typesafe-ai/jev", h.getFirst("ai-model-id"))
         assertEquals("4", h.getFirst("ai-evaluation-model-specification-version"))
         assertEquals("0.0.1", h.getFirst("ai-gateway-protocol-version"))
         assertEquals("api-key", h.getFirst("ai-gateway-auth-method"))
