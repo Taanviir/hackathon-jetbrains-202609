@@ -239,7 +239,7 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         return readAction {
             paths.mapNotNull { path ->
                 val file = safeFile(base, path) ?: return@mapNotNull null
-                if (file.isDirectory || file.fileType.isBinary || file.length > Candidates.MAX_BYTES) return@mapNotNull null
+                if (sourceProblem(file) != null) return@mapNotNull null
                 val text = FileDocumentManager.getInstance().getCachedDocument(file)?.text
                     ?: loadSource(file) ?: return@mapNotNull null
                 path to text
@@ -247,7 +247,23 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         }
     }
 
-    fun fileFor(path: String): VirtualFile? = project.guessProjectDir()?.let { safeFile(it, path) }
+    /** Manual pins follow the same readable-source policy as prompt construction. */
+    fun fileFor(path: String): VirtualFile? = project.guessProjectDir()
+        ?.let { safeFile(it, path) }
+        ?.takeIf { sourceProblem(it) == null }
+
+    fun sourceProblem(path: String): String? {
+        val base = project.guessProjectDir() ?: return "This project has no source root to read."
+        val file = safeFile(base, path) ?: return "This file is outside the project or unavailable."
+        return sourceProblem(file)
+    }
+
+    private fun sourceProblem(file: VirtualFile): String? = when {
+        file.isDirectory -> "Choose a file, not a folder."
+        file.fileType.isBinary -> "Binary files cannot be added to a source prompt."
+        file.length > Candidates.MAX_BYTES -> "This file exceeds the ${Candidates.MAX_BYTES}-byte source limit."
+        else -> null
+    }
 
     private fun safeFile(base: VirtualFile, path: String): VirtualFile? {
         val normalized = path.replace('\\', '/')

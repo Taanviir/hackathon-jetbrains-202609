@@ -5,6 +5,7 @@ import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import dev.contextpacker.pack.Candidates
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.TimeUnit
 
@@ -58,6 +59,31 @@ class ContextPackerServiceIntegrationTest : BasePlatformTestCase() {
         }
         val texts = offEdt { service.texts(listOf(valid) + rejected) }
         assertEquals(mapOf(valid to source), texts)
+    }
+
+    fun testManualSourceLookupMatchesPromptReadabilityRules(): Unit {
+        val note = "notes/Review.md"
+        val noteText = "Context for the selected change."
+        myFixture.addFileToProject(note, noteText)
+        val binary = myFixture.addFileToProject("assets/image.png", "not actually an image").virtualFile
+        val large = myFixture.addFileToProject("src/Huge.java", "class Huge { /* " + "x".repeat(100_001) + " */ }").virtualFile
+
+        val service = project.getService(ContextPackerService::class.java)
+        assertTrue(binary.fileType.isBinary)
+        assertTrue(large.length > Candidates.MAX_BYTES)
+        assertNull(service.sourceProblem(note))
+        assertNotNull(service.fileFor(note))
+        assertNull(service.fileFor("notes"))
+        assertTrue(service.sourceProblem("notes")!!.contains("folder"))
+        assertNull(service.fileFor("assets/image.png"))
+        assertTrue(service.sourceProblem("assets/image.png")!!.contains("Binary"))
+        assertNull(service.fileFor("src/Huge.java"))
+        assertTrue(service.sourceProblem("src/Huge.java")!!.contains("source limit"))
+
+        assertEquals(
+            mapOf(note to noteText),
+            offEdt { service.texts(listOf(note, "notes", "assets/image.png", "src/Huge.java")) },
+        )
     }
 
     fun testTypingPreviewUsesNoModelAndPreservesExplicitPackForEveryProvider(): Unit {
