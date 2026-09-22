@@ -114,6 +114,15 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         add(top, BorderLayout.NORTH)
         add(split, BorderLayout.CENTER)
+
+        // An agent's pack shows up here too, so the human can see exactly what context it was handed.
+        service.onPack { report ->
+            if (report.source != "tool window") service.scope.launch(Dispatchers.EDT) {
+                task.text = report.result.task
+                picks.clear()
+                show(report)
+            }
+        }
     }
 
     private fun button(text: String, icon: javax.swing.Icon, action: () -> Unit) =
@@ -126,7 +135,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
         picks.clear()
         job = service.scope.launch {
             try {
-                val report = service.pack(text) { msg -> launch(Dispatchers.EDT) { status.text = "$msg…" } }
+                val report = service.pack(text, "tool window") { msg -> launch(Dispatchers.EDT) { status.text = "$msg…" } }
                 withContext(Dispatchers.EDT) { show(report) }
             } catch (e: MissingKeyException) {
                 withContext(Dispatchers.EDT) { status.text = e.message }
@@ -149,8 +158,9 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
         report.result.files.forEach(picks::addElement)
         val r = report.result
         val failed = if (report.failedCalls > 0) " · ${report.failedCalls} calls failed" else ""
-        status.text = "%d of %,d files in %.1f s · %d Jev calls · %.1fk tokens · $%.4f%s".format(
-            r.files.size, r.candidates, report.totalMs / 1000.0, report.jevCalls,
+        val who = if (report.source == "tool window") "" else "Asked by ${report.source} · "
+        status.text = "%s%d of %,d files in %.1f s · %d Jev calls · %.1fk tokens · $%.4f%s".format(
+            who, r.files.size, r.candidates, report.totalMs / 1000.0, report.jevCalls,
             report.inputTokens / 1000.0, report.costUsd, failed,
         )
         status.toolTipText = "sketch %d ms · pass 1 + BM25 %d ms · pass 2 %d ms · %s".format(
