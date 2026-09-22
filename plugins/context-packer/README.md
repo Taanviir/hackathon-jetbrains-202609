@@ -102,12 +102,19 @@ About two minutes, on a Koog checkout:
    straight to the right files.
 5. Close with the table above. It's measured on commits from JetBrains' own agent framework.
 
-## Agent A/B
+## Against an LLM, and inside an agent
 
-*Pending.* The harness is in [eval/agent_ab.py](eval/agent_ab.py). It runs the same agent on the
-same tasks with and without `pack_context`, and records when a right file first reaches the agent,
-the LLM calls, tokens, cost, and the recall of its final answer. The numbers will go here once it
-has run.
+Full numbers are in the [eval report](https://taanviir.github.io/hackathon-jetbrains-202609/feat-context-packer/context-packer-eval/).
+
+**Against an LLM re-ranker.** GLM-5.3 Flash re-ranked BM25's top 30 on full source, on the same 70 tasks. It picks
+the top five better (recall@5 0.61 against 0.52 for Jev + BM25, a significant gap), and at ten they tie (0.67 against
+0.65). Jev does it in about 1 s for about $0.002, where the LLM takes 29 s and $0.007. Jev's edge is speed and cost,
+not judgement.
+
+**Inside an agent.** The same GLM agent ran 10 held-out tasks with and without `pack_context`, twice: once with commit
+subjects, once with identifier-free rewrites. Final recall was identical in both. With the packer the agent used 7-22%
+fewer tokens and fewer calls, but it was not faster to the first right file, because a grep-first agent gets there in
+about 4 s on these tasks. Ten tasks can't separate any of it from noise.
 
 ## Reproduce the numbers
 
@@ -122,10 +129,12 @@ cd spike
 uv run python jev_spike.py limits
 uv run python jev_spike.py hybrid --tasks 136 --top 60      # saves every score once
 uv run python fusion.py ../.cache/spike_runs/<that file>.json --dev 40
-cd ../eval && uv run python agent_ab.py --tasks 10 --offset 40
+cd ../eval && uv run python agent_ab.py --tasks 10 --offset 40 [--vague]
+uv run python rerank_llm.py --pool 30          # LLM baseline, stops at RERANK_MAX_COST_USD
+uv run python make_report.py                   # rebuilds reports/context-packer-eval/
 ```
 
-Plugin tests are `./gradlew test`, 16 of them, headless. For a licence-free sandbox IDE with the
+Plugin tests are `./gradlew test`, 16 of them, headless, and CI runs them on every PR. For a licence-free sandbox IDE with the
 MCP server on, run `OPEN_PROJECT=/path/to/project ./gradlew runIdeCommunity`.
 
 ## Limits
@@ -133,5 +142,5 @@ MCP server on, run `OPEN_PROJECT=/path/to/project ./gradlew runIdeCommunity`.
 - Claims are measured on Kotlin only, in one repository. Sketching works for other languages but
   isn't evaluated there.
 - Tasks that mostly add new files are out of scope. There's nothing yet to find.
-- The first pack in a fresh IDE sketches every file (about 1.4 s on Koog). After that, only changed
-  files are re-read.
+- Sketches are built in the background when a project opens, so the first pack is as fast as the
+  rest. After that, only changed files are re-read.
