@@ -24,8 +24,8 @@ The following build and workflow instructions describe the **root IntelliJev plu
 
 Verified on 23 September 2026:
 
-- `gradlew test` succeeds — 15 tests cover Jev parsing, selected-fix matching,
-  proposal parsing, empty-result call avoidance, and actual IntelliJ document apply/undo,
+- `gradlew test` succeeds in CI — 18 tests cover Jev parsing, selected-fix matching,
+  completed chat-response and proposal parsing, empty-result call avoidance, and actual IntelliJ document apply/undo,
   stale-source, read-only and deleted-file behavior; no failures or skipped tests.
 - `gradlew buildPlugin` produces `build/distributions/intellijev-0.1.0.zip`.
 - The earlier build loaded in the sandbox IDE (`Loaded custom plugins: IntelliJev (0.1.0)`).
@@ -99,7 +99,7 @@ The tool window has six tabs: **Context**, **Related Bugs**, **Coding Agent**, *
   this project's local `.idea/workspace.xml` settings, separate from model prompts;
   saving rejects text over 20,000 characters with an error.
 - Unit and IntelliJ platform tests cover `JevClient.score` parsing and answer-type rejection,
-  selected-fix matching, edit validation, apply/undo and stale or unwritable source rejection.
+  selected-fix matching, completed-response validation, edit validation, apply/undo and stale or unwritable source rejection.
 
 ## Known issues
 

@@ -261,7 +261,8 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
     private fun sourceProblem(file: VirtualFile): String? = when {
         file.isDirectory -> "Choose a file, not a folder."
         file.fileType.isBinary -> "Binary files cannot be added to a source prompt."
-        file.length > Candidates.MAX_BYTES -> "This file exceeds the ${Candidates.MAX_BYTES}-byte source limit."
+        !Candidates.fitsSizeLimit(file) ->
+            "This file exceeds the ${Candidates.MAX_BYTES} source limit (bytes on disk, characters in the editor)."
         else -> null
     }
 
@@ -319,6 +320,7 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
             async(Dispatchers.Default) {
                 readAction {
                     chunk.mapNotNull { file ->
+                        if (!Candidates.fitsSizeLimit(file)) return@mapNotNull null
                         val path = VfsUtilCore.getRelativePath(file, base) ?: return@mapNotNull null
                         val document = FileDocumentManager.getInstance().getCachedDocument(file)
                         val stamp = document?.modificationStamp ?: file.modificationStamp
@@ -332,6 +334,7 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
     }
 
     private fun docFor(file: VirtualFile, base: VirtualFile?, layaSketch: Boolean): FileDoc? {
+        if (!Candidates.fitsSizeLimit(file)) return null
         val document = FileDocumentManager.getInstance().getCachedDocument(file)
         val stamp = document?.modificationStamp ?: file.modificationStamp
         cache[file.path]?.takeIf { it.stamp == stamp && it.layaSketch == layaSketch }?.let { return it.doc }
