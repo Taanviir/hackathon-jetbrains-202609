@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Context Packer wiki</title>
+<meta name="description" content="How Context Packer works: Jev, BM25, sketches, re-ranking, fusion, stage 3, the eval, and the IntelliJ internals.">
+<style>
+:root {
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #75746f; --rule: #e4e3de;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --code: #f0efec; --s1-soft: #e3eefb;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #9b9a92; --rule: #34332f;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --code: #262624; --s1-soft: #16283d;
+} }
+:root[data-theme="dark"] {
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #9b9a92; --rule: #34332f;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --code: #262624; --s1-soft: #16283d;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 32px 16px 96px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; }
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); } aside { position: static !important; } }
+main { min-width: 0; }
+aside { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+aside a { display: block; color: var(--ink-2); text-decoration: none; padding: 3px 0; } aside a:hover { color: var(--s1); }
+aside .grp { color: var(--ink-3); font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; margin: 16px 0 4px; }
+nav.top { font-size: 14px; color: var(--ink-3); display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+nav.top a { color: inherit; } nav.top a[aria-current] { color: var(--ink); font-weight: 600; text-decoration: none; }
+h1 { font-size: 36px; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 12px; }
+h2 { font-size: 24px; margin: 56px 0 10px; padding-top: 8px; border-top: 1px solid var(--rule); }
+h3 { font-size: 17px; margin: 28px 0 6px; }
+p, li { color: var(--ink-2); } p strong, li strong { color: var(--ink); }
+.lede { font-size: 18px; }
+a { color: var(--s1); }
+code { font: 13.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--code); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.box { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 16px 18px; margin: 16px 0; }
+.why { border-left: 3px solid var(--s1); background: var(--s1-soft); border-radius: 0 10px 10px 0; padding: 12px 16px; margin: 14px 0; }
+.why p { margin: 0; }
+.tw { overflow-x: auto; margin: 12px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { color: var(--ink-3); font-weight: 600; font-size: 13px; }
+.num td:not(:first-child), .num th:not(:first-child) { text-align: right; }
+.arch { width: 100%; height: auto; display: block; margin: 16px 0; }
+.arch .n { fill: var(--surface); stroke: var(--rule); stroke-width: 1.5; }
+.arch .j { fill: var(--s1-soft); stroke: var(--s1); stroke-width: 1.5; }
+.arch .k { fill: var(--surface); stroke: var(--s2); stroke-width: 1.5; }
+.arch .o { fill: var(--surface); stroke: var(--s3); stroke-width: 1.5; }
+.arch .t { fill: var(--ink); font-size: 13px; font-weight: 650; } .arch .s { fill: var(--ink-3); font-size: 11.5px; }
+.arch .l { stroke: var(--ink-3); stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+.arch .legend { fill: var(--ink-3); font-size: 12px; }
+dl { margin: 0; } dt { font-weight: 650; color: var(--ink); margin-top: 12px; } dd { margin: 2px 0 0; color: var(--ink-2); }
+footer { margin-top: 64px; font-size: 14px; color: var(--ink-3); }
+</style>
+</head>
+<body>
+<div class="wrap">
+<aside>
+  <div class="grp">Overview</div>
+  <a href="#tldr">In one minute</a><a href="#arch">Architecture</a>
+  <div class="grp">Concepts</div>
+  <a href="#jev">Jev</a><a href="#bm25">BM25</a><a href="#sketch">Sketches</a><a href="#rerank">Why re-rank</a><a href="#fusion">Fusion</a><a href="#stage3">Stage 3</a><a href="#roles">Role labels</a>
+  <div class="grp">Proof</div>
+  <a href="#eval">How we measured</a><a href="#results">Results</a><a href="#journey">Wrong turns</a>
+  <div class="grp">Build</div>
+  <a href="#ide">IntelliJ internals</a><a href="#agents">Agents: tool vs hook</a><a href="#cost">Cost and safety</a><a href="#limits">Limits</a><a href="#code">Code map</a><a href="#glossary">Glossary</a>
+</aside>
+<main>
+<nav class="top"><a href="../../">All reports</a><a href="../context-packer-explained/">Explained</a><a href="../context-packer-wiki/" aria-current="page">Technical wiki</a><a href="../context-packer-qa/">Jury Q&amp;A</a><a href="../context-packer-eval/">Eval report</a></nav>
+<h1>Context Packer wiki</h1>
+<p class="lede">Everything you need to explain how it works and why each design choice was made. The eval report has the
+full numbers; this page explains them.</p>
+
+<h2 id="tldr">In one minute</h2>
+<p>Given a task in plain English, Context Packer ranks every source file in the project by how likely the task is to need it.
+It combines two very different signals: <strong>BM25</strong>, a classic keyword-matching formula, and <strong>Jev</strong>, a
+model that answers yes/no questions with calibrated probabilities. Jev first judges a short summary (a <em>sketch</em>) of
+every file; the best candidates from both signals are then re-read by Jev in full, the two scores are combined, and a final
+comparative question reorders the top 10. It runs inside IntelliJ, and serves people (a tool window) and agents (an MCP tool,
+and a Claude Code hook that injects the ranking before the agent starts).</p>
+
+<h2 id="arch">Architecture</h2>
+<svg class="arch" viewBox="0 0 900 400" role="img" aria-labelledby="at">
+  <title id="at">Pipeline: collect, sketch, pass 1 with BM25, pool, pass 2, fuse, stage 3 and roles, outputs</title>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor" style="color:var(--ink-3)"/></marker></defs>
+  <rect class="n" x="10" y="20" width="150" height="56" rx="8"/><text class="t" x="22" y="43">Task + project</text><text class="s" x="22" y="62">plain-English request</text>
+  <rect class="n" x="200" y="20" width="160" height="56" rx="8"/><text class="t" x="212" y="43">Collect</text><text class="s" x="212" y="62">ProjectFileIndex, filters</text>
+  <rect class="n" x="400" y="20" width="160" height="56" rx="8"/><text class="t" x="412" y="43">Sketch</text><text class="s" x="412" y="62">~300 tokens a file, cached</text>
+  <path class="l" d="M160,48 H196"/><path class="l" d="M360,48 H396"/>
+  <rect class="j" x="600" y="10" width="290" height="46" rx="8"/><text class="t" x="612" y="30">Pass 1 · Jev on sketches</text><text class="s" x="612" y="47">60 files a call, all files, ~2 s</text>
+  <rect class="k" x="600" y="66" width="290" height="46" rx="8"/><text class="t" x="612" y="86">BM25 on full text</text><text class="s" x="612" y="103">keyword ranking, in parallel</text>
+  <path class="l" d="M560,40 H596"/><path class="l" d="M560,56 C580,56 580,89 596,89"/>
+  <rect class="n" x="600" y="150" width="290" height="50" rx="8"/><text class="t" x="612" y="172">Pool</text><text class="s" x="612" y="190">top 60 of each, ~100 files, deduplicated</text>
+  <path class="l" d="M745,112 V146"/>
+  <rect class="j" x="310" y="150" width="250" height="50" rx="8"/><text class="t" x="322" y="172">Pass 2 · Jev on full source</text><text class="s" x="322" y="190">6 files a call, 6,000 chars each, ~1 s</text>
+  <path class="l" d="M600,175 H564"/>
+  <rect class="n" x="10" y="150" width="260" height="50" rx="8"/><text class="t" x="22" y="172">Fuse</text><text class="s" x="22" y="190">jev + 1 / (1 + bm25_rank / 10)</text>
+  <path class="l" d="M310,175 H274"/>
+  <rect class="j" x="10" y="240" width="260" height="50" rx="8"/><text class="t" x="22" y="262">Stage 3 · Jev choice, top 10</text><text class="s" x="22" y="280">"which file is edited?" +2 × p</text>
+  <rect class="j" x="310" y="240" width="250" height="50" rx="8"/><text class="t" x="322" y="262">Roles · Jev choice per file</text><text class="s" x="322" y="280">edit / test / example / dependency</text>
+  <path class="l" d="M140,200 V236"/><path class="l" d="M200,200 C200,220 435,220 435,236"/>
+  <rect class="o" x="10" y="330" width="260" height="50" rx="8"/><text class="t" x="22" y="352">Tool window</text><text class="s" x="22" y="370">people: pack, preview, Ask LLM</text>
+  <rect class="o" x="310" y="330" width="250" height="50" rx="8"/><text class="t" x="322" y="352">MCP tool pack_context</text><text class="s" x="322" y="370">any MCP agent</text>
+  <rect class="o" x="600" y="330" width="290" height="50" rx="8"/><text class="t" x="612" y="352">Claude Code hook</text><text class="s" x="612" y="370">ranking injected before the agent starts</text>
+  <path class="l" d="M140,290 V326"/><path class="l" d="M435,290 V326"/><path class="l" d="M270,275 C700,275 745,300 745,326"/>
+  <rect class="j" x="610" y="228" width="14" height="14" rx="3"/><text class="legend" x="630" y="240">Jev call</text>
+  <rect class="k" x="700" y="228" width="14" height="14" rx="3"/><text class="legend" x="720" y="240">keyword search</text>
+  <rect class="o" x="610" y="252" width="14" height="14" rx="3"/><text class="legend" x="630" y="264">output</text>
+</svg>
+<p>One pack on Koog (1,705 Kotlin files): about 50 Jev calls, 0.6M input tokens, $0.03, about 4 s end to end. Sketches are
+built in the background when the project opens and cached by file modification stamp, so a pack never waits for them.</p>
+
+<h2 id="jev">Jev</h2>
+<p>Jev is TypeSafe's first "System One" model. It <strong>cannot generate text</strong>. You send it a <code>state</code> (any
+JSON) and a set of typed <code>questions</code>; it returns calibrated probabilities. That's the whole interface. We use two
+question types:</p>
+<ul>
+  <li><strong><code>noul</code></strong> returns P(statement is true). Our statement: <em>"Implementing the change described in
+  `task` requires reading or editing the file in `f07`."</em> One question per file.</li>
+  <li><strong><code>choice</code></strong> picks among up to 255 labelled options and returns a probability for each. Stage 3 and
+  the role labels use it.</li>
+</ul>
+<p>Batching is the key trick: the state is an object with one key per file (<code>f000</code>, <code>f001</code>, …), and each
+question names its key, so 60 files share a single request. The limit is about 32k tokens of state per call: 100 sketches fit,
+150 don't. Price: $0.042 per million input tokens, output free. Latency: 0.5-2 s a call, and we run up to 48 at once.</p>
+<div class="why"><p><strong>Why Jev and not an LLM for this?</strong> The job is the same small judgement repeated thousands of
+times. An LLM can do it (we measured: it's even a little better at the very top) but takes about 29 s per request against
+Jev's ~1 s. Speed is what lets an agent call this before every task.</p></div>
+
+<h2 id="bm25">BM25</h2>
+<p>BM25 is the standard keyword-ranking formula behind most search engines. For each word in the task, a file scores higher
+when:</p>
+<ul>
+  <li>the word appears in it <strong>often</strong> (term frequency), with diminishing returns so 50 mentions isn't 50× better than one;</li>
+  <li>the word is <strong>rare</strong> across the project (inverse document frequency): "OpenAI" is informative, "the" isn't;</li>
+  <li>the file isn't just <strong>long</strong> (length normalisation), so a huge file doesn't win by containing every word.</li>
+</ul>
+<p>We split identifiers, so <code>cachedContentTokenCount</code> matches the words "token count". BM25 reads full source, costs
+nothing and takes milliseconds.</p>
+<div class="why"><p><strong>Why include it?</strong> Two reasons. It's the honest baseline, since it's what "just grep it"
+amounts to done well, so every result is reported against it. And it's genuinely good at tasks that name identifiers, so it's
+half of the shortlist. Its weakness is tasks described in words the code doesn't use, which is exactly where Jev helps.</p></div>
+
+<h2 id="sketch">Sketches</h2>
+<p>A sketch is a ~300-token summary of a file: its path, its package, and its declarations (classes, functions, properties) two
+levels deep, each with the first line of its doc comment. For example:</p>
+<pre>path: prompt/.../google/GoogleLLMClient.kt
+package ai.koog.prompt.executor.clients.google
+- public class GoogleClientSettings(  // Configuration settings for the Google AI client.
+  - public val baseUrl: String
+- public open class GoogleLLMClient @JvmOverloads constructor(  // Implementation of [LLMClient] for Google's Gemini API.</pre>
+<p>Sketches exist so that 60 files fit into one Jev call. Cost was never the reason: reading every file in full would cost about
+$0.11. The plugin uses the same regular-expression sketcher the eval measured, checked by a parity test on 60 real files.
+Sketches built from IntelliJ's Structure View read better but take about 19 ms a file cold and were never measured, so they're
+behind a flag.</p>
+
+<h2 id="rerank">Why re-rank</h2>
+<p>This is the core design decision, and it came from a failure. <strong>Jev scoring sketches alone lost to BM25</strong>
+(recall@10 0.37 against 0.46). A sketch shows a file's outline, but many tasks are about something inside a function body.</p>
+<p>The fix is a classic in search engineering: <strong>retrieve, then re-rank</strong>. Cast a cheap, wide net first; then look
+carefully at only what you caught.</p>
+<ol>
+  <li><strong>Wide net.</strong> Take BM25's top 60 and Jev-on-sketches' top 60. They catch different files: BM25 finds files that
+  use the task's words, Jev finds files that fit its meaning. Together that's about 100 files, and the right answer is in this pool
+  about 90% of the time.</li>
+  <li><strong>Careful look.</strong> Jev reads those ~100 files in <em>full</em> (6,000 characters each, 6 files per call). The pool
+  is small, so full source is affordable, and full source is where Jev is strong.</li>
+</ol>
+
+<h2 id="fusion">Fusion</h2>
+<p>The final score combines both signals:</p>
+<pre>score = jev_probability + 1 / (1 + bm25_rank / 10)</pre>
+<p>Jev's full-source probability is 0 to 1. The BM25 term is a bonus that decays with keyword rank: 1.0 for BM25's top file,
+0.5 at rank 10, 0.1 at rank 90. So a file BM25 ranks highly needs only moderate Jev support, and a file BM25 missed needs strong
+Jev support to climb. The equal weighting was chosen on the dev tasks from a grid of weights and a second method (reciprocal rank
+fusion). Equal weight won, and then we measured test once.</p>
+
+<h2 id="stage3">Stage 3: a comparative question</h2>
+<p>Passes 1 and 2 judge each file <em>on its own</em>. An LLM ranking a list <em>compares</em> files, and that's where it beat us
+(top-5 recall). So one more Jev call asks a single <code>choice</code> over the fused top 10: <em>"Which file must be edited to
+implement the change described in `task`?"</em> Each file's probability, times 2, is added to its score. Only the order inside
+the top 10 changes. It lifted held-out recall@5 from 0.54 to 0.57, for one call and about 0.4 s.</p>
+
+<h2 id="roles">Role labels</h2>
+<p>A separate Jev call, run in parallel with stage 3, asks per top file which part it plays: <strong>edit</strong>,
+<strong>test</strong>, <strong>example</strong> (a pattern to copy), <strong>dependency</strong> (an API used but not changed) or
+unrelated. A label shows when Jev is at least 50% sure. It's a separate call on purpose, so it can't change the measured ranking.
+Labels are for display only and weren't evaluated.</p>
+
+<h2 id="eval">How we measured</h2>
+<div class="box">
+<p><strong>The task set.</strong> Real commits from JetBrains/Koog (1,189 commits, 1,705 Kotlin files). The task is the commit's
+subject line, with ticket numbers stripped. The answer is the Kotlin files that commit modified. Commits that are mostly
+<em>new</em> files are excluded, because nothing can find a file that doesn't exist yet. That leaves 136 usable tasks.</p>
+<p><strong>No leakage.</strong> Every file is read as it was <em>at the parent commit</em>, before the change. Otherwise the answer
+would be sitting in the code: "add cachedContentTokenCount" is easy to find once that code exists.</p>
+<p><strong>Dev and test.</strong> Every choice (pool size, wording, fusion weight, stage 3's shape) was made on the first 40 tasks.
+The remaining tasks were measured once. 26 tasks were dropped because API credits ran out mid-run; none were in dev.</p>
+<p><strong>Recall@k.</strong> For each task: of the files the developer edited, what fraction appear in our top k? Averaged over
+tasks. Recall@10 = 0.69 means 69% of the edited files are in the top 10.</p>
+<p><strong>Bootstrap intervals.</strong> Resample the test tasks with replacement 2,000 times and recompute the difference each
+time. The middle 95% of those differences is the interval. If it excludes zero, the improvement isn't a fluke of which tasks
+happened to be in the set.</p>
+</div>
+
+<h2 id="results">Results</h2>
+<div class="tw"><table class="num"><thead><tr><th>Koog, 70 held-out tasks</th><th>recall@5</th><th>recall@10</th><th>recall@20</th></tr></thead><tbody>
+<tr><td>BM25</td><td>0.42</td><td>0.53</td><td>0.63</td></tr>
+<tr><td>Jev re-rank alone</td><td>0.52</td><td>0.63</td><td>0.74</td></tr>
+<tr><td>Jev + BM25 fused</td><td>0.54</td><td>0.69</td><td>0.80</td></tr>
+<tr><td><strong>+ stage 3 (shipped)</strong></td><td><strong>0.57</strong></td><td><strong>0.69</strong></td><td><strong>0.80</strong></td></tr>
+</tbody></table></div>
+<p>Shipped vs BM25: recall@10 +0.16 [+0.10, +0.23]. Stage 3 vs fused: recall@5 +0.03 [+0.006, +0.068]. Stage 3 only reorders the
+top 10, so it can't change recall@10 or @20.</p>
+<div class="tw"><table class="num"><thead><tr><th>Other checks</th><th>result</th></tr></thead><tbody>
+<tr><td>JetBrains/Exposed, 40 tasks, frozen pipeline</td><td>recall@5 0.43 → 0.54 (+0.10 [+0.01, +0.20]); @10 0.56 → 0.62, not significant</td></tr>
+<tr><td>LLM re-ranker (GLM) on BM25's top 30, 70 tasks</td><td>LLM better at @5 (0.61 vs 0.52), tie at @10 (0.67 vs 0.65); 29 s vs ~1 s</td></tr>
+<tr><td>Claude Code + hook, 8 tasks</td><td>turns 13.0 → 9.8 (−3.2 [−5.9, −0.5]), searches −38%, cost −15%, same recall on 7 of 8, not faster</td></tr>
+<tr><td>GLM agent + tool, 10 tasks × 2 wordings</td><td>7-22% fewer tokens, same recall, not faster to the first right file</td></tr>
+</tbody></table></div>
+
+<h2 id="journey">Wrong turns</h2>
+<ol>
+  <li><strong>Jev alone lost to BM25.</strong> This led to re-ranking on full source.</li>
+  <li><strong>The first "win" didn't hold.</strong> Tuned on 20 tasks, fused recall@10 looked like 0.64 against 0.47. On 30 unseen
+  tasks it lost (0.51 against 0.56). The causes were unfair new-file commits in the set and a fusion weight tuned on too few
+  tasks. Fixed with the filter and a proper dev/test split.</li>
+  <li><strong>The free gateway couldn't serve it.</strong> Vercel's AI Gateway answered about 30% of calls under load, so the
+  plugin uses TypeSafe's own API.</li>
+  <li><strong>Agents ignored the tool.</strong> Claude Code never called <code>pack_context</code>, even when told to. So it gets
+  the ranking through a hook instead.</li>
+  <li><strong>A code review caught a mismatch.</strong> The plugin's sketcher differed from the eval's on 2% of files. Fixed, with
+  a stronger parity test.</li>
+</ol>
+
+<h2 id="ide">IntelliJ internals</h2>
+<ul>
+  <li><strong>Collecting files:</strong> <code>ProjectFileIndex.iterateContent</code>, skipping excluded, ignored, library and
+  generated sources, binaries, docs/config and files over 100 KB. <code>CONTEXT_PACKER_EXTENSIONS=kt</code> restricts it to the
+  exact set the eval measured.</li>
+  <li><strong>Threading:</strong> file text and sketches are read in many short parallel <em>read actions</em>, never one long one,
+  and never with a network call inside, so typing is never blocked. Network runs on <code>Dispatchers.IO</code>, UI updates on the
+  EDT, and cancellation always propagates.</li>
+  <li><strong>Caching and warm-up:</strong> sketches are cached by modification stamp and built when the project opens (a
+  <code>ProjectActivity</code>, no Jev calls). Unsaved editor text is used when a file is open.</li>
+  <li><strong>Tool window:</strong> task field, search-as-you-type preview (after 700 ms: BM25 top 30 plus one Jev pass, about 5
+  calls, labelled preview), Pack, ranked list with role chips, Add open file / Drop to correct it, Copy prompt, Ask LLM.</li>
+  <li><strong>MCP:</strong> <code>pack_context(task, limit)</code> is registered on the IDE's built-in MCP server through the
+  <code>com.intellij.mcpServer.mcpToolset</code> extension point. Agent requests are replayed in the tool window.</li>
+  <li><strong>Keys:</strong> environment variables win, otherwise the IDE password store. <code>TYPESAFE_API_KEY</code> first,
+  Vercel gateway as fallback; a changed key takes effect on the next pack.</li>
+  <li><strong>Resilience:</strong> retries on 408, 429 and 5xx with jittered backoff, honouring <code>retry-after</code> (capped at
+  5 s). If every pass-1 call fails, the pack errors rather than pretend keyword results are Jev's. Later failures only degrade the
+  ranking.</li>
+</ul>
+
+<h2 id="agents">Agents: tool vs hook</h2>
+<p>An MCP tool depends on the agent <em>choosing</em> to call it. In five headless runs Claude Code never did, even with a system
+prompt naming the tool; it trusted its own Grep and Glob. The weaker GLM agent did call it, every time.</p>
+<p>So <code>agent/pack_hook.py</code> is a Claude Code <strong>UserPromptSubmit hook</strong>. It runs on every request before
+Claude sees it, asks the IDE's <code>pack_context</code>, and adds the ranked files to Claude's context. It gives up after 25 s,
+never injects error text, and exits silently on any failure, so it can't block a prompt. A warm hook adds about 4 s; the first MCP
+call after an IDE restart takes about 10 s.</p>
+
+<h2 id="cost">Cost and safety</h2>
+<ul>
+  <li><strong>Per pack:</strong> about 0.6M Jev input tokens, $0.03. A preview refresh is about $0.002.</li>
+  <li><strong>Caps:</strong> each IDE session stops at 20M Jev tokens (about 30 packs). Eval scripts share a persistent ledger and
+  stop at <code>JEV_TOKEN_BUDGET</code>.</li>
+  <li><strong>Data:</strong> sketches of every candidate file, and the full source (first 6,000 characters) of about 100 shortlisted
+  files, are sent to TypeSafe's API on each pack. Ask LLM sends the picked files to OpenRouter.</li>
+</ul>
+
+<h2 id="limits">Limits</h2>
+<ul>
+  <li>Measured on Kotlin, in two JetBrains repositories. Other languages run but are unmeasured.</li>
+  <li>Tasks are commit subjects; real requests are often vaguer. We tried identifier-free rewrites in one agent test; both arms got worse equally.</li>
+  <li>Recall counts only files that were edited. A useful file to read that wasn't edited counts as a miss.</li>
+  <li>Agent results are small samples (8 and 10 tasks) with one model each.</li>
+</ul>
+
+<h2 id="code">Code map</h2>
+<div class="tw"><table><thead><tr><th>Path (under plugins/context-packer)</th><th>What it does</th></tr></thead><tbody>
+<tr><td><code>src/.../pack/Packer.kt</code></td><td>The pipeline: pass 1, BM25, pool, pass 2, fusion, stage 3, roles, preview, failure policy</td></tr>
+<tr><td><code>src/.../pack/Bm25.kt</code>, <code>Sketcher.kt</code>, <code>Candidates.kt</code></td><td>Keyword ranking, sketches, file collection</td></tr>
+<tr><td><code>src/.../jev/JevClient.kt</code>, <code>JevRelevance.kt</code></td><td>Jev HTTP client (TypeSafe and gateway), retries; how questions are built</td></tr>
+<tr><td><code>src/.../ContextPackerService.kt</code></td><td>Project service: read actions, cache, warm-up, keys, budget, listeners</td></tr>
+<tr><td><code>src/.../ui/PackerPanel.kt</code>, <code>mcp/ContextPackerToolset.kt</code></td><td>Tool window; the MCP tool</td></tr>
+<tr><td><code>agent/pack_hook.py</code></td><td>Claude Code prompt hook</td></tr>
+<tr><td><code>spike/</code></td><td>First experiments and the Koog eval (<code>jev_spike.py</code>, <code>fusion.py</code>, <code>RESULTS.md</code>)</td></tr>
+<tr><td><code>eval/</code></td><td>Stage 3, Exposed, LLM baseline, agent A/Bs, report generator</td></tr>
+</tbody></table></div>
+
+<h2 id="glossary">Glossary</h2>
+<dl>
+  <dt>BM25</dt><dd>Keyword ranking: frequent in the file, rare in the project, adjusted for length.</dd>
+  <dt>Jev / System One model</dt><dd>A model that returns typed decisions with probabilities, and never text.</dd>
+  <dt>noul / choice</dt><dd>Jev question types: a probability that a statement is true; a probability per labelled option.</dd>
+  <dt>Sketch</dt><dd>A ~300-token outline of a file, so 60 fit in one Jev call.</dd>
+  <dt>Pool</dt><dd>The shortlist: BM25's top 60 plus Jev-on-sketches' top 60.</dd>
+  <dt>Re-rank</dt><dd>Score a shortlist again, more carefully (here: Jev on full source).</dd>
+  <dt>Fusion</dt><dd>Combining two rankings into one score.</dd>
+  <dt>Stage 3</dt><dd>One comparative Jev choice over the top 10 that reorders them.</dd>
+  <dt>Recall@k</dt><dd>The fraction of the truly needed files that appear in the top k.</dd>
+  <dt>Held-out / dev / test</dt><dd>Tune on dev, report once on test, which was never looked at while tuning.</dd>
+  <dt>Bootstrap interval</dt><dd>The range the improvement would plausibly take with a different sample of tasks.</dd>
+  <dt>Leakage</dt><dd>The answer showing up in the input. Avoided by reading code as it was before each change.</dd>
+  <dt>MCP</dt><dd>Model Context Protocol: how agents discover and call tools. IntelliJ ships an MCP server.</dd>
+  <dt>Hook</dt><dd>A command Claude Code runs on an event; ours runs on every prompt and adds context.</dd>
+  <dt>Read action / EDT</dt><dd>IntelliJ's rules: read code under a read lock, update UI on the event dispatch thread.</dd>
+</dl>
+<footer>Source of truth for every number: the <a href="../context-packer-eval/">eval report</a>, generated from the run files by
+<code>eval/make_report.py</code>.</footer>
+</main>
+</div>
+</body>
+</html>

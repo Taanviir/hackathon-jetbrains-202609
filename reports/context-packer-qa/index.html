@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Context Packer jury Q&amp;A</title>
+<meta name="description" content="The 30-second pitch, the numbers to remember, and honest answers to the questions a jury is likely to ask.">
+<style>
+:root {
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #75746f; --rule: #e4e3de;
+  --s1: #2a78d6; --s2: #eb6834; --s1-soft: #e3eefb; --s2-soft: #fbe9e1; --code: #f0efec;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #9b9a92; --rule: #34332f;
+  --s1: #3987e5; --s2: #d95926; --s1-soft: #16283d; --s2-soft: #3a2117; --code: #262624;
+} }
+:root[data-theme="dark"] {
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #9b9a92; --rule: #34332f;
+  --s1: #3987e5; --s2: #d95926; --s1-soft: #16283d; --s2-soft: #3a2117; --code: #262624;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 96px; }
+nav { font-size: 14px; color: var(--ink-3); display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+nav a { color: inherit; } nav a[aria-current] { color: var(--ink); font-weight: 600; text-decoration: none; }
+h1 { font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 8px; }
+h2 { font-size: 22px; margin: 48px 0 12px; }
+p, li { color: var(--ink-2); } strong { color: var(--ink); }
+a { color: var(--s1); }
+code { font: 13.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.pitch { background: var(--s1-soft); border-radius: 14px; padding: 20px 22px; font-size: 18px; line-height: 1.55; color: var(--ink); }
+.nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.num { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 14px 16px; }
+.num b { display: block; font-size: 24px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.num span { font-size: 14px; color: var(--ink-3); }
+details { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; margin: 8px 0; }
+summary { cursor: pointer; padding: 14px 16px; font-weight: 650; list-style: none; }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "+"; display: inline-block; width: 20px; color: var(--s1); font-weight: 700; }
+details[open] summary::before { content: "−"; }
+details > div { padding: 0 16px 14px 36px; } details > div p { margin: 0 0 10px; }
+.tag { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 8px; margin-left: 6px; vertical-align: 2px; }
+.tag.hard { background: var(--s2-soft); color: var(--s2); }
+.say { border-left: 3px solid var(--s1); padding-left: 12px; color: var(--ink); }
+.plan li { margin: 6px 0; }
+footer { margin-top: 64px; font-size: 14px; color: var(--ink-3); }
+</style>
+</head>
+<body>
+<main>
+<nav><a href="../../">All reports</a><a href="../context-packer-explained/">Explained</a><a href="../context-packer-wiki/">Technical wiki</a><a href="../context-packer-qa/" aria-current="page">Jury Q&amp;A</a><a href="../context-packer-eval/">Eval report</a></nav>
+<h1>Jury Q&amp;A</h1>
+<p>What to say, what to remember, and honest answers to the likely questions. Click a question to open it. The ones marked
+<span class="tag hard">tough</span> are where a sharp juror will push.</p>
+
+<h2>The 30-second pitch</h2>
+<div class="pitch">Coding agents spend most of their effort finding the right files, one search at a time. <strong>Context Packer</strong>
+ranks every file in the project in about four seconds, using <strong>Jev</strong>, a model that can't write but judges fast and
+cheaply, together with classic keyword search. On 70 real JetBrains commits it had never seen, it puts 69% of the files the
+developer actually touched into its top 10, against 53% for keyword search. It matches an LLM re-ranker at the top 10 at
+about 30× the speed, and Claude Code, handed its ranking up front, needs a quarter fewer steps to reach the same answer.
+<strong>Jev decides. The LLM writes.</strong></div>
+
+<h2>Numbers to remember</h2>
+<div class="nums">
+  <div class="num"><b>0.69 vs 0.53</b><span>recall@10, Context Packer vs keyword search, 70 held-out Koog commits</span></div>
+  <div class="num"><b>+16 points</b><span>95% interval +10 to +23: not luck</span></div>
+  <div class="num"><b>~4 s · $0.03</b><span>one ranking of 1,705 files, ~50 Jev calls</span></div>
+  <div class="num"><b>30× faster</b><span>than an LLM re-ranker, same top-10 result (1 s vs 29 s)</span></div>
+  <div class="num"><b>−25% turns</b><span>Claude Code with the hook, same answers on 7 of 8 tasks</span></div>
+  <div class="num"><b>2 repos</b><span>Koog, plus Exposed never tuned on (recall@5 0.54 vs 0.43)</span></div>
+</div>
+
+<h2>The idea</h2>
+<details><summary>What is Jev?</summary><div>
+<p>A model from TypeSafe that <strong>can't generate text</strong>. You give it some data and typed questions; it returns
+calibrated probabilities. That makes it fast (about 1 s a call) and cheap ($0.042 per million input tokens, output free). We
+ask it, for every file, "does this change need this file?"</p></div></details>
+<details><summary>Why not just use an LLM?</summary><div>
+<p>We tested exactly that. An LLM re-ranking the same shortlist <strong>ties</strong> us at the top 10 and is a bit better at the
+top 5, but takes about <strong>29 s per request against ~1 s</strong>, at 3.5× the cost. For a step that runs before every agent
+task, speed is the product.</p>
+<p class="say">"An LLM can do this judgement. Jev does it thirty times faster, which is what makes it usable on every request."</p></div></details>
+<details><summary>What's BM25, and why is it in there?</summary><div>
+<p>The standard keyword-search formula: a file scores higher when it uses the task's words often, when those words are rare in the
+project, and it isn't just a long file. It's the honest baseline, since "just grep it, done well" is exactly this. It's also half
+of our shortlist, because it's genuinely good when a task names an identifier.</p></div></details>
+<details><summary>Why rank twice ("re-rank")?</summary><div>
+<p>Because Jev reading only a summary of each file lost to keyword search. The fix is standard in search: cast a cheap, wide net
+first (keyword search plus Jev on summaries, best 60 of each), then look carefully at just those ~100 files, with Jev reading
+their full source. The careful look is where Jev is strong.</p></div></details>
+
+<h2>The evidence</h2>
+<details><summary>Why should I trust your numbers? <span class="tag hard">tough</span></summary><div>
+<p>Three safeguards. (1) <strong>No leakage</strong>: each test is a real commit, and we read the code as it was <em>before</em> the
+change, so the answer isn't sitting in the files. (2) <strong>Held out</strong>: every setting was chosen on 40 dev tasks, then
+we measured 70 other tasks once. (3) <strong>Intervals</strong>: the +16-point gain has a 95% interval of +10 to +23.</p>
+<p>And we publish the failure: our first held-out attempt <em>lost</em> to keyword search. The eval report explains why and what
+we fixed.</p></div></details>
+<details><summary>Is this just one repository?</summary><div>
+<p>No. We ran the pipeline, frozen with no changes, on a second JetBrains repo, Exposed. It clearly beat keyword search in its top 5
+(0.54 against 0.43). At top 10 it points the same way but isn't significant on 40 tasks. Both repos are Kotlin; other languages
+run but aren't measured.</p></div></details>
+<details><summary>Does it make agents faster? <span class="tag hard">tough</span></summary><div>
+<p class="say">"It makes them do less work, not finish sooner."</p>
+<p>With the hook, Claude Code needed 25% fewer turns (interval −5.9 to −0.5 per task), 38% fewer searches and 15% less money for
+the same answers. Wall time was the same. Good agents are already fast at grepping for words the task names. The saving shows up
+in steps and spend.</p></div></details>
+<details><summary>Why does it need a hook? Won't the agent just call your tool? <span class="tag hard">tough</span></summary><div>
+<p>No, and that's a finding. Offered as an MCP tool, Claude Code never called it in five tries, even when its system prompt said to.
+It trusts its own search. So a Claude Code hook runs before every request and hands over the ranking. The agent doesn't have to
+decide anything; it just starts with the files.</p></div></details>
+<details><summary>Isn't this just embeddings / RAG?</summary><div>
+<p>Different mechanism. Embeddings compare vectors for similarity and need an index kept in sync. Here there's no index to build: Jev
+reads the actual code and answers "does this change need this file?" as a probability, fresh on every request, combined with
+keyword search. We didn't benchmark an embedding baseline; the baselines we did run are keyword search and an LLM re-ranker.</p></div></details>
+
+<h2>Practicalities</h2>
+<details><summary>How does it fit into JetBrains tools?</summary><div>
+<p>It's a real IntelliJ plugin. It uses the IDE's own project index to pick files (skipping generated and excluded code), reads
+unsaved editor text, and builds its summaries in the background when the project opens. It has a tool window, and it registers
+<code>pack_context</code> on IntelliJ's built-in MCP server, so any MCP agent can call it. It's part of IntelliJev: one decision
+layer, many "finders".</p></div></details>
+<details><summary>What does it cost to run?</summary><div>
+<p>About $0.03 per ranking on a 1,700-file project, all Jev. Each IDE session has a hard cap (20M tokens, about 30 rankings) so an
+agent in a loop can't run up a bill.</p></div></details>
+<details><summary>Where does my code go? <span class="tag hard">tough</span></summary><div>
+<p>To TypeSafe's API: a short summary of every candidate file, and the first 6,000 characters of about 100 shortlisted files, per
+ranking. Ask LLM sends the picked files to the LLM provider. Nothing is stored by the plugin beyond an in-memory cache.</p></div></details>
+<details><summary>What if Jev is down?</summary><div>
+<p>If Jev answers nothing at all, the plugin says so rather than quietly showing keyword results. Partial failures (a slow call, a
+failed later stage) only degrade the ranking. Calls retry with backoff, and the hook gives up after 25 s so it never blocks a
+prompt.</p></div></details>
+<details><summary>What's next?</summary><div>
+<p>More languages and repositories in the eval; making the ranking faster so agents also finish sooner; and the other IntelliJev
+finders on the same decision layer.</p></div></details>
+
+<h2>If the demo breaks</h2>
+<ul class="plan">
+  <li><strong>Before going on:</strong> send one throwaway request. The first MCP call after the IDE starts takes about 10 s; after that it's about 4 s.</li>
+  <li><strong>The panel doesn't fill:</strong> press Pack in the tool window yourself. Same pipeline, same result.</li>
+  <li><strong>Nothing works (network, API):</strong> switch to the recorded video and narrate over it.</li>
+  <li><strong>A juror asks about a weak number:</strong> say it plainly and point to the eval report. We publish the failures on purpose.</li>
+</ul>
+<footer>Every number here comes from the <a href="../context-packer-eval/">eval report</a>. The concepts are explained in the
+<a href="../context-packer-wiki/">technical wiki</a>.</footer>
+</main>
+</body>
+</html>
