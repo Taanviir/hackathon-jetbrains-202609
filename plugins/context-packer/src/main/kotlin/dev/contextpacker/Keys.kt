@@ -32,6 +32,6 @@ class MissingKeyException(vararg keys: Keys) : IllegalStateException(
 )
 
 class BudgetExceededException(spent: Long, budget: Long) : IllegalStateException(
-    "Jev budget for this IDE session is used up (%,d of %,d input tokens). Set CONTEXT_PACKER_TOKEN_BUDGET to raise it."
+    "Jev session threshold reached (%,d of %,d reported input tokens). Set CONTEXT_PACKER_TOKEN_BUDGET to raise it."
         .format(spent, budget),
 )

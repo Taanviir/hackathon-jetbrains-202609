@@ -78,9 +78,11 @@ Needs an IntelliJ-based IDE, 2025.2 or newer.
      about 30% of calls under load (429s and 503s), so a pack takes 30-60 s.
    - `OPENROUTER_API_KEY`, only for the **Ask LLM** button. Jev never goes through OpenRouter.
 
-   Environment variables with the same names work too, and win over stored keys. Each IDE session
-   stops after 20M Jev input tokens (about 37 packs, $0.84) so a looping agent can't drain an
-   account; set `CONTEXT_PACKER_TOKEN_BUDGET` to change that.
+   Environment variables with the same names work too, and win over stored keys. Before starting
+   another pack, the plugin checks whether the session has reached 20M **reported** Jev input tokens;
+   set `CONTEXT_PACKER_TOKEN_BUDGET` to change that threshold. An in-progress pack can exceed it,
+   and missing usage cannot be counted, so this is not a strict spending cap. Requests include
+   retry attempts; any unknown usage makes the pack's API fee unavailable rather than zero.
 
    Fast keywords needs none of these keys. Laya uses a local server instead of an API key.
 

@@ -1,6 +1,9 @@
 package dev.contextpacker.jev
 
 import com.sun.net.httpserver.HttpServer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -9,12 +12,15 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.net.InetSocketAddress
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class JevClientTest {
@@ -37,7 +43,7 @@ class JevClientTest {
             requests += ex.requestHeaders.getFirst("Authorization") to ex.requestBody.readAllBytes().decodeToString()
             val index = hits.getAndIncrement()
             val status = statuses.getOrNull(index) ?: 200
-            val body = (if (status == 200) responseBodies.getOrNull(index) ?: fixture else """{"detail":"nope"}""").toByteArray()
+            val body = (responseBodies.getOrNull(index) ?: if (status == 200) fixture else """{"detail":"nope"}""").toByteArray()
             retryAfterMs?.let { ex.responseHeaders.add("retry-after-ms", it) }
             ex.sendResponseHeaders(status, body.size.toLong())
             ex.responseBody.use { it.write(body) }
@@ -97,11 +103,95 @@ class JevClientTest {
 
     @Test
     fun `retries 429 and 5xx, honouring retry-after-ms`() = runBlocking {
-        val client = JevClient("k", endpoint = serve(429, 503, retryAfterMs = "10"))
+        val client = JevClient("k", endpoint = serve(429, 503, retryAfterMs = "10", responseBodies = listOf(
+            """{"detail":"retry","usage":{"input_tokens":5}}""",
+            """{"detail":"retry"}""",
+        )))
         val started = System.nanoTime()
         assertEquals(0.96, client.systemOne(state, questions).noul("f000")!!, 1e-9)
         assertEquals(3, requests.size)
+        assertEquals(listOf(5, 0, 400), client.calls.map { it.inputTokens })
+        assertEquals(listOf(true, false, true), client.calls.map { it.usageKnown })
+        assertEquals(listOf(true, true, false), client.calls.map { it.error != null })
         assertTrue("used retry-after-ms, not the 0.5 s backoff", (System.nanoTime() - started) / 1_000_000 < 400)
+    }
+
+    @Test
+    fun `records malformed HTTP 200 with known or unknown usage`() = runBlocking {
+        val client = JevClient("k", endpoint = serve(responseBodies = listOf(
+            """{"usage":{"input_tokens":17},"answers":[]}""",
+            """{"usage": """,
+        )))
+        repeat(2) {
+            try {
+                client.systemOne(state, questions)
+                fail("expected malformed response to throw")
+            } catch (_: Exception) {
+                // Parsing must still fail; only the ledger behavior changes.
+            }
+        }
+        assertEquals(listOf(17, 0), client.calls.map { it.inputTokens })
+        assertEquals(listOf(true, false), client.calls.map { it.usageKnown })
+        assertTrue(client.calls.all { it.error != null })
+    }
+
+    @Test
+    fun `records a dispatched IO failure`() = runBlocking {
+        server.createContext("/drop") { ex ->
+            ex.requestBody.readAllBytes()
+            ex.close()
+        }
+        server.start()
+        val client = JevClient("k", endpoint = "http://127.0.0.1:${server.address.port}/drop", maxRetries = 0)
+        try {
+            client.systemOne(state, questions)
+            fail("expected transport failure")
+        } catch (_: Exception) {
+            val call = client.calls.single()
+            assertEquals(0, call.inputTokens)
+            assertTrue(!call.usageKnown)
+            assertNotNull(call.error)
+        }
+    }
+
+    @Test
+    fun `records an in flight cancellation`() = runBlocking {
+        val received = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        server.createContext("/slow") { ex ->
+            ex.requestBody.readAllBytes()
+            received.countDown()
+            release.await(5, TimeUnit.SECONDS)
+            runCatching { ex.sendResponseHeaders(200, -1); ex.close() }
+        }
+        server.start()
+        val client = JevClient("k", endpoint = "http://127.0.0.1:${server.address.port}/slow")
+        try {
+            val job = launch(Dispatchers.IO) { client.systemOne(state, questions) }
+            assertTrue(received.await(3, TimeUnit.SECONDS))
+            job.cancelAndJoin()
+            val call = client.calls.single()
+            assertEquals("Jev request cancelled", call.error)
+            assertTrue(!call.usageKnown)
+        } finally {
+            release.countDown()
+        }
+    }
+
+    @Test
+    fun `negative retry-after falls back to bounded backoff`() = runBlocking {
+        val client = JevClient("k", endpoint = serve(429, retryAfterMs = "-5"))
+        val started = System.nanoTime()
+        client.systemOne(state, questions)
+        assertTrue("negative header must not become a zero delay", (System.nanoTime() - started) / 1_000_000 >= 300)
+    }
+
+    @Test
+    fun `nonfinite retry-after falls back to bounded backoff`() = runBlocking {
+        val client = JevClient("k", endpoint = serve(429, retryAfterMs = "NaN"))
+        val started = System.nanoTime()
+        client.systemOne(state, questions)
+        assertTrue("nonfinite header must not become a zero delay", (System.nanoTime() - started) / 1_000_000 >= 300)
     }
 
     @Test
