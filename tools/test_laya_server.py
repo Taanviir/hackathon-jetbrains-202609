@@ -26,6 +26,7 @@ class FakeModel:
     version = "fake-laya"
     torch_version = "fake-torch"
     device = "cpu"
+    checkpoint = "fake-checkpoint"
 
     def __init__(self, delay: float = 0) -> None:
         self.delay = delay
@@ -87,6 +88,7 @@ class LayaServerTest(unittest.TestCase):
         self.assertEqual("fake-laya", health["version"])
         self.assertEqual("fake-torch", health["torch"])
         self.assertEqual("cpu", health["device"])
+        self.assertEqual("fake-checkpoint", health["checkpoint"])
 
         output = io.StringIO()
         with redirect_stdout(output), redirect_stderr(output):
@@ -202,9 +204,10 @@ class CliTest(unittest.TestCase):
             with self.subTest(download=download), tempfile.TemporaryDirectory() as temporary:
                 cache = Path(temporary) / "laya-cache"
 
-                def check_environment():
+                def check_environment(revision):
                     self.assertEqual(str(cache.resolve()), os.environ["HF_HOME"])
                     self.assertEqual(expected, os.environ["HF_HUB_OFFLINE"])
+                    self.assertEqual(laya_server.DEFAULT_REVISION, revision)
                     return FakeModel()
 
                 with mock.patch.dict(os.environ), mock.patch.object(laya_server, "EnglishModel", side_effect=check_environment), mock.patch.object(laya_server, "create_server", return_value=NoopServer()):
