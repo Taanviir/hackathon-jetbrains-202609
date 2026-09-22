@@ -32,7 +32,7 @@ class ContextPackerToolset : McpToolset {
     ): String {
         val project = currentCoroutineContext().project
         val report = try {
-            project.service<ContextPackerService>().pack(task)
+            project.service<ContextPackerService>().pack(task, source = "an agent over MCP")
         } catch (e: MissingKeyException) {
             throw McpExpectedError(e.message ?: "API key missing")
         } catch (e: BudgetExceededException) {

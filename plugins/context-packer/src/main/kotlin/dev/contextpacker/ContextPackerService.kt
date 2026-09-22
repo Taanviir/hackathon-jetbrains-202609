@@ -30,6 +30,8 @@ import kotlin.coroutines.cancellation.CancellationException
 
 data class PackReport(
     val result: PackResult,
+    /** Who asked: the tool window, or an agent over MCP. */
+    val source: String,
     val sketchMs: Long,
     val jevCalls: Int,
     val inputTokens: Long,
@@ -60,7 +62,14 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
     val sessionTokens get() = jev?.calls?.sumOf { it.inputTokens.toLong() } ?: 0L
     private val sessionBudget = System.getenv("CONTEXT_PACKER_TOKEN_BUDGET")?.toLongOrNull() ?: 20_000_000L
 
-    suspend fun pack(task: String, onProgress: (String) -> Unit = {}): PackReport {
+    private val listeners = java.util.concurrent.CopyOnWriteArrayList<(PackReport) -> Unit>()
+
+    /** Called after every pack, whoever asked, so the tool window can show what an agent was given. */
+    fun onPack(listener: (PackReport) -> Unit) {
+        listeners += listener
+    }
+
+    suspend fun pack(task: String, source: String = "tool window", onProgress: (String) -> Unit = {}): PackReport {
         val client = jevClient()
         if (sessionTokens >= sessionBudget) throw BudgetExceededException(sessionTokens, sessionBudget)
         val before = client.calls.size
@@ -78,12 +87,13 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         )
         return PackReport(
             result = result,
+            source = source,
             sketchMs = sketchMs,
             jevCalls = calls.size,
             inputTokens = calls.sumOf { it.inputTokens.toLong() },
             failedCalls = calls.count { it.error != null },
             jevModel = "${client.model} via ${client.backend.name.lowercase()}",
-        )
+        ).also { report -> listeners.forEach { it(report) } }
     }
 
     /** Full text of each path, for building a prompt out of the picks. */
