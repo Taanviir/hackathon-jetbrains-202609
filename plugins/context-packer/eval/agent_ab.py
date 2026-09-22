@@ -106,8 +106,10 @@ class Tools:
         t0 = time.perf_counter()
         files = koog.files_at(self.task.parent)
         sk = {p: js.sketch(p, s) for p, s in files.items()}
+        # BM25 runs alongside pass 1, as it does in the plugin
+        bm25 = asyncio.create_task(asyncio.to_thread(js.bm25_rank, task, files))
         s1 = await js.score_pass1(self.jev, task, sk, 60)
-        br = js.bm25_rank(task, files)
+        br = await bm25
         pool = list(dict.fromkeys(br[:60] + sorted(s1, key=lambda p: -s1[p])[:60]))
         s2 = await js.score_full(self.jev, task, files, pool, 6, 6000)
         pos = {p: i for i, p in enumerate(br)}
@@ -259,16 +261,20 @@ async def main():
     ap.add_argument("--tasks", type=int, default=10)
     ap.add_argument("--offset", type=int, default=20)
     ap.add_argument("--parallel", type=int, default=5)
+    ap.add_argument("--vague", action="store_true", help="give both arms the identifier-free rewrite from vague.py")
     args = ap.parse_args()
     tasks = koog.load_tasks(limit=args.offset + args.tasks)[args.offset:]
+    if args.vague:
+        rewrites = {v["sha"]: v["vague"] for v in json.loads((RESULTS / "vague_tasks.json").read_text())}
+        tasks = [koog.Task(t.sha, t.parent, rewrites[t.sha[:8]], t.truth) for t in tasks]
     key = os.environ["OPENROUTER_API_KEY"]
     async with httpx.AsyncClient(timeout=120, headers={"Authorization": f"Bearer {key}", "X-Title": "Context Packer eval"}) as http:
         sem = asyncio.Semaphore(args.parallel)
         rows = await asyncio.gather(*(run_task(http, t, sem) for t in tasks))
-    summary = {"model": MODEL, "tasks": len(rows), "offset": args.offset, **summarise(rows)}
+    summary = {"model": MODEL, "tasks": len(rows), "offset": args.offset, "vague": args.vague, **summarise(rows)}
     print(json.dumps(summary, indent=1))
     RESULTS.mkdir(exist_ok=True)
-    (RESULTS / f"agent_ab_o{args.offset}_t{args.tasks}.json").write_text(json.dumps({"summary": summary, "rows": rows}, indent=1))
+    (RESULTS / f"agent_ab_o{args.offset}_t{args.tasks}{'_vague' if args.vague else ''}.json").write_text(json.dumps({"summary": summary, "rows": rows}, indent=1))
 
 
 if __name__ == "__main__":

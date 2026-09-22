@@ -15,6 +15,7 @@
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="Context Packer" anchor="right" secondary="false" icon="AllIcons.Actions.Find"
                     factoryClass="dev.contextpacker.ui.ContextPackerToolWindowFactory"/>
+        <postStartupActivity implementation="dev.contextpacker.WarmUp"/>
     </extensions>
 
     <actions>
