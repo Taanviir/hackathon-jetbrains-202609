@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Context Packer eval</title>
+<meta name="description" content="How Context Packer was measured: Jev plus BM25 file retrieval on held-out JetBrains/koog commits, and an agent A/B.">
+<style>
+:root {
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #75746f;
+  --rule: #e4e3de; --grid: #ecebe7; --s1: #2a78d6; --s2: #eb6834; --good: #0ca30c; --bad: #d03b3b;
+  --code: #f0efec;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #9b9a92;
+  --rule: #34332f; --grid: #2a2a28; --s1: #3987e5; --s2: #d95926; --code: #262624;
+} }
+:root[data-theme="dark"] {
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #9b9a92;
+  --rule: #34332f; --grid: #2a2a28; --s1: #3987e5; --s2: #d95926; --code: #262624;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
+h2 { font-size: 20px; margin: 48px 0 8px; }
+h3 { font-size: 16px; margin: 24px 0 6px; }
+p, li { color: var(--ink-2); } p strong, li strong { color: var(--ink); }
+.lede { font-size: 18px; color: var(--ink-2); margin: 0 0 20px; }
+.meta { font-size: 14px; color: var(--ink-3); } .meta a { color: inherit; }
+a { color: var(--s1); }
+code { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 20px; margin: 16px 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 20px 0; }
+.tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; }
+.tile .n { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.tile .l { font-size: 13px; color: var(--ink-3); }
+.tw { overflow-x: auto; margin: 12px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { color: var(--ink-3); font-weight: 600; font-size: 13px; }
+td:not(:first-child), th:not(:first-child) { text-align: right; }
+table.left td, table.left th { text-align: left; }
+.chart { width: 100%; height: auto; display: block; }
+.chart .grid { stroke: var(--grid); stroke-width: 1; } .chart .axis { stroke: var(--ink-3); stroke-width: 1; }
+.chart .zero { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .tick { fill: var(--ink-3); font-size: 12px; } .chart .val { fill: var(--ink-2); font-size: 12px; font-weight: 600; }
+.chart .s1 { fill: var(--s1); } .chart .s2 { fill: var(--s2); }
+.chart .dot { fill: var(--s1); stroke: var(--surface); stroke-width: 2; } .chart .whisker { stroke: var(--s1); stroke-width: 2; }
+.chart .hit { fill: transparent; } .chart .mark:hover path, .chart .mark:hover .dot { opacity: .8; }
+.legend { display: flex; gap: 18px; font-size: 13px; color: var(--ink-2); margin: 0 0 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+#tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--page); font-size: 13px; padding: 6px 9px; border-radius: 6px; opacity: 0; transition: opacity .1s; }
+ol.timeline { padding-left: 20px; } ol.timeline li { margin: 8px 0; }
+.flag { font-weight: 600; } .flag.good { color: var(--good); } .flag.bad { color: var(--bad); }
+.note { font-size: 14px; color: var(--ink-3); }
+</style>
+</head>
+<body>
+<main>
+<p class="meta"><a href="../../">All reports</a> · Context Packer · 22 September 2026</p>
+<h1>Context Packer eval</h1>
+<p class="lede">Can Jev, a model that answers typed questions but never writes text, find the files a coding task needs
+better than keyword search, and does handing those files to an agent help it? Measured on real JetBrains/koog commits.</p>
+
+<div class="tiles">
+  <div class="tile"><div class="n">0.69</div><div class="l">recall@10, Context Packer<br>70 held-out tasks</div></div>
+  <div class="tile"><div class="n">0.53</div><div class="l">recall@10, BM25 keyword search<br>same tasks</div></div>
+  <div class="tile"><div class="n">+0.16</div><div class="l">difference, 95% CI<br>[+0.10, +0.23]</div></div>
+  <div class="tile"><div class="n">4.4 s</div><div class="l">one pack in the IDE<br>2,206 files, about $0.03</div></div>
+</div>
+
+<h2>The headline</h2>
+<p>Each task is a real Koog commit subject. The right answer is the <code>.kt</code> files that commit modified, and
+every file is read as it was <em>before</em> the commit so the answer can't leak in. The way BM25 and Jev are combined
+was chosen on 40 dev tasks, then measured once on 70 test tasks nobody had looked at.</p>
+<div class="card">
+  <div class="legend"><span><i style="background:var(--s1)"></i>Context Packer</span><span><i style="background:var(--s2)"></i>BM25</span></div>
+  <svg viewBox="0 0 560 260" role="img" aria-labelledby="c1t" class="chart"><title id="c1t">Recall at 5, 10 and 20 on 70 held-out tasks: BM25 against Context Packer</title><line x1="44" x2="552" y1="224.0" y2="224.0" class="grid"/><text x="36" y="228.0" class="tick" text-anchor="end">0.00</text><line x1="44" x2="552" y1="172.0" y2="172.0" class="grid"/><text x="36" y="176.0" class="tick" text-anchor="end">0.25</text><line x1="44" x2="552" y1="120.0" y2="120.0" class="grid"/><text x="36" y="124.0" class="tick" text-anchor="end">0.50</text><line x1="44" x2="552" y1="68.0" y2="68.0" class="grid"/><text x="36" y="72.0" class="tick" text-anchor="end">0.75</text><line x1="44" x2="552" y1="16.0" y2="16.0" class="grid"/><text x="36" y="20.0" class="tick" text-anchor="end">1.00</text><g class="mark" data-tip="BM25 · recall@5 0.415"><rect x="89.0" y="16" width="42" height="208" class="hit"/><path d="M93.0,224.0 V141.7 Q93.0,137.7 97.0,137.7 H123.0 Q127.0,137.7 127.0,141.7 V224.0 Z" class="s2"/><text x="110.0" y="131.7" class="val" text-anchor="middle">0.41</text></g><g class="mark" data-tip="Context Packer · recall@5 0.539"><rect x="125.0" y="16" width="42" height="208" class="hit"/><path d="M129.0,224.0 V115.9 Q129.0,111.9 133.0,111.9 H159.0 Q163.0,111.9 163.0,115.9 V224.0 Z" class="s1"/><text x="146.0" y="105.9" class="val" text-anchor="middle">0.54</text></g><text x="128.0" y="248" class="tick" text-anchor="middle">recall@5</text><g class="mark" data-tip="BM25 · recall@10 0.526"><rect x="257.0" y="16" width="42" height="208" class="hit"/><path d="M261.0,224.0 V118.6 Q261.0,114.6 265.0,114.6 H291.0 Q295.0,114.6 295.0,118.6 V224.0 Z" class="s2"/><text x="278.0" y="108.6" class="val" text-anchor="middle">0.53</text></g><g class="mark" data-tip="Context Packer · recall@10 0.688"><rect x="293.0" y="16" width="42" height="208" class="hit"/><path d="M297.0,224.0 V84.9 Q297.0,80.9 301.0,80.9 H327.0 Q331.0,80.9 331.0,84.9 V224.0 Z" class="s1"/><text x="314.0" y="74.9" class="val" text-anchor="middle">0.69</text></g><text x="296.0" y="248" class="tick" text-anchor="middle">recall@10</text><g class="mark" data-tip="BM25 · recall@20 0.629"><rect x="425.0" y="16" width="42" height="208" class="hit"/><path d="M429.0,224.0 V97.2 Q429.0,93.2 433.0,93.2 H459.0 Q463.0,93.2 463.0,97.2 V224.0 Z" class="s2"/><text x="446.0" y="87.2" class="val" text-anchor="middle">0.63</text></g><g class="mark" data-tip="Context Packer · recall@20 0.803"><rect x="461.0" y="16" width="42" height="208" class="hit"/><path d="M465.0,224.0 V61.1 Q465.0,57.1 469.0,57.1 H495.0 Q499.0,57.1 499.0,61.1 V224.0 Z" class="s1"/><text x="482.0" y="51.1" class="val" text-anchor="middle">0.80</text></g><text x="464.0" y="248" class="tick" text-anchor="middle">recall@20</text><line x1="44" x2="552" y1="224.0" y2="224.0" class="axis"/></svg>
+  <div class="tw"><table class=""><thead><tr><th>70 held-out tasks</th><th>recall@5</th><th>recall@10</th><th>recall@20</th></tr></thead><tbody><tr><td>BM25 keyword search</td><td>0.41</td><td>0.53</td><td>0.63</td></tr><tr><td>Jev re-rank alone</td><td>0.51</td><td>0.63</td><td>0.74</td></tr><tr><td><strong>Context Packer (Jev + BM25)</strong></td><td><strong>0.54</strong></td><td><strong>0.69</strong></td><td><strong>0.80</strong></td></tr></tbody></table></div>
+</div>
+<div class="card">
+  <p style="margin:0 0 8px">Improvement over BM25, paired bootstrap over tasks. Neither interval touches zero.</p>
+  <svg viewBox="0 0 560 130" role="img" aria-labelledby="c2t" class="chart"><title id="c2t">Improvement over BM25 with 95% bootstrap intervals</title><line x1="154.3" x2="154.3" y1="10" y2="102" class="zero"/><text x="154.3" y="120" class="tick" text-anchor="middle">+0.0</text><line x1="282.9" x2="282.9" y1="10" y2="102" class="grid"/><text x="282.9" y="120" class="tick" text-anchor="middle">+0.1</text><line x1="411.4" x2="411.4" y1="10" y2="102" class="grid"/><text x="411.4" y="120" class="tick" text-anchor="middle">+0.2</text><line x1="540.0" x2="540.0" y1="10" y2="102" class="grid"/><text x="540.0" y="120" class="tick" text-anchor="middle">+0.3</text><g class="mark" data-tip="recall@5: +0.124, 95% CI [+0.072, +0.181]"><rect x="90" y="20" width="450" height="28" class="hit"/><line x1="246.3" x2="387.3" y1="34" y2="34" class="whisker"/><line x1="246.3" x2="246.3" y1="28" y2="40" class="whisker"/><line x1="387.3" x2="387.3" y1="28" y2="40" class="whisker"/><circle cx="313.7" cy="34" r="5" class="dot"/></g><text x="80" y="38" class="tick" text-anchor="end">recall@5</text><g class="mark" data-tip="recall@10: +0.162, 95% CI [+0.101, +0.231]"><rect x="90" y="58" width="450" height="28" class="hit"/><line x1="283.9" x2="451.2" y1="72" y2="72" class="whisker"/><line x1="283.9" x2="283.9" y1="66" y2="78" class="whisker"/><line x1="451.2" x2="451.2" y1="66" y2="78" class="whisker"/><circle cx="362.4" cy="72" r="5" class="dot"/></g><text x="80" y="76" class="tick" text-anchor="end">recall@10</text></svg>
+</div>
+
+<h2>How it works</h2>
+<ol>
+  <li><strong>Sketch</strong> every source file into ~300 tokens: path, package, declarations and first doc lines.</li>
+  <li><strong>Pass 1.</strong> Jev reads 60 sketches per call and gives, for each, P("implementing the task requires reading or editing this file"). BM25 ranks the full text alongside.</li>
+  <li><strong>Pool</strong> the top 60 of each, then <strong>pass 2</strong>: Jev asks the same question over the pool's <em>full source</em>, 6 files per call.</li>
+  <li><strong>Fuse</strong>: <code>score = jev + 1 / (1 + bm25_rank / 10)</code>, chosen on dev.</li>
+</ol>
+
+<h2>How we got here</h2>
+<p>The number above is the end of a path with two wrong turns. Both are kept here, because they're why the final number is believable.</p>
+<ol class="timeline">
+  <li><strong>API limits.</strong> 100 sketches fit in one call (28k tokens, 0.8 s); 150 fail with <code>max_tokens_exceeded</code>. A full sweep of Koog is 18-37 calls.</li>
+  <li><span class="flag bad">Jev alone loses to keyword search.</span> On sketches only, recall@10 was 0.37 against BM25's 0.46 (10 tasks). Sketches hide what many tasks are about.</li>
+  <li><span class="flag good">Re-ranking on full source wins, on the tuning set.</span> Pooling BM25 and Jev, then re-reading the pool in full, reached 0.64 against 0.47 on 20 tasks.</li>
+  <li><span class="flag bad">It didn't hold on new tasks.</span> On 30 held-out tasks with those settings: 0.51 against BM25's 0.56. Two causes: commits that mostly <em>add</em> files were in the set (nothing can find a file that doesn't exist yet), and the BM25 weight was tuned on too few tasks.</li>
+  <li><strong>Fixed properly.</strong> We dropped add-dominated commits, ran the pipeline once over all 136 usable tasks saving every score, chose the fusion on dev only, and reported test once. The credits ran out at task 111; the 26 affected tasks are excluded, and none were in dev.</li>
+  <li><span class="flag good">Held-out result:</span> 0.69 against 0.53, interval [+0.10, +0.23].</li>
+</ol>
+
+<h3>Choosing the fusion on dev</h3>
+<div class="tw"><table class=""><thead><tr><th>variant</th><th>dev recall@5</th><th>dev recall@10</th></tr></thead><tbody><tr><td>blend_w1.0 ← chosen</td><td>0.54</td><td>0.71</td></tr><tr><td>rrf_k30</td><td>0.53</td><td>0.70</td></tr><tr><td>rrf_k10</td><td>0.52</td><td>0.69</td></tr><tr><td>blend_w0.5</td><td>0.49</td><td>0.69</td></tr><tr><td>rrf_k60</td><td>0.50</td><td>0.68</td></tr><tr><td>rrf_k5</td><td>0.51</td><td>0.65</td></tr><tr><td>bm25</td><td>0.42</td><td>0.56</td></tr></tbody></table></div>
+<p class="note">The pool holds 90% of the right files on test, so there's headroom left in the re-ranking.</p>
+
+<h3>A cheaper variant: skip pass 1</h3>
+<p>Pass 1 is two-thirds of the Jev calls. Scoring only BM25's top files with pass 2 costs little recall:</p>
+<div class="tw"><table class=""><thead><tr><th>test, 70 tasks</th><th>recall@5</th><th>recall@10</th><th>Jev calls per pack</th></tr></thead><tbody><tr><td>Full pipeline</td><td>0.54</td><td>0.69</td><td>~56</td></tr><tr><td>BM25 top 60 → pass 2</td><td>0.53</td><td>0.66</td><td>10</td></tr><tr><td>BM25 top 40 → pass 2</td><td>0.52</td><td>0.65</td><td>7</td></tr><tr><td>BM25 alone</td><td>0.41</td><td>0.53</td><td>0</td></tr></tbody></table></div>
+
+<h2>In the IDE</h2>
+<p>Timings from the plugin's own log on Koog, 2,206 candidate files. The first version built sketches from the IDE's
+Structure View, which runs Kotlin analysis at about 19 ms a file. The shipped version uses the regex sketcher the eval
+measured (a parity test checks the Kotlin port against it).</p>
+<div class="tw"><table class=""><thead><tr><th></th><th>sketch</th><th>pass 1 + BM25</th><th>pass 2</th><th>total</th></tr></thead><tbody><tr><td>Fresh IDE, Structure View sketches</td><td>42.7 s</td><td>2.9 s</td><td>2.2 s</td><td><strong>47.7 s</strong></td></tr><tr><td>Fresh IDE, regex sketches (shipped)</td><td>1.4 s</td><td>4.2 s</td><td>1.0 s</td><td><strong>6.6 s</strong></td></tr><tr><td>Warm, sketches cached</td><td>0.1 s</td><td>3.4 s</td><td>0.9 s</td><td><strong>4.4 s</strong></td></tr></tbody></table></div>
+<p class="note">Every pack: 53-56 Jev calls, 0 failed, about 0.65M input tokens ($0.03).</p>
+
+<h3>Why TypeSafe's API and not the free gateway</h3>
+<p>Vercel's AI Gateway serves the same Jev model for free, but under load it mostly refused:</p>
+<div class="tw"><table class="left"><thead><tr><th>probe</th><th>result</th></tr></thead><tbody><tr><td>1 call, 60 sketches</td><td>0 of 1 ok (503)</td></tr><tr><td>4 concurrent</td><td>1 of 4 ok (3 × 503)</td></tr><tr><td>16 concurrent</td><td>2 of 16 ok (9 × 503, 5 × 429)</td></tr><tr><td>Sequential, 0.5 s apart, 2-60 files</td><td>about half 429 at every size; 503 at 60</td></tr><tr><td>Simulated 10-call pack</td><td>28-62 s, ~70% of attempts failed before a retry landed</td></tr></tbody></table></div>
+<p class="note">TypeSafe's own API ran more than 5,000 calls at 16 concurrent with no rate limiting. The plugin uses it by
+default and keeps the gateway only as a fallback.</p>
+
+<h2>Agent A/B</h2>
+<p>The same agent (<code>z-ai/glm-5.3-flash</code>), prompt and tools (<code>list_dir</code>, <code>grep</code>,
+<code>read_file</code>) on a real checkout of Koog at each task's parent commit, 10 held-out tasks. The only difference
+is whether a <code>pack_context</code> tool exists. Every run ends when the agent submits its file list.</p>
+<div class="tw"><table class=""><thead><tr><th>10 tasks</th><th>without pack_context</th><th>with pack_context</th></tr></thead><tbody><tr><td>Final recall</td><td>0.97</td><td>0.97</td></tr><tr><td>Wall time, median</td><td>87 s</td><td><strong>68 s</strong></td></tr><tr><td>LLM calls, mean</td><td>16.9</td><td><strong>13.2</strong></td></tr><tr><td>Tokens, mean</td><td>242k</td><td><strong>165k</strong></td></tr><tr><td>LLM cost, 10 tasks</td><td>$0.169</td><td><strong>$0.117</strong></td></tr><tr><td>Time to first right file, median</td><td><strong>4.2 s</strong></td><td>12.7 s</td></tr></tbody></table></div>
+<p><strong>This result is mixed.</strong> With the packer the agent used fewer calls and tokens for the same recall. It was
+<em>not</em> faster to the first right file: these commit subjects name identifiers, so the explorer's first
+<code>grep</code> often hits at once, while the harness's Python <code>pack_context</code> took a median of 9.2 s (the plugin
+takes 4.4 s). The agent also kept exploring after it had the pack. Ten tasks is too few to call any of these differences
+significant.</p>
+<details><summary>Per task</summary>
+<div class="tw"><table class=""><thead><tr><th>task</th><th>wall, explore</th><th>wall, pack</th><th>calls, explore</th><th>calls, pack</th><th>first right file, explore</th><th>first right file, pack</th><th>recall, explore</th><th>recall, pack</th></tr></thead><tbody><tr><td>Update Koog trip planning agent example</td><td>96 s</td><td>38 s</td><td>19</td><td>4</td><td>1.9 s</td><td>13.7 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Add OpenAI GPT-5.5 and GPT-5.5 Pro models</td><td>76 s</td><td>76 s</td><td>15</td><td>16</td><td>2.3 s</td><td>15.5 s</td><td>0.67</td><td>0.67</td></tr><tr><td>AIAgentError populated incorrectly for reflective…</td><td>113 s</td><td>97 s</td><td>19</td><td>19</td><td>28.3 s</td><td>28.3 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Consider tool&#x27;s customName in tools from callable</td><td>47 s</td><td>69 s</td><td>10</td><td>12</td><td>4.3 s</td><td>14.7 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Return tool calls ahead of assistant message in OllamaClient</td><td>93 s</td><td>45 s</td><td>18</td><td>11</td><td>1.6 s</td><td>19.9 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Accept text/plain Content-Type on Ollama non-streaming responses</td><td>60 s</td><td>68 s</td><td>19</td><td>13</td><td>19.9 s</td><td>11.5 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Process Ollama batch embeddings</td><td>82 s</td><td>69 s</td><td>19</td><td>19</td><td>9.0 s</td><td>7.9 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Add trace attributes to all Langfuse spans, not j…</td><td>31 s</td><td>17 s</td><td>12</td><td>4</td><td>1.1 s</td><td>11.7 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Stop additionalProperties leaking as additional_properties to Op</td><td>101 s</td><td>187 s</td><td>19</td><td>19</td><td>22.9 s</td><td>9.5 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Refactor LLAMA model definitions for clarity</td><td>102 s</td><td>66 s</td><td>19</td><td>15</td><td>4.2 s</td><td>9.0 s</td><td>1.00</td><td>1.00</td></tr></tbody></table></div>
+</details>
+
+<h2>What it cost</h2>
+<div class="tw"><table class=""><thead><tr><th></th><th>input tokens</th><th>cost</th><th>note</th></tr></thead><tbody><tr><td>Spike and eval, first TypeSafe account</td><td>126M</td><td>$5.30</td><td>Ran dry at task 111 of the 136-task run.</td></tr><tr><td>Agent A/B, Jev (ledger)</td><td>5.3M</td><td>$0.22</td><td>Capped at 11M tokens by the ledger.</td></tr><tr><td>In-IDE checks, Jev</td><td>2.6M</td><td>$0.11</td><td>Four packs across three IDE restarts (idea.log).</td></tr><tr><td>Agent A/B, GLM on OpenRouter</td><td>-</td><td>$0.29</td><td>Both arms, 10 tasks.</td></tr></tbody></table></div>
+<p class="note">Jev lists at $0.042 per million input tokens, output free. After the first account ran dry, every eval run
+checks a persistent ledger and stops at a token cap, and the plugin caps each IDE session at 20M tokens.</p>
+
+<h2>Caveats</h2>
+<ul>
+  <li>One repository (Koog), one language (Kotlin). The sketcher handles other languages, but they aren't evaluated.</li>
+  <li>Commit subjects stand in for tasks. Real requests are often vaguer, which should favour Jev over keywords, but that isn't measured.</li>
+  <li>Recall counts only files the commit modified. A pick that's useful to read but wasn't edited counts as a miss.</li>
+  <li>The agent A/B is 10 tasks, with one model.</li>
+</ul>
+<p class="meta">Generated by <code>plugins/context-packer/eval/make_report.py</code> from the run files. Code and raw notes:
+<code>plugins/context-packer/</code>, <code>spike/RESULTS.md</code>.</p>
+</main>
+<div id="tip" role="tooltip"></div>
+<script>
+(() => {
+  const tip = document.getElementById("tip");
+  document.querySelectorAll(".mark").forEach(m => {
+    m.addEventListener("mousemove", ev => {
+      tip.textContent = m.dataset.tip; tip.style.opacity = 1;
+      tip.style.left = Math.min(ev.clientX + 12, innerWidth - tip.offsetWidth - 8) + "px";
+      tip.style.top = (ev.clientY + 14) + "px";
+    });
+    m.addEventListener("mouseleave", () => tip.style.opacity = 0);
+  });
+})();
+</script>
+</body>
+</html>
