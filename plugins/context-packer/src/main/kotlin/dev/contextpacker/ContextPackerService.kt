@@ -200,6 +200,7 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
 
     /** Fills the sketch cache without calling Jev, so the first real pack skips the sketching step. */
     suspend fun warm() {
+        if (provider == DecisionProvider.KEYWORDS) return
         val started = System.nanoTime()
         val docs = collectDocs()
         thisLogger().info("warm-up: sketched ${docs.size} files in ${(System.nanoTime() - started) / 1_000_000} ms")

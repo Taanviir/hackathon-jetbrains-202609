@@ -51,8 +51,9 @@ It's the re-rank on full source, fused with BM25, that wins.
 
 ### Fast keywords (local)
 
-Select **Fast keywords (local)** in the tool window, set `CONTEXT_PACKER_PROVIDER=keywords`, or
-call `pack_context` with `provider=keywords`. This explicit mode ranks the **full eligible source
+Select **Fast keywords (local)** in the tool window or call `pack_context` with `provider=keywords`.
+For a fresh project, `CONTEXT_PACKER_PROVIDER=keywords` sets the initial choice; a saved UI preference
+takes precedence over that environment default. This explicit mode ranks the **full eligible source
 corpus** with BM25 over paths and file text. It needs no API key or model server, makes no model
 request, and has $0 API fee and zero API tokens; local CPU and electricity are not priced. The UI
 and MCP output show ordinal keyword ranks, not model relevance or correctness confidence. It does
