@@ -7,6 +7,7 @@ import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import dev.contextpacker.pack.Candidates
 import kotlinx.coroutines.runBlocking
+import java.util.Base64
 import java.util.concurrent.TimeUnit
 
 class ContextPackerServiceIntegrationTest : BasePlatformTestCase() {
@@ -65,7 +66,13 @@ class ContextPackerServiceIntegrationTest : BasePlatformTestCase() {
         val note = "notes/Review.md"
         val noteText = "Context for the selected change."
         myFixture.addFileToProject(note, noteText)
-        val binary = myFixture.addFileToProject("assets/image.png", "not actually an image").virtualFile
+        myFixture.tempDirFixture.findOrCreateDir("assets")
+        val binary = myFixture.tempDirFixture.createFile("assets/image.png")
+        // Create the VFS file directly: addFileToProject would attach a text PSI wrapper.
+        val png = Base64.getDecoder().decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aE0AAAAASUVORK5CYII=",
+        )
+        WriteCommandAction.runWriteCommandAction(project, Runnable { binary.setBinaryContent(png) })
         val large = myFixture.addFileToProject("src/Huge.java", "class Huge { /* " + "x".repeat(100_001) + " */ }").virtualFile
 
         val service = project.getService(ContextPackerService::class.java)
