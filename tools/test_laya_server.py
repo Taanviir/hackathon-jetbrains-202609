@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import socket
 import sys
 import tempfile
 import threading
@@ -323,6 +324,30 @@ class LayaServerTest(unittest.TestCase):
 
 
 class CliTest(unittest.TestCase):
+    def test_occupied_port_rejects_before_model_load(self) -> None:
+        self.assertEqual(os.name != "nt", laya_server.LocalServer.allow_reuse_address)
+        with laya_server.create_server(FakeModel(), port=0) as occupied:
+            if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                self.assertEqual(1, occupied.socket.getsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE))
+            port = occupied.server_address[1]
+            with tempfile.TemporaryDirectory() as temporary, redirect_stderr(io.StringIO()) as errors:
+                with mock.patch.object(laya_server, "EnglishModel") as load_model:
+                    self.assertEqual(1, laya_server.main(["--cache", temporary, "--port", str(port)]))
+                    load_model.assert_not_called()
+            self.assertIn("already in use", errors.getvalue())
+            self.assertNotIn("Traceback", errors.getvalue())
+
+    def test_model_load_failure_releases_reserved_port(self) -> None:
+        probe = laya_server.create_server(FakeModel(), port=0)
+        port = probe.server_address[1]
+        probe.server_close()
+        with tempfile.TemporaryDirectory() as temporary, redirect_stderr(io.StringIO()) as errors:
+            with mock.patch.object(laya_server, "EnglishModel", side_effect=RuntimeError("fake load failure")):
+                self.assertEqual(1, laya_server.main(["--cache", temporary, "--port", str(port)]))
+        self.assertIn("Could not load English Laya", errors.getvalue())
+        with laya_server.create_server(FakeModel(), port=port) as rebound:
+            self.assertEqual(port, rebound.server_address[1])
+
     def test_response_cache_capacity_is_bounded(self) -> None:
         for capacity in (-1, 1025):
             with self.subTest(capacity=capacity), redirect_stderr(io.StringIO()):

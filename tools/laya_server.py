@@ -12,11 +12,13 @@ from __future__ import annotations
 import argparse
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+import errno
 import hashlib
 import json
 import os
 import re
 from pathlib import Path
+import socket
 import sys
 import threading
 import time
@@ -114,8 +116,16 @@ class EnglishModel:
 
 class LocalServer(ThreadingHTTPServer):
     daemon_threads = True
+    # Unix keeps quick-restart SO_REUSEADDR behavior. On Windows it can admit a
+    # second listener on the same port, so reserve the address exclusively there.
+    allow_reuse_address = os.name != "nt"
 
-    def __init__(self, model: object, port: int = DEFAULT_PORT, response_cache: int = 0) -> None:
+    def server_bind(self) -> None:
+        if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+    def __init__(self, model: object | None, port: int = DEFAULT_PORT, response_cache: int = 0) -> None:
         if not 0 <= response_cache <= MAX_RESPONSE_CACHE:
             raise ValueError(f"response_cache must be between 0 and {MAX_RESPONSE_CACHE}")
         super().__init__((HOST, port), Handler)
@@ -198,7 +208,9 @@ class LocalServer(ThreadingHTTPServer):
 
     def server_close(self) -> None:
         super().server_close()
-        self.inference_worker.shutdown(wait=True, cancel_futures=True)
+        worker = getattr(self, "inference_worker", None)
+        if worker is not None:
+            worker.shutdown(wait=True, cancel_futures=True)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -313,7 +325,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(405, {"error": "method not allowed"})
 
 
-def create_server(model: object, port: int = DEFAULT_PORT, response_cache: int = 0) -> LocalServer:
+def create_server(model: object | None, port: int = DEFAULT_PORT, response_cache: int = 0) -> LocalServer:
     """Inject a fake model in tests without importing Laya or loading any weights."""
     return LocalServer(model, port, response_cache)
 
@@ -341,13 +353,24 @@ def main(argv: list[str] | None = None) -> int:
     os.environ["USE_TF"] = "0"
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-    print("Loading the English Laya checkpoint...", flush=True)
     try:
-        model = EnglishModel(args.revision.lower())
-    except Exception as error:
-        print(f"Could not load English Laya ({type(error).__name__}). Check --cache or pass --download.", file=sys.stderr)
+        server = create_server(None, args.port, args.response_cache)
+    except OSError as error:
+        if error.errno == errno.EADDRINUSE or getattr(error, "winerror", None) == 10048:
+            print(f"Port {args.port} is already in use on {HOST}. Stop that server or choose --port.", file=sys.stderr)
+        else:
+            print(f"Could not bind {HOST}:{args.port} ({type(error).__name__}).", file=sys.stderr)
         return 1
-    with create_server(model, args.port, args.response_cache) as server:
+
+    # The listener reserves the port now, but serve_forever starts only after the model is ready.
+    # The context manager closes the reserved socket if loading fails.
+    with server:
+        print("Loading the English Laya checkpoint...", flush=True)
+        try:
+            server.model = EnglishModel(args.revision.lower())
+        except Exception as error:
+            print(f"Could not load English Laya ({type(error).__name__}). Check --cache or pass --download.", file=sys.stderr)
+            return 1
         print(f"English Laya ready at http://{HOST}:{server.server_address[1]}", flush=True)
         try:
             server.serve_forever()
