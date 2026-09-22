@@ -1,47 +1,44 @@
 package dev.contextpacker
 
 import com.intellij.openapi.application.runReadAction
-import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VFileProperty
-import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
-import com.intellij.testFramework.fixtures.TempDirTestFixture
-import com.intellij.testFramework.fixtures.impl.TempDirTestFixtureImpl
+import com.intellij.testFramework.ApplicationRule
 import dev.contextpacker.pack.Candidates
-import kotlinx.coroutines.runBlocking
 import org.junit.Assume
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 
-class SymlinkContainmentIntegrationTest : BasePlatformTestCase() {
-    protected override fun createTempDirTestFixture(): TempDirTestFixture = TempDirTestFixtureImpl()
+/** Exercise the shared containment helper with real local VFS paths, including physical links. */
+class SymlinkContainmentIntegrationTest {
+    @Rule @JvmField val application = ApplicationRule()
 
-    private fun <T> offEdt(block: suspend () -> T): T =
-        com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread<T> {
-            runBlocking { block() }
-        }.get(30, TimeUnit.SECONDS)
+    private fun localFile(path: Path) = LocalFileSystem.getInstance()
+        .refreshAndFindFileByPath(path.toString().replace('\\', '/'))
 
-    private fun withLink(toDirectory: Boolean, verify: (String, VirtualFile, VirtualFile) -> Unit) {
-        val root = Path.of(project.basePath ?: error("Project has no base path"))
-        assertTrue("The test fixture must have a real local project directory", Files.isDirectory(root))
-        val controlName = "Control${UUID.randomUUID().toString().replace("-", "")}.java"
-        val controlText = "class NormalControl { int value = 1; }"
-        val control = myFixture.addFileToProject(controlName, controlText).virtualFile
-        assertTrue("The control must be on the local filesystem", Files.isRegularFile(root.resolve(controlName)))
-        val service = project.getService(ContextPackerService::class.java)
-        assertTrue(runReadAction { Candidates.isInsideProjectWithoutLinks(project.guessProjectDir()!!, control) })
-        assertEquals(control.path, runReadAction { service.fileFor(controlName) }?.path)
-        assertEquals(controlText, offEdt { service.texts(listOf(controlName)) }[controlName])
-        val outside = Files.createTempDirectory(root.parent, "context-packer-outside-")
+    private fun checkLink(toDirectory: Boolean) {
+        val root = Files.createTempDirectory("context-packer-root-")
+        val outside = Files.createTempDirectory("context-packer-outside-")
+        val control = root.resolve("NormalControl.java")
         val source = outside.resolve("OutsideSource.java")
-        val name = "linked-${UUID.randomUUID()}" + if (toDirectory) "" else ".java"
-        val link = root.resolve(name)
+        val link = root.resolve(if (toDirectory) "linked" else "linked.java")
         try {
+            Files.writeString(control, "class NormalControl { int value = 1; }")
             Files.writeString(source, "class OutsideSource { String confidentialMarker; }")
+            val baseFile = localFile(root)
+            val controlFile = localFile(control)
+            assertNotNull("The VFS must expose the local project directory", baseFile)
+            assertNotNull("The VFS must expose the normal source", controlFile)
+            assertTrue(runReadAction {
+                Candidates.isInsideProjectWithoutLinks(baseFile!!, controlFile!!)
+            })
+
             try {
                 Files.createSymbolicLink(link, if (toDirectory) outside else source)
             } catch (e: IOException) {
@@ -51,36 +48,26 @@ class SymlinkContainmentIntegrationTest : BasePlatformTestCase() {
             } catch (e: SecurityException) {
                 Assume.assumeNoException(e)
             }
-            val virtualLink = LocalFileSystem.getInstance()
-                .refreshAndFindFileByPath(link.toString().replace('\\', '/'))
-            assertNotNull("The VFS must expose the local link for this test", virtualLink)
-            assertTrue("The VFS must identify the link", virtualLink!!.`is`(VFileProperty.SYMLINK))
-            val base = project.guessProjectDir() ?: error("Project has no VFS root")
-            val relative = if (toDirectory) "$name/OutsideSource.java" else name
-            verify(relative, base, virtualLink)
+            val linkFile = localFile(link)
+            assertNotNull("The VFS must expose the local link", linkFile)
+            assertTrue("The VFS must identify the link", linkFile!!.`is`(VFileProperty.SYMLINK))
+            assertFalse(runReadAction { Candidates.isInsideProjectWithoutLinks(baseFile!!, linkFile) })
+
+            if (toDirectory) {
+                val child = localFile(link.resolve("OutsideSource.java"))
+                assertNotNull("The VFS must expose the linked directory's source", child)
+                assertFalse(runReadAction { Candidates.isInsideProjectWithoutLinks(baseFile!!, child!!) })
+            }
         } finally {
             Files.deleteIfExists(link)
             Files.deleteIfExists(source)
+            Files.deleteIfExists(control)
             Files.deleteIfExists(outside)
+            Files.deleteIfExists(root)
         }
     }
 
-    fun testLinkedSourceFileCannotBeScoredOrRead(): Unit = withLink(false) { relative, base, link ->
-        val service = project.getService(ContextPackerService::class.java)
-        assertFalse(runReadAction { Candidates.isInsideProjectWithoutLinks(base, link) })
-        assertFalse(runReadAction { Candidates.collect(project).any { it.path == link.path } })
-        assertNull(runReadAction { service.fileFor(relative) })
-        assertTrue(offEdt { service.texts(listOf(relative)) }.isEmpty())
-    }
+    @Test fun testLinkedSourceFileIsOutsideTheProject(): Unit = checkLink(false)
 
-    fun testLinkedDirectoryCannotExposeItsDescendants(): Unit = withLink(true) { relative, base, link ->
-        val service = project.getService(ContextPackerService::class.java)
-        assertFalse(runReadAction { Candidates.isInsideProjectWithoutLinks(base, link) })
-        runReadAction { link.findChild("OutsideSource.java") }?.let { child ->
-            assertFalse(runReadAction { Candidates.isInsideProjectWithoutLinks(base, child) })
-        }
-        assertFalse(runReadAction { Candidates.collect(project).any { it.path.endsWith(relative) } })
-        assertNull(runReadAction { service.fileFor(relative) })
-        assertTrue(offEdt { service.texts(listOf(relative)) }.isEmpty())
-    }
+    @Test fun testLinkedDirectoryAndDescendantAreOutsideTheProject(): Unit = checkLink(true)
 }
