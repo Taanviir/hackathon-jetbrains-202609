@@ -6,10 +6,47 @@ fresh sandbox, `CONTEXT_PACKER_PROVIDER=laya` selects Laya initially; a later UI
 selection is saved in project workspace settings.
 
 The provider uses the [Laya playground](https://github.com/wdobry/laya-playground)
-HTTP contract backed by [Laya](https://github.com/NandhaKishorM/laya). Start its
-local server, then confirm `GET http://127.0.0.1:8770/api/health` reports the English
-model ready. Its documented installation starts at
-[brainfunctioncollapse.com/laya](https://brainfunctioncollapse.com/laya).
+HTTP contract backed by [Laya](https://github.com/NandhaKishorM/laya). This repository
+includes an English-only server at [`tools/laya_server.py`](../../tools/laya_server.py).
+It binds to `127.0.0.1`, serializes inference, and keeps source bodies out of its
+request logs. It does not require the playground UI or download other checkpoints.
+
+## Install and run
+
+Install Git, Python 3.10 or newer, and [uv](https://docs.astral.sh/uv/). From the
+repository root in PowerShell, create an isolated environment and install the
+same author revision used in the first local benchmark:
+
+```powershell
+uv venv --python 3.10 plugins/context-packer/.cache/laya-venv
+uv pip install --no-cache --python plugins/context-packer/.cache/laya-venv/Scripts/python.exe 'laya @ git+https://github.com/NandhaKishorM/laya.git@573e5b62696ba441230cd6be71d593331b5d23af'
+& plugins/context-packer/.cache/laya-venv/Scripts/python.exe tools/laya_server.py --download
+```
+
+The first run fetches the English checkpoint (about 807 MB on the tested host)
+and then serves it. Keep that terminal running. Later starts can omit `--download`:
+
+```powershell
+& plugins/context-packer/.cache/laya-venv/Scripts/python.exe tools/laya_server.py
+```
+
+Without `--download`, startup requires cached weights and sets offline mode before
+loading Laya. `--cache D:/path/to/cache` selects a different model cache and `--port`
+selects a different port. The default cache is `plugins/context-packer/.cache/laya`,
+which is ignored by Git. On macOS/Linux, use `.cache/laya-venv/bin/python` in place
+of the Windows `Scripts/python.exe` path above. CPU inference is supported; a GPU
+is not required. The tested environment was Python 3.10.0, Laya 0.3.5,
+torch 2.14.0+cpu and transformers 5.17.0; the source pin alone does not pin every
+transitive dependency.
+
+From another terminal, confirm the server has loaded before packing:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8770/api/health
+```
+
+The response must contain `models.english: ready`. Starting a second server on the
+same port fails; use the existing instance or stop its terminal first.
 
 Optional environment variables:
 
@@ -42,8 +79,10 @@ not generated code.
 
 ## Failure behavior
 
-Cancel stops the active request and queued scoring work. An unavailable server,
-invalid probability or missing answer is a failure, not a valid zero score.
+Cancel stops the active request and queued scoring work. An unavailable server or
+timed-out request stops the pack without waiting again for every queued file. Once
+the server recovers, start a new pack. An invalid probability or missing answer is
+a failed batch, not a valid zero score.
 Partial scoring failures are disclosed. If every batch in a pass fails, packing
 fails instead of presenting keyword-only results as model output.
 

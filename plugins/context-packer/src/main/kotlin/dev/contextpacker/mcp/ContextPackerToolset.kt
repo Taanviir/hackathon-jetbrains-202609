@@ -13,6 +13,7 @@ import dev.contextpacker.MissingKeyException
 import dev.contextpacker.PackReport
 import dev.contextpacker.jev.JevException
 import dev.contextpacker.laya.LayaException
+import dev.contextpacker.pack.ScorerUnavailableException
 import kotlinx.coroutines.currentCoroutineContext
 
 /** Lets any MCP agent (Claude Code, Junie, Cursor…) get a packed context in one call instead of exploring. */
@@ -54,6 +55,8 @@ class ContextPackerToolset : McpToolset {
             throw McpExpectedError(e.message ?: "Invalid pack request")
         } catch (e: LayaException) {
             throw McpExpectedError(e.message ?: "Local Laya is unavailable")
+        } catch (e: ScorerUnavailableException) {
+            throw McpExpectedError(e.message ?: "The decision provider is unavailable")
         } catch (e: JevException) {
             throw McpExpectedError(e.message ?: "Jev is unavailable")
         }

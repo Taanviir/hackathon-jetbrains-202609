@@ -81,13 +81,29 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
     val sessionTokens get() = jev?.calls?.sumOf { it.inputTokens.toLong() } ?: 0L
     private val sessionBudget = System.getenv("CONTEXT_PACKER_TOKEN_BUDGET")?.toLongOrNull() ?: 20_000_000L
 
-    private val listeners = java.util.concurrent.CopyOnWriteArrayList<(PackReport) -> Unit>()
+    private val listenerLock = Any()
+    private val listeners = mutableListOf<(PackReport) -> Unit>()
 
     /** The latest pack, including agent requests made before the tool window opened. */
     @Volatile var lastReport: PackReport? = null
         private set
 
-    fun onPack(listener: (PackReport) -> Unit) { listeners += listener }
+    /** Register and optionally replay the latest report without a subscribe/replay race. */
+    fun onPack(replayLast: Boolean = false, listener: (PackReport) -> Unit): () -> Unit {
+        synchronized(listenerLock) {
+            listeners += listener
+            if (replayLast) lastReport?.let { report -> notifyListener(listener, report) }
+        }
+        return { synchronized(listenerLock) { listeners.remove(listener) } }
+    }
+
+    private fun notifyListener(listener: (PackReport) -> Unit, report: PackReport) {
+        try {
+            listener(report)
+        } catch (e: Exception) {
+            thisLogger().warn("Pack report listener failed", e)
+        }
+    }
 
     suspend fun pack(
         task: String,
@@ -143,8 +159,10 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
             scoredCandidates = scoringDocs.size,
             usageKnown = calls.all { it.usageKnown },
         ).also { report ->
-            lastReport = report
-            listeners.forEach { it(report) }
+            synchronized(listenerLock) {
+                lastReport = report
+                listeners.toList().forEach { notifyListener(it, report) }
+            }
         }
     }
 

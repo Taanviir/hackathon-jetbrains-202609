@@ -2,6 +2,7 @@ package dev.contextpacker.laya
 
 import dev.contextpacker.jev.CallStat
 import dev.contextpacker.pack.RelevanceScorer
+import dev.contextpacker.pack.ScorerUnavailableException
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -15,6 +16,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.net.URI
+import java.io.IOException
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
@@ -64,7 +66,9 @@ class LayaRelevance(
         var usageKnown = false
         try {
             val response = http.sendAsync(request, HttpResponse.BodyHandlers.ofString()).await()
-            if (response.statusCode() != 200) throw LayaException("Local Laya returned HTTP ${response.statusCode()}. Check its server log and model readiness.")
+            if (response.statusCode() != 200) throw ScorerUnavailableException(
+                "Local Laya returned HTTP ${response.statusCode()}. Check its server log and model readiness, then pack again.",
+            )
             val root = Json.parseToJsonElement(response.body()).jsonObject
             val tokenValue = (root["usage"] as? JsonObject)?.get("input_tokens") as? JsonPrimitive
             val parsedTokens = tokenValue?.takeUnless { it.isString }?.intOrNull?.takeIf { it >= 0 }
@@ -80,9 +84,13 @@ class LayaRelevance(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            val failure = if (e is LayaException) e else LayaException(
-                "Could not score with local Laya. Check the configured local server (${e::class.simpleName}).", e,
-            )
+            val failure = when (e) {
+                is ScorerUnavailableException, is LayaException -> e
+                is IOException -> ScorerUnavailableException(
+                    "Could not score with local Laya. Check the configured local server (${e::class.simpleName}), then pack again.", e,
+                )
+                else -> LayaException("Local Laya returned an invalid response (${e::class.simpleName}).", e)
+            }
             calls += CallStat(elapsed(started), tokens, 1, failure.message, usageKnown)
             throw failure
         }
