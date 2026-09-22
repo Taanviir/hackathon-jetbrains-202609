@@ -271,7 +271,7 @@ class PackerTest {
     }
 
     @Test
-    fun `overlap starts the BM25 full source pass while sketch scoring is pending`() = runBlocking {
+    fun `overlap starts the BM25 full source pass while sketch scoring is pending`(): Unit = runBlocking {
         val sketchStarted = CompletableDeferred<Unit>()
         val releaseSketch = CompletableDeferred<Unit>()
         val fullStarted = CompletableDeferred<Unit>()
@@ -296,6 +296,7 @@ class PackerTest {
             releaseSketch.complete(Unit)
             job.cancel()
         }
+        Unit
     }
 
     @Test
