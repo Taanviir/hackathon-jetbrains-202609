@@ -76,6 +76,18 @@ The brief ranks judging criteria in this order, and two of them are doing real w
 A useful test for any candidate: take Jev out and swap in an LLM. If the idea still works,
 just slower, it is probably not innovative enough to win on criterion 3.
 
+## Diagrams
+
+Scene files are in [docs/diagrams](./docs/diagrams). Drag one onto the Excalidraw board to
+drop it in, or use File then Open to look at it on its own. They are editable shapes, not
+images, so pull them apart during the session.
+
+- [00-two-tier-principle](./docs/diagrams/00-two-tier-principle.excalidraw) is the shape all
+  three candidates share. Start here.
+- [a-semantic-inspections](./docs/diagrams/a-semantic-inspections.excalidraw)
+- [b-codebase-triage](./docs/diagrams/b-codebase-triage.excalidraw)
+- [c-llm-rubric](./docs/diagrams/c-llm-rubric.excalidraw)
+
 ## Candidate ideas
 
 Each of these has one objection it has to survive. That is the thing to bring an answer to.
