@@ -48,6 +48,8 @@ SPEND = [
     ("LLM re-ranker baseline, GLM", "2.3M", "$0.52", "70 tasks, under a $0.80 cap."),
     ("Stage 3, Jev (ledger)", "2.2M", "$0.09", "Two dev shapes, one test run."),
     ("Exposed eval, Jev (ledger)", "13.5M", "$0.57", "40 tasks, frozen pipeline, one run."),
+    ("Claude Code runs, Claude plan", "-", "$4.68", "Five adoption probes and the 16-run hook A/B."),
+    ("Claude Code A/B, Jev (hook)", "4.7M", "$0.20", "One pack per hooked run."),
 ]
 
 
@@ -218,10 +220,19 @@ def claude_ab_section() -> str:
             f'{(r["explore"]["input_tokens"] + r["explore"]["cache_read"] + r["explore"]["cache_write"]) / 1000:.0f}k',
             f'{(r["pack"]["input_tokens"] + r["pack"]["cache_read"] + r["pack"]["cache_write"]) / 1000:.0f}k',
             pct(r["explore"]["recall"]), pct(r["pack"]["recall"])] for r in CLAUDE_AB]
+    import random
+    rng = random.Random(7)
+    diffs = [r["pack"]["turns"] - r["explore"]["turns"] for r in CLAUDE_AB]
+    means = sorted(st.mean(rng.choice(diffs) for _ in diffs) for _ in range(4000))
+    verdict = (f"<p><strong>With the hook, Claude Code needed {(1 - k['turns'] / x['turns']):.0%} fewer turns</strong> "
+               f"({st.mean(diffs):+.1f} per task, 95% interval [{means[100]:+.1f}, {means[3899]:+.1f}]) and "
+               f"{(1 - k['greps'] / x['greps']):.0%} fewer searches, for about the same answers: recall was equal on "
+               f"{sum(r['pack']['recall'] == r['explore']['recall'] for r in CLAUDE_AB)} of {len(CLAUDE_AB)} tasks. "
+               "It was not faster, and eight tasks can't settle the token and cost savings.</p>")
     return ("<h3>Claude Code with the hook</h3><p>The same Claude Code (Sonnet), prompt and read-only tools, on "
-            f"{len(CLAUDE_AB)} held-out Koog tasks (vague wording) at their parent commits. The only difference is the hook. "
-            "Tokens count everything Claude processed, including cached context.</p>"
-            + table([f"{len(CLAUDE_AB)} tasks", "no hook", "with hook"], rows)
+            f"{len(CLAUDE_AB)} held-out Koog tasks (vague wording) at their parent commits. The only difference is the hook, "
+            "which fired on every run. Tokens count everything Claude processed, including cached context.</p>"
+            + table([f"{len(CLAUDE_AB)} tasks", "no hook", "with hook"], rows) + verdict
             + "<details><summary>Per task</summary>"
             + table(["task", "turns, no hook", "turns, hook", "tokens, no hook", "tokens, hook", "recall, no hook", "recall, hook"], per)
             + "</details>")

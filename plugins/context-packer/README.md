@@ -127,10 +127,10 @@ the top five better (recall@5 0.61 against 0.52 for Jev + BM25, a significant ga
 0.65). Jev does it in about 1 s for about $0.002, where the LLM takes 29 s and $0.007. Jev's edge is speed and cost,
 not judgement. Stage 3 narrows the top-five gap but doesn't close it.
 
-**Inside an agent.** The same GLM agent ran 10 held-out tasks with and without `pack_context`, twice: once with commit
-subjects, once with identifier-free rewrites. Final recall was identical in both. With the packer the agent used 7-22%
-fewer tokens and fewer calls, but it was not faster to the first right file, because a grep-first agent gets there in
-about 4 s on these tasks. Ten tasks can't separate any of it from noise.
+**Inside an agent.** Claude Code (Sonnet) with the prompt hook, against the same Claude Code without it, on 8 held-out
+Koog tasks: **25% fewer turns** (−3.3 per task, 95% interval −5.9 to −0.5), 38% fewer searches and 15% lower cost,
+with recall equal on 7 of 8 tasks. It was not faster. Offered as a tool instead, Claude Code never called it. A weaker
+agent (GLM) did call it and used 7-22% fewer tokens, again without getting faster.
 
 ## Reproduce the numbers
 
