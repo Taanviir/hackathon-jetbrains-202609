@@ -9,6 +9,7 @@ import argparse
 from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+import hashlib
 import json
 import math
 import os
@@ -124,6 +125,27 @@ def load_tasks(repo: Path, ref: str, limit: int) -> tuple[list[Task], list[dict]
     if len(tasks) < limit:
         raise RuntimeError(f"Only {len(tasks)} eligible tasks in {ref}; need {limit}. Fetch more history.")
     return tasks, skipped
+
+
+def validate_extension_manifest(manifest: dict, tasks: list[Task], skipped: list[dict],
+                                protocol: dict, head: str) -> None:
+    """Require the measured commits and policy to match a pre-evaluation frozen split."""
+    actual = [asdict(task) for task in tasks]
+    frozen_protocol = dict(manifest["protocol"])
+    current_protocol = dict(protocol)
+    frozen_protocol.pop("heldout_tasks", None)
+    current_protocol.pop("heldout_tasks", None)
+    if manifest["source_koog_head"] != head or frozen_protocol != current_protocol:
+        raise RuntimeError("Frozen manifest has a different Koog HEAD or retrieval protocol.")
+    if manifest["development_shas"] != [task.sha for task in tasks[:protocol["dev_tasks"]]]:
+        raise RuntimeError("Frozen development task split differs from selected commits.")
+    first_heldout_end = protocol["dev_tasks"] + manifest["protocol"]["heldout_tasks"]
+    if manifest["initial_heldout_shas"] != [task.sha for task in tasks[protocol["dev_tasks"]:first_heldout_end]]:
+        raise RuntimeError("Frozen initial held-out split differs from selected commits.")
+    if manifest["extension_heldout_tasks"] != actual[first_heldout_end:]:
+        raise RuntimeError("Frozen extension tasks, parents, or truth files differ from selected commits.")
+    if manifest["skipped_before_extension"] != skipped:
+        raise RuntimeError("Frozen eligibility exclusions differ from selected commits.")
 
 
 def files_at(repo: Path, rev: str, blob_cache: dict[str, str]) -> dict[str, str]:
@@ -245,6 +267,14 @@ def call_json(url: str, body: dict | None, timeout: float) -> tuple[dict, float]
     with urlopen(req, timeout=timeout) as response:
         result = json.load(response)
     return result, (time.perf_counter() - started) * 1000
+
+
+def require_checkpoint(health: dict, expected: str | None) -> None:
+    """Fail before model inference if the local server does not expose the pinned weights."""
+    if expected and health.get("checkpoint", "").lower() != expected.lower():
+        raise RuntimeError(
+            f"Expected checkpoint {expected}, server reports {health.get('checkpoint', 'none')}."
+        )
 
 
 def score_one(endpoint: str, timeout: float, task: str, path: str, text: str) -> dict:
@@ -613,10 +643,13 @@ def run_dev_variant(args: argparse.Namespace, repo: Path) -> None:
     health, _ = call_json(args.endpoint.removesuffix("/api/predict") + "/api/health", None, args.timeout)
     if health["models"].get(MODEL) != "ready":
         raise RuntimeError(f"Laya {MODEL} is not ready: {health['models']}")
+    require_checkpoint(health, args.expected_checkpoint)
     if args.resume and args.output.exists():
         data = json.loads(args.output.read_text(encoding="utf-8"))
         if data["source_koog_head"] != head or data["candidate_limit"] != args.variant_candidates:
             raise RuntimeError("Variant resume file differs in corpus or candidate limit.")
+        if data.get("expected_checkpoint") != args.expected_checkpoint:
+            raise RuntimeError("Variant resume checkpoint expectation changed.")
     else:
         data = {
             "run_utc": datetime.now(timezone.utc).isoformat(),
@@ -624,6 +657,7 @@ def run_dev_variant(args: argparse.Namespace, repo: Path) -> None:
             "source_koog_head": head,
             "model": MODEL,
             "health": health,
+            "expected_checkpoint": args.expected_checkpoint,
             "candidate_limit": args.variant_candidates,
             "excerpt": "task_window: best code line by lexical overlap, 200 chars of preceding context, then 1000 chars",
             "rows": [],
@@ -737,7 +771,13 @@ def main() -> None:
     ap.add_argument("--heldout-note", help="Observed held-out timing conditions.")
     ap.add_argument("--dev-variant-from", type=Path, help="Run the task-window single-pass experiment on this baseline's dev rows only.")
     ap.add_argument("--variant-candidates", type=int, default=40)
+    ap.add_argument("--task-manifest", type=Path, help="Validate a pre-evaluation frozen task split (required for seeded extensions).")
+    ap.add_argument("--expected-checkpoint", help="Require this exact 40-hex Laya checkpoint in server health before any prediction.")
     args = ap.parse_args()
+    if args.expected_checkpoint:
+        if not re.fullmatch(r"[0-9a-fA-F]{40}", args.expected_checkpoint):
+            ap.error("--expected-checkpoint must be a 40-character hexadecimal commit.")
+        args.expected_checkpoint = args.expected_checkpoint.lower()
     if not (1 <= args.dev <= 10 and 1 <= args.heldout <= 30 and
             1 <= args.prefilter <= 60 and 1 <= args.pool <= 20 and args.timeout > 0):
         ap.error("Use 1..10 dev tasks, 1..30 held-out tasks, 1..60 candidates, 1..20 pool, positive timeout.")
@@ -752,6 +792,14 @@ def main() -> None:
         return
     head = git(repo, "rev-parse", args.ref).decode().strip()
     tasks, skipped = load_tasks(repo, args.ref, args.dev + args.heldout)
+    manifest_sha256 = None
+    if args.task_manifest:
+        manifest_bytes = args.task_manifest.read_bytes()
+        manifest = json.loads(manifest_bytes)
+        expected_hash = hashlib.sha256(json.dumps(manifest["protocol"], sort_keys=True).encode()).hexdigest()
+        if manifest.get("protocol_sha256") != expected_hash:
+            raise RuntimeError("Frozen manifest protocol hash is invalid.")
+        manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
     if args.stop_after is not None and not 1 <= args.stop_after <= len(tasks):
         ap.error("--stop-after must be between 1 and the total task count.")
     protocol = {
@@ -763,11 +811,24 @@ def main() -> None:
         "timeout_seconds": args.timeout, "sequential_requests": True,
         "bm25_rerank_corpus": "prefiltered candidates", "tie_break": "path",
     }
+    if args.task_manifest:
+        validate_extension_manifest(manifest, tasks, skipped, protocol, head)
     health, _ = call_json(args.endpoint.removesuffix("/api/predict") + "/api/health", None, args.timeout)
     if health["models"].get(MODEL) != "ready":
         raise RuntimeError(f"Laya {MODEL} is not ready: {health['models']}")
+    require_checkpoint(health, args.expected_checkpoint)
     if args.resume and args.output.exists():
         data = json.loads(args.output.read_text(encoding="utf-8"))
+        stored_checkpoint = data.get("expected_checkpoint")
+        if stored_checkpoint and stored_checkpoint != args.expected_checkpoint:
+            raise RuntimeError("Resume checkpoint requires its exact --expected-checkpoint.")
+        if not stored_checkpoint and data.get("extension_provenance") and not args.expected_checkpoint:
+            raise RuntimeError("Seeded extension requires --expected-checkpoint.")
+        if data.get("tasks") != [asdict(task) for task in tasks]:
+            raise RuntimeError("Resume checkpoint task manifest differs from selected commits.")
+        stored_manifest_sha256 = data.get("task_manifest_sha256") or data.get("extension_provenance", {}).get("manifest_sha256")
+        if stored_manifest_sha256 and stored_manifest_sha256 != manifest_sha256:
+            raise RuntimeError("Resume checkpoint requires its exact frozen --task-manifest.")
         legacy = data["protocol"]
         comparable = ("dev_tasks", "heldout_tasks", "prefilter", "pool", "max_blob_bytes",
                       "sketch_chars", "adapter_excerpt_chars", "adapter_task_chars",
@@ -779,9 +840,14 @@ def main() -> None:
         data["protocol"] = protocol
         data["tasks"] = [asdict(t) for t in tasks]
         data["skipped_tasks"] = skipped
+        if args.expected_checkpoint:
+            data["expected_checkpoint"] = args.expected_checkpoint
+        if manifest_sha256:
+            data["task_manifest_sha256"] = manifest_sha256
         data.setdefault("resume_sessions", []).append({
             "utc": datetime.now(timezone.utc).isoformat(),
             "health": health,
+            "expected_checkpoint": args.expected_checkpoint,
             "completed_rows_at_start": len(data["rows"]),
         })
     else:
@@ -805,6 +871,8 @@ def main() -> None:
             "skipped_tasks": skipped,
             "rows": [],
         }
+        if manifest_sha256:
+            data["task_manifest_sha256"] = manifest_sha256
         save_json(args.output, data)
     data["host"].setdefault("processor", platform.processor() or os.environ.get("PROCESSOR_IDENTIFIER", "unknown"))
     data.setdefault("conditions", {})
