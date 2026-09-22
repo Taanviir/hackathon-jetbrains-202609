@@ -18,6 +18,7 @@ import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.WrapLayout
 import dev.contextpacker.ContextPackerService
+import dev.contextpacker.DecisionProvider
 import dev.contextpacker.Keys
 import dev.contextpacker.MissingKeyException
 import dev.contextpacker.PackReport
@@ -27,6 +28,7 @@ import dev.contextpacker.pack.PackedFile
 import dev.contextpacker.pack.Packer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
@@ -38,6 +40,7 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.DefaultListModel
 import javax.swing.JButton
+import javax.swing.JComboBox
 import javax.swing.JList
 import javax.swing.JPanel
 
@@ -58,6 +61,15 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
         })
     }
     private val packButton = JButton("Pack context", AllIcons.Actions.Find).apply { addActionListener { runPack() } }
+    private val cancelButton = JButton("Cancel").apply {
+        isEnabled = false
+        addActionListener { job?.cancel(); answerJob?.cancel() }
+    }
+    private val provider = JComboBox(DecisionProvider.entries.toTypedArray()).apply {
+        selectedItem = service.provider
+        toolTipText = "Laya runs locally at 127.0.0.1:8770 and needs no API key. Jev uses your configured API."
+        addActionListener { service.provider = selectedItem as DecisionProvider }
+    }
     private val status = JBLabel(" ").apply { foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND }
 
     private val picks = DefaultListModel<PackedFile>()
@@ -87,13 +99,18 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private var lastReport: PackReport? = null
     private var job: Job? = null
+    private var answerJob: Job? = null
+    private var requestSerial = 0
+    private var answerSerial = 0
 
     init {
         border = JBUI.Borders.empty(6)
         val top = JPanel(BorderLayout(0, 4)).apply {
             add(JBScrollPane(task), BorderLayout.CENTER)
             add(JPanel(BorderLayout()).apply {
-                add(packButton, BorderLayout.WEST)
+                add(JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+                    add(provider); add(packButton); add(cancelButton)
+                }, BorderLayout.WEST)
                 add(status, BorderLayout.CENTER)
                 status.border = JBUI.Borders.emptyLeft(8)
             }, BorderLayout.SOUTH)
@@ -122,24 +139,44 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun runPack() {
         val text = task.text.trim().ifEmpty { return }
         job?.cancel()
+        answerJob?.cancel()
+        val serial = ++requestSerial
         packButton.isEnabled = false
+        provider.isEnabled = false
+        cancelButton.isEnabled = true
+        status.toolTipText = null
+        lastReport = null
+        answer.text = ""
         picks.clear()
         job = service.scope.launch {
             try {
-                val report = service.pack(text) { msg -> launch(Dispatchers.EDT) { status.text = "$msg…" } }
-                withContext(Dispatchers.EDT) { show(report) }
+                val report = service.pack(text) { msg -> launch(Dispatchers.EDT) {
+                    if (serial == requestSerial) status.text = "$msg…"
+                } }
+                withContext(Dispatchers.EDT) { if (serial == requestSerial) show(report) }
             } catch (e: MissingKeyException) {
-                withContext(Dispatchers.EDT) { status.text = e.message }
+                withContext(Dispatchers.EDT) { if (serial == requestSerial) status.text = e.message }
             } catch (e: kotlinx.coroutines.CancellationException) {
+                withContext(NonCancellable + Dispatchers.EDT) {
+                    if (serial == requestSerial) status.text = "Cancelled"
+                }
                 throw e
             } catch (e: Exception) {
                 // Status line gets the readable part; the tooltip keeps the server's own words.
                 withContext(Dispatchers.EDT) {
-                    status.text = "Failed: " + (e.message ?: e::class.simpleName.orEmpty()).substringBefore(" (HTTP")
-                    status.toolTipText = e.message
+                    if (serial == requestSerial) {
+                        status.text = "Failed: " + (e.message ?: e::class.simpleName.orEmpty()).substringBefore(" (HTTP")
+                        status.toolTipText = e.message
+                    }
                 }
             } finally {
-                withContext(Dispatchers.EDT) { packButton.isEnabled = true }
+                withContext(NonCancellable + Dispatchers.EDT) {
+                    if (serial == requestSerial) {
+                        packButton.isEnabled = true
+                        provider.isEnabled = true
+                        cancelButton.isEnabled = answerJob?.isActive == true
+                    }
+                }
             }
         }
     }
@@ -148,13 +185,17 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
         lastReport = report
         report.result.files.forEach(picks::addElement)
         val r = report.result
-        val failed = if (report.failedCalls > 0) " · ${report.failedCalls} calls failed" else ""
-        status.text = "%d of %,d files in %.1f s · %d Jev calls · %.1fk tokens · $%.4f%s".format(
+        val failed = if (r.failedBatches > 0) " · ${r.failedBatches} incomplete batches" else ""
+        val cost = if (report.provider == DecisionProvider.LAYA) "local · API fee $0"
+            else report.costUsd?.let { "est. API $%.4f".format(it) } ?: "API fee unavailable"
+        val tokens = if (report.usageKnown) "%.1fk tokens".format(report.inputTokens / 1000.0) else "tokens unavailable"
+        status.text = "%d of %,d files in %.1f s · %d %s calls · %s · %s%s".format(
             r.files.size, r.candidates, report.totalMs / 1000.0, report.jevCalls,
-            report.inputTokens / 1000.0, report.costUsd, failed,
+            report.provider.name, tokens, cost, failed,
         )
-        status.toolTipText = "sketch %d ms · pass 1 + BM25 %d ms · pass 2 %d ms · %s".format(
-            report.sketchMs, r.pass1Ms, r.pass2Ms, report.jevModel,
+        status.toolTipText = "sketch %d ms · pass 1 + BM25 %d ms · pass 2 %d ms · %s · scored %d candidates%s".format(
+            report.sketchMs, r.pass1Ms, r.pass2Ms, report.jevModel, report.scoredCandidates,
+            if (report.provider == DecisionProvider.LAYA) " after keyword prefilter; local compute cost excluded" else "",
         )
     }
 
@@ -175,40 +216,71 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
     }
 
-    private fun currentPrompt(onReady: (String) -> Unit) {
+    private fun currentPrompt(onReady: (String, Int) -> Unit) {
         val paths = (0 until picks.size()).map { picks[it].path }
         val taskText = task.text.trim()
+        val serial = requestSerial
         if (paths.isEmpty() || taskText.isEmpty()) return
         service.scope.launch {
-            val texts = service.texts(paths)
-            val prompt = Prompt.build(taskText, paths.mapNotNull { p -> texts[p]?.let { p to it } })
-            withContext(Dispatchers.EDT) { onReady(prompt) }
+            try {
+                val texts = service.texts(paths)
+                val available = paths.mapNotNull { p -> texts[p]?.let { p to it } }
+                check(available.isNotEmpty()) { "None of the selected files could be read." }
+                val missing = paths.filter { it !in texts }
+                val prompt = Prompt.build(taskText, available) + if (missing.isEmpty()) "" else
+                    "\nSelected files unavailable; read these separately: " + missing.take(Prompt.MAX_FILES)
+                        .joinToString { it.take(512).replace('\n', ' ').replace('\r', ' ') } + "\n"
+                withContext(Dispatchers.EDT) {
+                    if (serial == requestSerial) onReady(prompt, minOf(available.size, Prompt.MAX_FILES))
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                withContext(Dispatchers.EDT) { if (serial == requestSerial) status.text = "Could not build prompt: ${e.message}" }
+            }
         }
     }
 
-    private fun copyPrompt() = currentPrompt { prompt ->
+    private fun copyPrompt() = currentPrompt { prompt, fileCount ->
         CopyPasteManager.getInstance().setContents(StringSelection(prompt))
-        status.text = "Copied a %,d-character prompt with %d files".format(prompt.length, picks.size())
+        status.text = "Copied a %,d-character prompt with %d files".format(prompt.length, fileCount)
     }
 
-    private fun askLlm() = currentPrompt { prompt ->
+    private fun askLlm() = currentPrompt { prompt, _ ->
+        answerJob?.cancel()
+        val serial = ++answerSerial
+        val packSerial = requestSerial
         answer.text = "Asking ${ChatClient.DEFAULT_MODEL}…"
-        service.scope.launch {
-            val text = try {
+        cancelButton.isEnabled = true
+        answerJob = service.scope.launch {
+            try {
                 val key = Keys.OPENROUTER.get() ?: throw MissingKeyException(Keys.OPENROUTER)
                 val started = System.nanoTime()
                 val reply = ChatClient(key).complete(Prompt.SYSTEM, prompt)
                 val secs = (System.nanoTime() - started) / 1e9
-                reply.content + "\n\n— %s · %.1f s · %,d in / %,d out tokens%s".format(
+                val text = reply.content + "\n\n— %s · %.1f s · %,d in / %,d out tokens%s".format(
                     ChatClient.DEFAULT_MODEL, secs, reply.promptTokens, reply.completionTokens,
                     reply.cost?.let { " · $%.4f".format(it) } ?: "",
                 )
+                withContext(Dispatchers.EDT) {
+                    if (serial == answerSerial && packSerial == requestSerial) {
+                        answer.text = text; answer.caretPosition = 0
+                    }
+                }
             } catch (e: kotlinx.coroutines.CancellationException) {
+                withContext(NonCancellable + Dispatchers.EDT) {
+                    if (serial == answerSerial && packSerial == requestSerial) answer.text = "Cancelled"
+                }
                 throw e
             } catch (e: Exception) {
-                "Failed: ${e.message}"
+                withContext(Dispatchers.EDT) {
+                    if (serial == answerSerial && packSerial == requestSerial) answer.text = "Failed: ${e.message}"
+                }
+            } finally {
+                withContext(NonCancellable + Dispatchers.EDT) {
+                    if (serial == answerSerial && packSerial == requestSerial) cancelButton.isEnabled = job?.isActive == true
+                }
             }
-            withContext(Dispatchers.EDT) { answer.text = text; answer.caretPosition = 0 }
         }
     }
 
@@ -218,7 +290,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
             if (value.isTest) append("test  ", SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES)
             append(value.path.substringAfterLast('/'), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
             append("  " + value.path.substringBeforeLast('/', ""), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES)
-            toolTipText = value.path + (value.bm25Rank?.let { " · Jev %.2f · keyword rank $it".format(value.relevance) } ?: " · added by hand")
+            toolTipText = value.path + (value.bm25Rank?.let { " · relevance %.2f · keyword rank $it".format(value.relevance) } ?: " · added by hand")
         }
     }
 }

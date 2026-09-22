@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.CancellationException
 
 /** One candidate file: a short structural sketch for the wide pass, full text for the narrow one. */
 data class FileDoc(val path: String, val sketch: String, val text: String)
@@ -41,7 +42,7 @@ data class PackResult(
     val failedBatches: Int,
 )
 
-/** Scores a batch of (path, text) pairs against a task in a single call. */
+/** Scores a batch in one call. Return exactly one finite probability in [0, 1] per requested path. */
 fun interface RelevanceScorer {
     suspend fun score(task: String, items: List<Pair<String, String>>): Map<String, Double>
 }
@@ -53,7 +54,19 @@ fun interface RelevanceScorer {
  */
 class Packer(private val scorer: RelevanceScorer, private val config: PackConfig = PackConfig()) {
 
+    init {
+        require(config.batch > 0 && config.pool > 0 && config.perCall > 0 && config.fullChars > 0 && config.keep > 0) {
+            "Batch, pool, perCall, fullChars, and keep must be positive"
+        }
+        require(config.bm25Weight.isFinite() && config.bm25Weight >= 0.0) {
+            "bm25Weight must be finite and non-negative"
+        }
+    }
+
     suspend fun pack(task: String, docs: List<FileDoc>, onProgress: (String) -> Unit = {}): PackResult = coroutineScope {
+        require(task.isNotBlank()) { "Task must not be blank" }
+        require(docs.all { it.path.isNotBlank() }) { "File paths must not be blank" }
+        require(docs.map { it.path }.toSet().size == docs.size) { "File paths must be unique" }
         val started = System.nanoTime()
         onProgress("Scoring ${docs.size} files")
         val bm25 = async(Dispatchers.Default) { Bm25.rank(task, docs.associate { it.path to it.text }) }
@@ -62,9 +75,9 @@ class Packer(private val scorer: RelevanceScorer, private val config: PackConfig
         val pass1Done = System.nanoTime()
 
         val byPath = docs.associateBy { it.path }
-        val bySketch = pass1.scores.keys.sortedByDescending { pass1.scores.getValue(it) }
+        val bySketch = pass1.scores.keys.sortedWith(compareByDescending<String> { pass1.scores.getValue(it) }.thenBy { it })
         val pool = (bm25Ranked.take(config.pool) + bySketch.take(config.pool)).distinct()
-        onProgress("Reading ${pool.size} shortlisted files in full")
+        onProgress("Scoring source excerpts from ${pool.size} shortlisted files")
         val pass2 = scoreAll(task, pool.map { it to "path: $it\n${byPath.getValue(it).text.take(config.fullChars)}" }, config.perCall)
         val done = System.nanoTime()
 
@@ -79,7 +92,7 @@ class Packer(private val scorer: RelevanceScorer, private val config: PackConfig
                 bm25Rank = pos?.plus(1),
                 isTest = isTest(path),
             )
-        }.sortedByDescending { it.score }.take(config.keep)
+        }.sortedWith(compareByDescending<PackedFile> { it.score }.thenBy { it.path }).take(config.keep)
 
         PackResult(
             task = task,
@@ -100,7 +113,21 @@ class Packer(private val scorer: RelevanceScorer, private val config: PackConfig
      */
     private suspend fun scoreAll(task: String, items: List<Pair<String, String>>, groupSize: Int): Scores = coroutineScope {
         val parts = items.chunked(groupSize).map { group ->
-            async { runCatching { scorer.score(task, group) } }
+            async {
+                try {
+                    val response = scorer.score(task, group)
+                    val expected = group.mapTo(HashSet()) { it.first }
+                    require(response.keys == expected) { "Scorer must return exactly the requested paths" }
+                    require(response.values.all { it.isFinite() && it in 0.0..1.0 }) {
+                        "Scorer probabilities must be finite and within [0, 1]"
+                    }
+                    Result.success(response)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
+            }
         }.awaitAll()
         if (parts.isNotEmpty() && parts.all { it.isFailure }) throw parts.first().exceptionOrNull()!!
         val scores = HashMap<String, Double>()

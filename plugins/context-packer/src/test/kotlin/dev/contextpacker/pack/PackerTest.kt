@@ -1,8 +1,10 @@
 package dev.contextpacker.pack
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
@@ -62,6 +64,93 @@ class PackerTest {
         } catch (e: IllegalStateException) {
             assertEquals("boom", e.message)
         }
+    }
+
+    @Test
+    fun `missing or unexpected scorer paths count as failed batches`() = runBlocking {
+        val candidates = listOf(FileDoc("src/A.kt", "sketch A", "full A"), FileDoc("src/B.kt", "sketch B", "full B"))
+        for (badResponse in listOf(emptyMap(), mapOf("src/Unknown.kt" to 0.9))) {
+            val scorer = RelevanceScorer { _, items ->
+                if (items.single().second == "sketch A") badResponse
+                else items.associate { it.first to 0.9 }
+            }
+            val result = Packer(scorer, PackConfig(batch = 1, pool = 2, perCall = 1)).pack("change A", candidates)
+            assertEquals(1, result.failedBatches)
+            assertEquals(setOf("src/A.kt", "src/B.kt"), result.files.map { it.path }.toSet())
+        }
+    }
+
+    @Test
+    fun `all incomplete scorer responses fail the pack`() {
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            runBlocking {
+                Packer(RelevanceScorer { _, _ -> emptyMap() }, PackConfig(batch = 1))
+                    .pack("change A", listOf(FileDoc("src/A.kt", "sketch A", "full A")))
+            }
+        }
+        assertTrue(error.message.orEmpty().contains("exactly the requested paths"))
+    }
+
+    @Test
+    fun `invalid probabilities count as failed batches`() = runBlocking {
+        val candidates = listOf(FileDoc("src/A.kt", "sketch A", "full A"), FileDoc("src/B.kt", "sketch B", "full B"))
+        for (invalid in listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, -0.1, 1.1)) {
+            val scorer = RelevanceScorer { _, items ->
+                items.associate { (path, text) -> path to if (path == "src/A.kt" && text == "sketch A") invalid else 0.9 }
+            }
+            val result = Packer(scorer, PackConfig(batch = 1, pool = 2, perCall = 1)).pack("change A", candidates)
+            assertEquals("score $invalid", 1, result.failedBatches)
+            assertTrue(result.files.all { it.relevance in 0.0..1.0 && it.score.isFinite() })
+        }
+    }
+
+    @Test
+    fun `a failed full source batch has zero relevance and is reported`() = runBlocking {
+        val candidates = listOf(FileDoc("src/A.kt", "sketch A", "full A"), FileDoc("src/B.kt", "sketch B", "full B"))
+        val scorer = RelevanceScorer { _, items ->
+            if (items.single().first == "src/A.kt" && items.single().second.startsWith("path: ")) error("boom")
+            items.associate { it.first to 0.9 }
+        }
+        val result = Packer(scorer, PackConfig(batch = 1, pool = 2, perCall = 1)).pack("change A", candidates)
+        assertEquals(1, result.failedBatches)
+        assertEquals(0.0, result.files.first { it.path == "src/A.kt" }.relevance, 0.0)
+        assertEquals(0.9, result.files.first { it.path == "src/B.kt" }.relevance, 0.0)
+    }
+
+    @Test
+    fun `cancellation propagates even when other batches can score`() {
+        val candidates = listOf(FileDoc("src/A.kt", "sketch A", "full A"), FileDoc("src/B.kt", "sketch B", "full B"))
+        val scorer = RelevanceScorer { _, items ->
+            if (items.single().first == "src/A.kt") throw CancellationException("cancelled")
+            items.associate { it.first to 0.9 }
+        }
+        val error = assertThrows(CancellationException::class.java) {
+            runBlocking { Packer(scorer, PackConfig(batch = 1)).pack("change A", candidates) }
+        }
+        assertEquals("cancelled", error.message)
+    }
+
+    @Test
+    fun `invalid config and inputs fail before scoring`() {
+        val scorer = FakeScorer()
+        val invalidConfigs = listOf(
+            PackConfig(batch = 0), PackConfig(pool = 0), PackConfig(perCall = 0),
+            PackConfig(fullChars = 0), PackConfig(keep = 0),
+            PackConfig(bm25Weight = -0.1), PackConfig(bm25Weight = Double.NaN),
+            PackConfig(bm25Weight = Double.POSITIVE_INFINITY),
+        )
+        invalidConfigs.forEach { config ->
+            assertThrows(IllegalArgumentException::class.java) { Packer(scorer, config) }
+        }
+        val packer = Packer(scorer)
+        assertThrows(IllegalArgumentException::class.java) { runBlocking { packer.pack("  ", docs) } }
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { packer.pack("change A", listOf(FileDoc(" ", "sketch", "full"))) }
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { packer.pack("change A", listOf(docs[0], docs[0])) }
+        }
+        assertTrue(scorer.batches.isEmpty())
     }
 
     @Test

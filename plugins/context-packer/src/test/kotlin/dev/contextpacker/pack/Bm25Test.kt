@@ -24,4 +24,11 @@ class Bm25Test {
     fun `empty corpus ranks nothing`() {
         assertEquals(emptyList<String>(), Bm25.rank("anything", emptyMap()))
     }
+
+    @Test
+    fun `tied results are reproducible regardless of project traversal order`() {
+        val docs = linkedMapOf("Z.kt" to "same content", "A.kt" to "same content")
+        assertEquals(listOf("A.kt", "Z.kt"), Bm25.rank("unmatched", docs))
+        assertEquals(Bm25.rank("unmatched", docs), Bm25.rank("unmatched", docs.entries.reversed().associate { it.toPair() }))
+    }
 }

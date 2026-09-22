@@ -101,7 +101,7 @@ class JevClient(
             }
             if (response.statusCode() == 200) {
                 val parsed = JevResponse.parse(response.body()).let { if (it.model.isEmpty()) it.copy(model = model) else it }
-                calls += CallStat(elapsedMs(started), parsed.inputTokens, questionCount, null)
+                calls += CallStat(elapsedMs(started), parsed.inputTokens, questionCount, null, parsed.usageKnown)
                 return parsed
             }
             lastStatus = response.statusCode()
@@ -109,7 +109,7 @@ class JevClient(
             if (response.statusCode() !in RETRY_STATUSES) break
             wait = retryAfterMs(response) ?: backoffMs(attempt + 1)
         }
-        calls += CallStat(elapsedMs(started), 0, questionCount, lastError)
+        calls += CallStat(elapsedMs(started), 0, questionCount, lastError, usageKnown = false)
         throw JevException(lastStatus, lastError)
     }
 
@@ -143,11 +143,22 @@ class JevClient(
     }
 }
 
-data class CallStat(val ms: Long, val inputTokens: Int, val questions: Int, val error: String?)
+data class CallStat(
+    val ms: Long,
+    val inputTokens: Int,
+    val questions: Int,
+    val error: String?,
+    val usageKnown: Boolean = true,
+)
 
 class JevException(val status: Int?, message: String) : RuntimeException(message)
 
-data class JevResponse(val model: String, val answers: Map<String, JsonObject>, val inputTokens: Int) {
+data class JevResponse(
+    val model: String,
+    val answers: Map<String, JsonObject>,
+    val inputTokens: Int,
+    val usageKnown: Boolean = true,
+) {
     /** P(statement is true) for a yes/no question (`noul` on TypeSafe, `boolean` on the gateway), or null. */
     fun noul(key: String): Double? =
         (answers[key]?.get("noul") ?: answers[key]?.get("probability"))?.jsonPrimitive?.doubleOrNull
@@ -158,11 +169,14 @@ data class JevResponse(val model: String, val answers: Map<String, JsonObject>, 
     companion object {
         fun parse(body: String): JevResponse {
             val root = Json.parseToJsonElement(body).jsonObject
+            val usage = root["usage"] as? JsonObject
+            val tokenValue = (usage?.get("input_tokens") ?: usage?.get("inputTokens")) as? JsonPrimitive
+            val inputTokens = tokenValue?.takeUnless { it.isString }?.intOrNull?.takeIf { it >= 0 }
             return JevResponse(
                 model = root["model"]?.jsonPrimitive?.contentOrNull.orEmpty(),
                 answers = root["answers"]?.jsonObject?.mapValues { it.value.jsonObject }.orEmpty(),
-                inputTokens = root["usage"]?.jsonObject?.let { it["input_tokens"] ?: it["inputTokens"] }
-                    ?.jsonPrimitive?.intOrNull ?: 0,
+                inputTokens = inputTokens ?: 0,
+                usageKnown = inputTokens != null,
             )
         }
     }

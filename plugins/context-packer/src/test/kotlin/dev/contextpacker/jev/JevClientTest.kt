@@ -28,14 +28,16 @@ class JevClientTest {
         retryAfterMs: String? = null,
         path: String = "/v1/systemone",
         fixtureName: String = "systemone_noul.json",
+        responseBodies: List<String> = emptyList(),
     ): String {
         val fixture = javaClass.getResource("/fixtures/$fixtureName")!!.readText()
         val hits = AtomicInteger()
         server.createContext(path) { ex ->
             headers += ex.requestHeaders
             requests += ex.requestHeaders.getFirst("Authorization") to ex.requestBody.readAllBytes().decodeToString()
-            val status = statuses.getOrNull(hits.getAndIncrement()) ?: 200
-            val body = (if (status == 200) fixture else """{"detail":"nope"}""").toByteArray()
+            val index = hits.getAndIncrement()
+            val status = statuses.getOrNull(index) ?: 200
+            val body = (if (status == 200) responseBodies.getOrNull(index) ?: fixture else """{"detail":"nope"}""").toByteArray()
             retryAfterMs?.let { ex.responseHeaders.add("retry-after-ms", it) }
             ex.sendResponseHeaders(status, body.size.toLong())
             ex.responseBody.use { it.write(body) }
@@ -59,6 +61,7 @@ class JevClientTest {
         assertEquals(0.03, response.noul("f001")!!, 1e-9)
         assertNull(response.noul("missing"))
         assertEquals(400, response.inputTokens)
+        assertTrue(response.usageKnown)
         assertEquals("jev-1.13.0", response.model)
 
         val (auth, body) = requests.single()
@@ -68,6 +71,28 @@ class JevClientTest {
         assertEquals(setOf("f000", "f001"), sent["questions"]!!.jsonObject.keys)
         assertEquals("Add exponential backoff to retries", sent["state"]!!.jsonObject["task"]!!.jsonPrimitive.content)
         assertNull(client.calls.single().error)
+        assertTrue(client.calls.single().usageKnown)
+    }
+
+    @Test
+    fun `distinguishes absent or invalid token usage from a reported zero`() = runBlocking {
+        val answer = """{"answers":{"f000":{"noul":0.96},"f001":{"noul":0.03}}"""
+        val responses = listOf(
+            "$answer}",
+            """$answer,"usage":{"input_tokens":"7"}}""",
+            """$answer,"usage":{"input_tokens":-3}}""",
+            """$answer,"usage":{"input_tokens":1.5}}""",
+            """$answer,"usage":"unknown"}""",
+            """$answer,"usage":{"input_tokens":0}}""",
+            """$answer,"usage":{"inputTokens":9}}""",
+        )
+        val client = JevClient("k", endpoint = serve(responseBodies = responses))
+        val result = responses.map { client.systemOne(state, questions) }
+
+        assertEquals(listOf(0, 0, 0, 0, 0, 0, 9), result.map { it.inputTokens })
+        assertEquals(listOf(false, false, false, false, false, true, true), result.map { it.usageKnown })
+        assertEquals(result.map { it.inputTokens }, client.calls.map { it.inputTokens })
+        assertEquals(result.map { it.usageKnown }, client.calls.map { it.usageKnown })
     }
 
     @Test
@@ -90,6 +115,7 @@ class JevClientTest {
         }
         assertEquals(1, requests.size)
         assertTrue(client.calls.single().error!!.contains("(HTTP 400)"))
+        assertTrue(!client.calls.single().usageKnown)
     }
 
     @Test
