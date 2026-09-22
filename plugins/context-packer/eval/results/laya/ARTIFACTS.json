@@ -82,39 +82,55 @@
       "uncompressed_sha256": "1a6f5b543c0ed37141aeff878d127f0c53db65381b140b646e230ec74b44f42b"
     },
     {
+      "file": "laya-benchmark-uncertainty.json.gz",
+      "format": "gzip JSON, mtime=0, no embedded filename",
+      "source_name": "laya-benchmark-uncertainty.json",
+      "stored_bytes": 1545,
+      "stored_sha256": "d02c21bea141f64da4cd84bd97f8e9c259dc4e0184b37b59a0c33f5cdc8b7b9d",
+      "uncompressed_bytes": 6576,
+      "uncompressed_sha256": "e568bc008863381ed7b5e4214ca42798bfd856988897c06cedc82c5ae53a407d"
+    },
+    {
       "file": "laya-benchmark.md",
       "format": "Markdown",
       "source_name": "laya-benchmark.md",
-      "stored_bytes": 5231,
-      "stored_sha256": "fb4381b313742f790a16dd26a993c7256040da998ad8c7f5bd64b853f3e25d2d"
+      "stored_bytes": 5179,
+      "stored_sha256": "4d7c2e42b6b32f99da16cb8a0300c45a08c09d7f680bc79ae89130961c65bd8f"
     },
     {
       "file": "laya-benchmark-extension.md",
       "format": "Markdown",
       "source_name": "laya-benchmark-extension.md",
-      "stored_bytes": 6042,
-      "stored_sha256": "059fa286eca5b8aad2f73316e55a21970467d04f0c45f640e656bbe3d558672e"
+      "stored_bytes": 5987,
+      "stored_sha256": "95efb78a5dfea0f2a67ef8ceb306ac66e3201eb940dd6d4a0cf213c031ceb45a"
     },
     {
       "file": "laya-benchmark-dev-window.md",
       "format": "Markdown",
       "source_name": "laya-benchmark-dev-window.md",
-      "stored_bytes": 1275,
-      "stored_sha256": "ee0749237d387e012acef49b12862f13e6c3c73465b84278c9509dfc1f50987d"
+      "stored_bytes": 1257,
+      "stored_sha256": "4ba44f4503c74d14f400970f60e7db81d7ada54a5be559c577223282c9390a78"
     },
     {
       "file": "laya-benchmark-cache.md",
       "format": "Markdown",
       "source_name": "laya-benchmark-cache.md",
-      "stored_bytes": 1263,
-      "stored_sha256": "35ff17576f13e632dea008bf0f92f5eb8c7cbb4637b1af55a9871e1e5a916f3b"
+      "stored_bytes": 1246,
+      "stored_sha256": "b3efd227fe914654b1bc6c7f825795513b6bc25537eccabe6526ca97db898cf7"
     },
     {
       "file": "laya-benchmark-server-resources.md",
       "format": "Markdown",
       "source_name": "laya-benchmark-server-resources.md",
-      "stored_bytes": 1827,
-      "stored_sha256": "4b24c3daf428f600e5fe90dddc4b5b880aca236038de913addf5599c7c22ebab"
+      "stored_bytes": 1803,
+      "stored_sha256": "c743559bd2491638eddab10cce367690a3c433edf5599a6f9503e7d5e948e94e"
+    },
+    {
+      "file": "laya-benchmark-uncertainty.md",
+      "format": "Markdown",
+      "source_name": "laya-benchmark-uncertainty.md",
+      "stored_bytes": 936,
+      "stored_sha256": "7251e622f824bb4ce77779d093def078708e1452021c91aa5ae3bb2f8cc09013"
     }
   ],
   "scope": "Public Koog/Laya benchmark evidence; no model weights, credentials, or private prompts"
