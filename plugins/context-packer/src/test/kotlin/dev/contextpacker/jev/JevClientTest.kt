@@ -18,14 +18,21 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
 class JevClientTest {
-    private val fixture = javaClass.getResource("/fixtures/systemone_noul.json")!!.readText()
     private val requests = CopyOnWriteArrayList<Pair<String?, String>>()
+    private val headers = CopyOnWriteArrayList<com.sun.net.httpserver.Headers>()
     private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
 
-    /** Serves each status in turn, then the recorded fixture. */
-    private fun serve(vararg statuses: Int, retryAfterMs: String? = null): String {
+    /** Serves each status in turn, then the recorded fixture. Returns the endpoint URL. */
+    private fun serve(
+        vararg statuses: Int,
+        retryAfterMs: String? = null,
+        path: String = "/v1/systemone",
+        fixtureName: String = "systemone_noul.json",
+    ): String {
+        val fixture = javaClass.getResource("/fixtures/$fixtureName")!!.readText()
         val hits = AtomicInteger()
-        server.createContext("/v1/systemone") { ex ->
+        server.createContext(path) { ex ->
+            headers += ex.requestHeaders
             requests += ex.requestHeaders.getFirst("Authorization") to ex.requestBody.readAllBytes().decodeToString()
             val status = statuses.getOrNull(hits.getAndIncrement()) ?: 200
             val body = (if (status == 200) fixture else """{"detail":"nope"}""").toByteArray()
@@ -34,7 +41,7 @@ class JevClientTest {
             ex.responseBody.use { it.write(body) }
         }
         server.start()
-        return "http://127.0.0.1:${server.address.port}"
+        return "http://127.0.0.1:${server.address.port}$path"
     }
 
     @After
@@ -45,7 +52,7 @@ class JevClientTest {
 
     @Test
     fun `sends the SDK's body and bearer auth, parses answers and usage`() = runBlocking {
-        val client = JevClient("k3y", baseUrl = serve())
+        val client = JevClient("k3y", endpoint = serve())
         val response = client.systemOne(state, questions)
 
         assertEquals(0.96, response.noul("f000")!!, 1e-9)
@@ -65,7 +72,7 @@ class JevClientTest {
 
     @Test
     fun `retries 429 and 5xx, honouring retry-after-ms`() = runBlocking {
-        val client = JevClient("k", baseUrl = serve(429, 503, retryAfterMs = "10"))
+        val client = JevClient("k", endpoint = serve(429, 503, retryAfterMs = "10"))
         val started = System.nanoTime()
         assertEquals(0.96, client.systemOne(state, questions).noul("f000")!!, 1e-9)
         assertEquals(3, requests.size)
@@ -74,7 +81,7 @@ class JevClientTest {
 
     @Test
     fun `does not retry a 400 and reports it`() = runBlocking {
-        val client = JevClient("k", baseUrl = serve(400))
+        val client = JevClient("k", endpoint = serve(400))
         try {
             client.systemOne(state, questions)
             fail("expected JevException")
@@ -87,7 +94,7 @@ class JevClientTest {
 
     @Test
     fun `gives up after max retries`() = runBlocking {
-        val client = JevClient("k", baseUrl = serve(500, 500, 500), maxRetries = 2)
+        val client = JevClient("k", endpoint = serve(500, 500, 500), maxRetries = 2)
         try {
             client.systemOne(state, questions)
             fail("expected JevException")
@@ -95,5 +102,27 @@ class JevClientTest {
             assertEquals(500, e.status)
         }
         assertEquals(3, requests.size)
+    }
+
+    @Test
+    fun `gateway backend sends the AI SDK envelope and reads boolean probabilities`() = runBlocking {
+        val url = serve(path = "/v4/ai/evaluation-model", fixtureName = "gateway_boolean.json")
+        val client = JevClient("gw", JevBackend.GATEWAY, endpoint = url)
+        val response = client.systemOne(state, questions)
+
+        assertEquals(0.96, response.noul("f000")!!, 1e-9)
+        assertEquals(0.03, response.noul("f001")!!, 1e-9)
+        assertEquals(400, response.inputTokens)
+        assertEquals("typesafe-ai/jev-latest", response.model)
+
+        val h = headers.single()
+        assertEquals("Bearer gw", h.getFirst("Authorization"))
+        assertEquals("typesafe-ai/jev-latest", h.getFirst("ai-model-id"))
+        assertEquals("4", h.getFirst("ai-evaluation-model-specification-version"))
+        assertEquals("0.0.1", h.getFirst("ai-gateway-protocol-version"))
+        assertEquals("api-key", h.getFirst("ai-gateway-auth-method"))
+        val sent = Json.parseToJsonElement(requests.single().second).jsonObject
+        assertNull("the model travels in a header, not the body", sent["model"])
+        assertEquals("boolean", sent["questions"]!!.jsonObject["f000"]!!.jsonObject["type"]!!.jsonPrimitive.content)
     }
 }

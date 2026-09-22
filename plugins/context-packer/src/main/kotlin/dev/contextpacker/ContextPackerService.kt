@@ -10,6 +10,7 @@ import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiManager
+import dev.contextpacker.jev.JevBackend
 import dev.contextpacker.jev.JevClient
 import dev.contextpacker.jev.JevRelevance
 import dev.contextpacker.pack.Candidates
@@ -67,7 +68,7 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
             jevCalls = calls.size,
             inputTokens = calls.sumOf { it.inputTokens.toLong() },
             failedCalls = calls.count { it.error != null },
-            jevModel = client.model,
+            jevModel = "${client.model} via ${client.backend.name.lowercase()}",
         )
     }
 
@@ -86,10 +87,20 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
 
     fun fileFor(path: String): VirtualFile? = project.guessProjectDir()?.findFileByRelativePath(path)
 
+    /** Vercel AI Gateway if its key is set, TypeSafe's own API otherwise. `JEV_BACKEND` forces one. */
     private suspend fun jevClient(): JevClient {
         jev?.let { return it }
-        val key = withContext(Dispatchers.IO) { Keys.TYPESAFE.get() } ?: throw MissingKeyException(Keys.TYPESAFE)
-        return JevClient(key).also { jev = it }
+        val client = withContext(Dispatchers.IO) {
+            val forced = System.getenv("JEV_BACKEND")?.uppercase()?.let { runCatching { JevBackend.valueOf(it) }.getOrNull() }
+            val gateway = Keys.GATEWAY.get().takeIf { forced == null || forced == JevBackend.GATEWAY }
+            val typesafe = Keys.TYPESAFE.get().takeIf { forced == null || forced == JevBackend.TYPESAFE }
+            when {
+                gateway != null -> JevClient(gateway, JevBackend.GATEWAY)
+                typesafe != null -> JevClient(typesafe, JevBackend.TYPESAFE)
+                else -> throw MissingKeyException(Keys.GATEWAY, Keys.TYPESAFE)
+            }
+        }
+        return client.also { jev = it }
     }
 
     /** Many short read actions in parallel, never one long one, so typing is never blocked. */
