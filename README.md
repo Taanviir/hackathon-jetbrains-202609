@@ -6,6 +6,14 @@ IntelliJ plugin, driven by AI, that makes developers' lives easier. The brief is
 
 We are still choosing the idea. This README is the shared context for that choice.
 
+## What we built
+
+- **[Context Packer](./plugins/context-packer/)**, an IntelliJ plugin plus an MCP tool that uses Jev to
+  find the files a coding task needs. On 70 held-out Koog commits it reaches recall@10 of 0.69,
+  against 0.53 for keyword search. Start with its [README](./plugins/context-packer/README.md).
+- **[Reports](https://taanviir.github.io/hackathon-jetbrains-202609/)**, eval benchmarks and other HTML
+  outputs from every branch. To add yours, see [reports/README.md](./reports/README.md).
+
 ## Team
 
 | Handle | Role |
