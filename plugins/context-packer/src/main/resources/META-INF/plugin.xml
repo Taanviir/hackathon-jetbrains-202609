@@ -1,0 +1,26 @@
+<idea-plugin>
+    <id>dev.contextpacker</id>
+    <name>Context Packer</name>
+    <vendor>Taanviir</vendor>
+    <description><![CDATA[
+        <p>Finds the files a coding task needs in about three seconds instead of an agent's
+        minute of exploring. Every file is sketched from the IDE's own code model, scored by
+        Jev, and re-ranked on full source. Available from a tool window and as an MCP tool for
+        agents.</p>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends optional="true" config-file="context-packer-mcp.xml">com.intellij.mcpServer</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Context Packer" anchor="right" secondary="false"
+                    factoryClass="dev.contextpacker.ui.ContextPackerToolWindowFactory"/>
+    </extensions>
+
+    <actions>
+        <action id="ContextPacker.SetKeys" class="dev.contextpacker.ui.SetKeysAction"
+                text="Context Packer: Set API Keys…" description="Store the TypeSafe and OpenRouter keys">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>
