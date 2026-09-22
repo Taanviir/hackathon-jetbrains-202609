@@ -49,6 +49,21 @@ plugin does the looking.
 Jev alone on sketches loses to plain keyword search (0.39 against 0.46 recall@10 in the spike).
 It's the re-rank on full source, fused with BM25, that wins.
 
+### Fast keywords (local)
+
+Select **Fast keywords (local)** in the tool window, set `CONTEXT_PACKER_PROVIDER=keywords`, or
+call `pack_context` with `provider=keywords`. This explicit mode ranks the **full eligible source
+corpus** with BM25 over paths and file text. It needs no API key or model server, makes no model
+request, and has $0 API fee and zero API tokens; local CPU and electricity are not priced. The UI
+and MCP output show ordinal keyword ranks, not model relevance or correctness confidence. It does
+not generate or cache sketches, so switching back to Jev or Laya still builds their normal inputs.
+There is no automatic fallback between providers.
+
+BM25 is the predeclared keyword baseline in the table above. Those measurements compare it with
+the Jev pipeline on that task set; they do not establish which mode will be best for every project
+or task. **Copy prompt** and **Ask OpenRouter (cloud)** remain separate actions; the latter still
+sends selected file contents to OpenRouter when clicked.
+
 ## Install
 
 Needs an IntelliJ-based IDE, 2025.2 or newer.
@@ -66,12 +81,14 @@ Needs an IntelliJ-based IDE, 2025.2 or newer.
    stops after 20M Jev input tokens (about 37 packs, $0.84) so a looping agent can't drain an
    account; set `CONTEXT_PACKER_TOKEN_BUDGET` to change that.
 
+   Fast keywords needs none of these keys. Laya uses a local server instead of an API key.
+
 ## Use it
 
 **In the IDE.** Open the **Context Packer** tool window (magnifier icon, right stripe), describe
 the change and press **Pack context** or Ctrl+Enter. Double-click a pick to open it, press Delete
 to drop one, and use **Add open file** to pin one it missed. Then **Copy prompt** puts the task
-plus every picked file on the clipboard, or **Ask LLM** sends it to `z-ai/glm-5.3-flash` through
+plus every picked file on the clipboard, or **Ask OpenRouter (cloud)** sends it to `z-ai/glm-5.3-flash` through
 OpenRouter. Set `CONTEXT_PACKER_LLM_MODEL` to use a different model.
 
 ![An agent's pack shown in the tool window](docs/tool-window-agent-pack.png)
@@ -97,7 +114,7 @@ About two minutes, on a Koog checkout:
 1. Open the tool window. Type *"Support reasoning_content in Delta for OpenAI"* and pack. The
    status line shows files scored, seconds, Jev calls and cost. `OpenAILLMClient.kt` comes first.
 2. Hover the status line for the stage timings, and a pick for its Jev score and keyword rank.
-3. Press **Ask LLM**. The model answers from the picked files in one shot, with no exploring.
+3. Press **Ask OpenRouter (cloud)**. The model answers from the picked files in one shot, with no exploring.
 4. In a terminal, ask Claude Code to make the same change. It calls `pack_context` first and goes
    straight to the right files.
 5. Close with the table above. It's measured on commits from JetBrains' own agent framework.
@@ -125,7 +142,7 @@ uv run python fusion.py ../.cache/spike_runs/<that file>.json --dev 40
 cd ../eval && uv run python agent_ab.py --tasks 10 --offset 40
 ```
 
-Plugin tests are `./gradlew test`, 16 of them, headless. For a licence-free sandbox IDE with the
+Plugin tests are `./gradlew test`, headless. For a licence-free sandbox IDE with the
 MCP server on, run `OPEN_PROJECT=/path/to/project ./gradlew runIdeCommunity`.
 
 ## Limits

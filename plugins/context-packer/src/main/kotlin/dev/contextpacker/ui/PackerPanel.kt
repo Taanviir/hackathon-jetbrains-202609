@@ -80,7 +80,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }
     private val provider = JComboBox(DecisionProvider.entries.toTypedArray()).apply {
         selectedItem = service.provider
-        toolTipText = "Laya runs locally at 127.0.0.1:8770 and needs no API key. Jev uses your configured API."
+        toolTipText = "Fast keywords reads source locally with no model. Laya uses a local server; Jev uses your configured API."
         addActionListener { service.provider = selectedItem as DecisionProvider }
     }
     private val status = JBTextArea(5, 24).apply {
@@ -288,19 +288,32 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         report.result.files.forEach(picks::addElement)
         val r = report.result
         val failed = if (r.failedBatches > 0) " · ${r.failedBatches} incomplete batches" else ""
-        val cost = if (report.provider == DecisionProvider.LAYA) "local · API fee $0"
-            else report.costUsd?.let { "est. API $%.4f".format(it) } ?: "API fee unavailable"
-        val tokens = if (report.usageKnown) "%.1fk tokens".format(report.inputTokens / 1000.0) else "tokens unavailable"
+        val cost = when (report.provider) {
+            DecisionProvider.KEYWORDS -> "API fee $0 · local compute excluded"
+            DecisionProvider.LAYA -> "local · API fee $0"
+            DecisionProvider.JEV -> report.costUsd?.let { "est. API $%.4f".format(it) } ?: "API fee unavailable"
+        }
+        val tokens = when {
+            report.provider == DecisionProvider.KEYWORDS -> "0 API tokens"
+            report.usageKnown -> "%.1fk tokens".format(report.inputTokens / 1000.0)
+            else -> "tokens unavailable"
+        }
+        val calls = if (report.provider == DecisionProvider.KEYWORDS) "full-corpus BM25 · no model calls"
+            else "${report.jevCalls} ${report.provider.name} calls"
         status.text = listOfNotNull(
             if (report.source == "tool window") null else "Asked by ${report.source}",
             "%d of %,d files · %.1f s".format(r.files.size, r.candidates, report.totalMs / 1000.0),
-            "${report.jevCalls} ${report.provider.name} calls · $tokens",
+            "$calls · $tokens",
             "$cost$failed",
         ).joinToString("\n")
-        status.toolTipText = "sketch %d ms · pass 1 + BM25 %d ms · pass 2 %d ms · %s · scored %d candidates%s".format(
-            report.sketchMs, r.pass1Ms, r.pass2Ms, report.jevModel, report.scoredCandidates,
-            if (report.provider == DecisionProvider.LAYA) " after keyword prefilter; local compute cost excluded" else "",
-        )
+        status.toolTipText = if (report.provider == DecisionProvider.KEYWORDS) {
+            "Read ${report.scoredCandidates} files in ${report.sketchMs} ms; ranked the full corpus with BM25 in ${r.pass1Ms} ms. No model or network request."
+        } else {
+            "sketch %d ms · pass 1 + BM25 %d ms · pass 2 %d ms · %s · scored %d candidates%s".format(
+                report.sketchMs, r.pass1Ms, r.pass2Ms, report.jevModel, report.scoredCandidates,
+                if (report.provider == DecisionProvider.LAYA) " after keyword prefilter; local compute cost excluded" else "",
+            )
+        }
     }
 
     private fun open(file: PackedFile) {
@@ -316,7 +329,8 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val file = FileEditorManager.getInstance(project).selectedFiles.firstOrNull() ?: return
         val path = project.guessProjectDir()?.let { VfsUtilCore.getRelativePath(file, it) } ?: return
         if ((0 until picks.size()).none { picks[it].path == path }) {
-            picks.add(0, PackedFile(path, relevance = 1.0, score = 1.0, bm25Rank = null, isTest = Packer.isTest(path)))
+            val modelScore = if ((lastReport?.provider ?: provider.selectedItem) == DecisionProvider.KEYWORDS) 0.0 else 1.0
+            picks.add(0, PackedFile(path, relevance = modelScore, score = modelScore, bm25Rank = null, isTest = Packer.isTest(path)))
         }
     }
 
@@ -413,13 +427,16 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         }
     }
 
-    private class PickRenderer : ColoredListCellRenderer<PackedFile>() {
+    private inner class PickRenderer : ColoredListCellRenderer<PackedFile>() {
         override fun customizeCellRenderer(list: JList<out PackedFile>, value: PackedFile, index: Int, selected: Boolean, focus: Boolean) {
-            append("%.2f  ".format(value.score), SimpleTextAttributes.GRAYED_ATTRIBUTES)
+            val keywords = (lastReport?.provider ?: provider.selectedItem) == DecisionProvider.KEYWORDS
+            if (keywords) append(value.bm25Rank?.let { "#$it  " } ?: "pinned  ", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+            else append("%.2f  ".format(value.score), SimpleTextAttributes.GRAYED_ATTRIBUTES)
             if (value.isTest) append("test  ", SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES)
             append(value.path.substringAfterLast('/'), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
             append("  " + value.path.substringBeforeLast('/', ""), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES)
-            toolTipText = value.path + (value.bm25Rank?.let { " · relevance %.2f · keyword rank $it".format(value.relevance) } ?: " · added by hand")
+            toolTipText = if (keywords) value.path + (value.bm25Rank?.let { " · full-corpus BM25 keyword rank #$it" } ?: " · added by hand")
+            else value.path + (value.bm25Rank?.let { " · relevance %.2f · keyword rank $it".format(value.relevance) } ?: " · added by hand")
         }
     }
 }

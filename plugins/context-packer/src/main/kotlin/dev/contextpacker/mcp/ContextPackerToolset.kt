@@ -24,9 +24,10 @@ class ContextPackerToolset : McpToolset {
         """
         Locate relevant source files in the open project when a coding task's edit targets are unknown.
         Returns ranked project-relative paths with test files marked; it does not edit files.
-        Use provider=laya for the local decision model, provider=jev for the configured API, or configured
-        for the IDE preference. Laya scores short excerpts from a keyword shortlist of at most 60 files.
-        Scores are ranking signals, not calibrated correctness confidence. Read the selected files before editing.
+        Use provider=keywords for full-corpus local BM25 with no model or API key, provider=laya for
+        the local decision model, provider=jev for the configured API, or configured for the IDE preference.
+        Laya scores short excerpts from a keyword shortlist of at most 60 files; keywords ranks every
+        eligible file. Model scores are ranking signals, not correctness confidence. Read picks before editing.
         """,
     )
     suspend fun pack_context(
@@ -34,16 +35,17 @@ class ContextPackerToolset : McpToolset {
         task: String,
         @McpDescription("How many files to return, 1 to 20")
         limit: Int = 10,
-        @McpDescription("Decision provider: configured, laya (local, no API key), or jev (API key required)")
+        @McpDescription("Decision provider: configured, keywords (full-corpus BM25, local), laya (local model), or jev (API key required)")
         provider: String = "configured",
     ): String {
         val project = currentCoroutineContext().project
         val report = try {
             val selected = when (provider.lowercase()) {
                 "configured" -> null
+                "keywords", "bm25" -> DecisionProvider.KEYWORDS
                 "laya" -> DecisionProvider.LAYA
                 "jev" -> DecisionProvider.JEV
-                else -> throw IllegalArgumentException("provider must be configured, laya, or jev")
+                else -> throw IllegalArgumentException("provider must be configured, keywords, laya, or jev")
             }
             require(limit in 1..20) { "limit must be between 1 and 20" }
             project.service<ContextPackerService>().pack(task, source = "an agent over MCP", requestedProvider = selected)
@@ -68,15 +70,27 @@ class ContextPackerToolset : McpToolset {
         append("Picked %d of %,d files in %.1f s. Paths are relative to %s.\n".format(
             minOf(limit, r.files.size), r.candidates, report.totalMs / 1000.0, basePath ?: "the project root",
         ))
-        append("score  path\n")
-        r.files.take(limit).forEach { f ->
-            append("%.2f   %s%s\n".format(f.score, f.path, if (f.isTest) "  (test)" else ""))
+        if (report.provider == DecisionProvider.KEYWORDS) {
+            append("rank  path\n")
+            r.files.take(limit).forEachIndexed { index, f ->
+                append("#%d   %s%s\n".format(f.bm25Rank ?: index + 1, f.path, if (f.isTest) "  (test)" else ""))
+            }
+        } else {
+            append("score  path\n")
+            r.files.take(limit).forEach { f ->
+                append("%.2f   %s%s\n".format(f.score, f.path, if (f.isTest) "  (test)" else ""))
+            }
         }
-        append("Provider: ${report.jevModel}; scored ${report.scoredCandidates} candidates. ")
-        append(if (report.provider == DecisionProvider.LAYA) "Laya reads short excerpts after a keyword prefilter. API fee is $0; local compute cost is excluded. "
-            else "Jev reads bounded source excerpts; " + (report.costUsd?.let { "the API fee estimate is $%.4f. ".format(it) }
-                ?: "token usage and API fee are unavailable. "))
+        append("Provider: ${report.jevModel}; ${if (report.provider == DecisionProvider.KEYWORDS) "ranked" else "scored"} ${report.scoredCandidates} candidates. ")
+        append(when (report.provider) {
+            DecisionProvider.KEYWORDS -> "Full-corpus lexical rank only; no model relevance or confidence. No model requests, 0 API tokens, API fee $0; local compute cost is excluded. "
+            DecisionProvider.LAYA -> "Laya reads short excerpts after a keyword prefilter. API fee is $0; local compute cost is excluded. "
+            DecisionProvider.JEV -> "Jev reads bounded source excerpts; " + (report.costUsd?.let { "the API fee estimate is $%.4f. ".format(it) }
+                ?: "token usage and API fee are unavailable. ")
+        })
         if (r.failedBatches > 0) append("WARNING: ${r.failedBatches} scoring batches failed; ranking is incomplete. ")
-        append("Scores combine model relevance and keyword rank. Read the top files before changing code; request more context if needed.")
+        append(if (report.provider == DecisionProvider.KEYWORDS) "Ranks come from BM25 over paths and full source. "
+            else "Scores combine model relevance and keyword rank. ")
+        append("Read the top files before changing code; request more context if needed.")
     }
 }
