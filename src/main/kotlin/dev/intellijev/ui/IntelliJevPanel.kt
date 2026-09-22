@@ -6,7 +6,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.vfs.ReadonlyStatusHandler
 import com.intellij.ui.components.JBList
@@ -248,21 +247,25 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()), Di
         }
     }
     private fun applyChange(change: ProposedChange): Boolean {
-        val document = FileDocumentManager.getInstance().getDocument(change.file) ?: return false
+        if (!change.file.isValid || change.file.isDirectory) {
+            JOptionPane.showMessageDialog(this, "The selected file is no longer available. Request a fresh proposal before applying it.", "IntelliJev", JOptionPane.WARNING_MESSAGE)
+            return false
+        }
         if (ReadonlyStatusHandler.getInstance(project).ensureFilesWritable(change.file).hasReadonlyFiles()) {
             JOptionPane.showMessageDialog(this, "The selected file is read-only.", "IntelliJev", JOptionPane.WARNING_MESSAGE)
             return false
         }
-        var applied = false
-        WriteCommandAction.runWriteCommandAction(project, "Apply IntelliJev proposal", null, Runnable {
-            if (change.file.isValid && document.text == change.before) {
-                document.setText(change.after)
-                applied = true
+        val result = ReviewedChangeApplier.apply(project, change)
+        val document = when (result) {
+            is ApplyChangeResult.Applied -> result.document
+            ApplyChangeResult.Stale -> {
+                JOptionPane.showMessageDialog(this, "This file changed after the proposal was generated. Request a fresh proposal before applying it.", "IntelliJev", JOptionPane.WARNING_MESSAGE)
+                return false
             }
-        })
-        if (!applied) {
-            JOptionPane.showMessageDialog(this, "This file changed after the proposal was generated. Request a fresh proposal before applying it.", "IntelliJev", JOptionPane.WARNING_MESSAGE)
-            return false
+            ApplyChangeResult.Unavailable -> {
+                JOptionPane.showMessageDialog(this, "The selected file is no longer available. Request a fresh proposal before applying it.", "IntelliJev", JOptionPane.WARNING_MESSAGE)
+                return false
+            }
         }
         FileDocumentManager.getInstance().saveDocument(document)
         proposalModel.removeElement(change)

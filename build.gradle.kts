@@ -1,4 +1,5 @@
 import org.jetbrains.intellij.platform.gradle.tasks.RunIdeTask
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 plugins {
     kotlin("jvm") version "2.1.10"
@@ -18,8 +19,10 @@ dependencies {
     intellijPlatform {
         intellijIdeaCommunity("2025.1.1")
         bundledPlugin("com.intellij.java")
+        testFramework(TestFrameworkType.Platform)
     }
     testImplementation(kotlin("test"))
+    testImplementation("junit:junit:4.13.2")
 }
 
 kotlin { jvmToolchain(21) }
