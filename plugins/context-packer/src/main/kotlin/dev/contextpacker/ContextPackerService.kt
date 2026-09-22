@@ -44,6 +44,7 @@ data class PackReport(
     val sketchMs: Long,
     val jevCalls: Int,
     val inputTokens: Long,
+    /** HTTP/response-envelope failures, including retries; scorer failures are result.failedBatches. */
     val failedCalls: Int,
     val jevModel: String,
     val provider: DecisionProvider = DecisionProvider.JEV,
@@ -214,7 +215,7 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
                 val file = safeFile(base, path) ?: return@mapNotNull null
                 if (file.isDirectory || file.fileType.isBinary || file.length > Candidates.MAX_BYTES) return@mapNotNull null
                 val text = FileDocumentManager.getInstance().getCachedDocument(file)?.text
-                    ?: runCatching { VfsUtilCore.loadText(file) }.getOrNull() ?: return@mapNotNull null
+                    ?: loadSource(file) ?: return@mapNotNull null
                 path to text
             }.toMap()
         }
@@ -272,15 +273,7 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
                         val document = FileDocumentManager.getInstance().getCachedDocument(file)
                         val stamp = document?.modificationStamp ?: file.modificationStamp
                         val text = cache[file.path]?.takeIf { it.stamp == stamp }?.doc?.text
-                            ?: document?.text ?: try {
-                                VfsUtilCore.loadText(file)
-                            } catch (e: ProcessCanceledException) {
-                                throw e
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                null
-                            } ?: return@mapNotNull null
+                            ?: document?.text ?: loadSource(file) ?: return@mapNotNull null
                         path to text
                     }
                 }
@@ -292,15 +285,27 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         val document = FileDocumentManager.getInstance().getCachedDocument(file)
         val stamp = document?.modificationStamp ?: file.modificationStamp
         cache[file.path]?.takeIf { it.stamp == stamp }?.let { return it.doc }
-        val text = document?.text ?: runCatching { VfsUtilCore.loadText(file) }.getOrNull() ?: return null
+        val text = document?.text ?: loadSource(file) ?: return null
         val path = base?.let { VfsUtilCore.getRelativePath(file, it) } ?: return null
         val sketch = if (!psiSketches) RegexSketcher.sketch(path, text) else try {
             PsiManager.getInstance(project).findFile(file)?.let { Sketcher.sketch(it, path, text) }
+        } catch (e: ProcessCanceledException) {
+            throw e
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             null
         } ?: RegexSketcher.sketch(path, text)
         return FileDoc(path, sketch, text).also { cache[file.path] = Cached(stamp, it) }
+    }
+
+    private fun loadSource(file: VirtualFile): String? = try {
+        VfsUtilCore.loadText(file)
+    } catch (e: ProcessCanceledException) {
+        throw e
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
     }
 }

@@ -21,6 +21,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.min
 import kotlin.random.Random
 
@@ -49,7 +50,7 @@ class JevClient(
 ) {
     private val permits = Semaphore(concurrency)
 
-    /** Every call made, successful or not. Read it to report latency and token counts. */
+    /** Every dispatched HTTP attempt, including retries and failures. */
     val calls = ConcurrentLinkedQueue<CallStat>()
 
     /** Questions are written in TypeSafe's vocabulary (`noul`); the gateway's is translated here. */
@@ -85,33 +86,57 @@ class JevClient(
         else question
 
     private suspend fun send(request: HttpRequest, questionCount: Int): JevResponse {
-        val started = System.nanoTime()
         var wait = 0L
         var lastStatus: Int? = null
         var lastError = ""
         for (attempt in 0..maxRetries) {
             if (attempt > 0) delay(wait)
+            val started = System.nanoTime()
+            var dispatched = false
             val response = try {
-                http.sendAsync(request, HttpResponse.BodyHandlers.ofString()).await()
+                val future = http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                dispatched = true
+                future.await()
+            } catch (e: CancellationException) {
+                if (dispatched) record(started, 0, questionCount, "Jev request cancelled", usageKnown = false)
+                throw e
             } catch (e: java.io.IOException) {
                 lastStatus = null
                 lastError = "${e::class.simpleName}: ${e.message}"
+                if (dispatched) record(started, 0, questionCount, lastError, usageKnown = false)
                 wait = backoffMs(attempt + 1)
                 continue
+            } catch (e: Exception) {
+                if (dispatched) record(started, 0, questionCount, "Jev request failed: ${e::class.simpleName}", usageKnown = false)
+                throw e
             }
             if (response.statusCode() == 200) {
-                val parsed = JevResponse.parse(response.body()).let { if (it.model.isEmpty()) it.copy(model = model) else it }
-                calls += CallStat(elapsedMs(started), parsed.inputTokens, questionCount, null, parsed.usageKnown)
+                val parsed = try {
+                    JevResponse.parse(response.body()).let { if (it.model.isEmpty()) it.copy(model = model) else it }
+                } catch (e: Exception) {
+                    val tokens = inputTokensIn(response.body())
+                    record(started, tokens ?: 0, questionCount, "Jev returned an invalid HTTP 200 response", tokens != null)
+                    throw e
+                }
+                record(started, parsed.inputTokens, questionCount, null, parsed.usageKnown)
                 return parsed
             }
             lastStatus = response.statusCode()
             lastError = describe(response.statusCode()) + " (HTTP ${response.statusCode()}): ${response.body().take(MAX_ERROR_BODY)}"
+            val tokens = inputTokensIn(response.body())
+            record(started, tokens ?: 0, questionCount, lastError, tokens != null)
             if (response.statusCode() !in RETRY_STATUSES) break
             wait = retryAfterMs(response) ?: backoffMs(attempt + 1)
         }
-        calls += CallStat(elapsedMs(started), 0, questionCount, lastError, usageKnown = false)
         throw JevException(lastStatus, lastError)
     }
+
+    private fun record(started: Long, tokens: Int, questions: Int, error: String?, usageKnown: Boolean) {
+        calls += CallStat(elapsedMs(started), tokens, questions, error, usageKnown)
+    }
+
+    private fun inputTokensIn(body: String): Int? =
+        runCatching { knownInputTokens(Json.parseToJsonElement(body).jsonObject) }.getOrNull()
 
     private fun backoffMs(attempt: Int): Long {
         val exponential = min(BACKOFF_MAX_MS, BACKOFF_INITIAL_MS shl (attempt - 1).coerceAtMost(10))
@@ -119,8 +144,13 @@ class JevClient(
     }
 
     private fun retryAfterMs(response: HttpResponse<*>): Long? {
-        response.headers().firstValue("retry-after-ms").orElse(null)?.toDoubleOrNull()?.let { return it.toLong() }
-        return response.headers().firstValue("retry-after").orElse(null)?.toDoubleOrNull()?.let { (it * 1000).toLong() }
+        retryDelay(response.headers().firstValue("retry-after-ms").orElse(null), 1.0)?.let { return it }
+        return retryDelay(response.headers().firstValue("retry-after").orElse(null), 1_000.0)
+    }
+
+    private fun retryDelay(value: String?, multiplier: Double): Long? {
+        val milliseconds = (value?.toDoubleOrNull() ?: return null) * multiplier
+        return milliseconds.takeIf { it.isFinite() && it >= 0.0 && it < Long.MAX_VALUE.toDouble() }?.toLong()
     }
 
     private fun elapsedMs(started: Long) = (System.nanoTime() - started) / 1_000_000
@@ -169,9 +199,7 @@ data class JevResponse(
     companion object {
         fun parse(body: String): JevResponse {
             val root = Json.parseToJsonElement(body).jsonObject
-            val usage = root["usage"] as? JsonObject
-            val tokenValue = (usage?.get("input_tokens") ?: usage?.get("inputTokens")) as? JsonPrimitive
-            val inputTokens = tokenValue?.takeUnless { it.isString }?.intOrNull?.takeIf { it >= 0 }
+            val inputTokens = knownInputTokens(root)
             return JevResponse(
                 model = root["model"]?.jsonPrimitive?.contentOrNull.orEmpty(),
                 answers = root["answers"]?.jsonObject?.mapValues { it.value.jsonObject }.orEmpty(),
@@ -180,6 +208,12 @@ data class JevResponse(
             )
         }
     }
+}
+
+private fun knownInputTokens(root: JsonObject): Int? {
+    val usage = root["usage"] as? JsonObject
+    val tokenValue = (usage?.get("input_tokens") ?: usage?.get("inputTokens")) as? JsonPrimitive
+    return tokenValue?.takeUnless { it.isString }?.intOrNull?.takeIf { it >= 0 }
 }
 
 object Questions {
