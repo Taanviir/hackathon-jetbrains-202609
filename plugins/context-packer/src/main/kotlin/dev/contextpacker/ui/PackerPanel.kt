@@ -168,8 +168,8 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
             who, r.files.size, r.candidates, report.totalMs / 1000.0, report.jevCalls,
             report.inputTokens / 1000.0, report.costUsd, failed,
         )
-        status.toolTipText = "sketch %d ms · pass 1 + BM25 %d ms · pass 2 %d ms · %s".format(
-            report.sketchMs, r.pass1Ms, r.pass2Ms, report.jevModel,
+        status.toolTipText = "sketch %d ms · pass 1 + BM25 %d ms · pass 2 %d ms · stage 3 %d ms · %s".format(
+            report.sketchMs, r.pass1Ms, r.pass2Ms, r.stage3Ms, report.jevModel,
         )
     }
 

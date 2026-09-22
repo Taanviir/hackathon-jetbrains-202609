@@ -81,11 +81,13 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         val started = System.nanoTime()
         val docs = collectDocs()
         val sketchMs = (System.nanoTime() - started) / 1_000_000
-        val result = Packer(JevRelevance(client)).pack(task, docs, onProgress)
+        val jevScorer = JevRelevance(client)
+        val result = Packer(jevScorer, chooser = jevScorer).pack(task, docs, onProgress)
         val calls = client.calls.drop(before)
         val slowest = calls.maxOfOrNull { it.ms } ?: 0
         thisLogger().info(
             "pack: ${docs.size} files · sketch ${sketchMs} ms · pass1+bm25 ${result.pass1Ms} ms · pass2 ${result.pass2Ms} ms · " +
+                "stage3 ${result.stage3Ms} ms · " +
                 "${calls.size} Jev calls, slowest ${slowest} ms, ${calls.count { it.error != null }} failed · " +
                 "${calls.sumOf { it.inputTokens }} tokens, session ${sessionTokens} · cache ${cache.size}",
         )
