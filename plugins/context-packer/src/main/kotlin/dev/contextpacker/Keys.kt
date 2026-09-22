@@ -10,9 +10,9 @@ import com.intellij.ide.passwordSafe.PasswordSafe
  * IDE's password store, which is where "Set API Keys" puts them.
  */
 enum class Keys(val envVar: String) {
-    /** Vercel AI Gateway, preferred for Jev when set. */
-    GATEWAY("AI_GATEWAY_API_KEY"),
     TYPESAFE("TYPESAFE_API_KEY"),
+    /** Vercel AI Gateway: same Jev, but heavily rate-limited. Used when no TypeSafe key is set. */
+    GATEWAY("AI_GATEWAY_API_KEY"),
     /** Only for the text-writing LLM. Jev never goes through OpenRouter. */
     OPENROUTER("OPENROUTER_API_KEY");
 
@@ -29,4 +29,9 @@ enum class Keys(val envVar: String) {
 
 class MissingKeyException(vararg keys: Keys) : IllegalStateException(
     keys.joinToString(" or ") { it.envVar } + " is not set. Use Tools | Context Packer: Set API Keys, or export it.",
+)
+
+class BudgetExceededException(spent: Long, budget: Long) : IllegalStateException(
+    "Jev budget for this IDE session is used up (%,d of %,d input tokens). Set CONTEXT_PACKER_TOKEN_BUDGET to raise it."
+        .format(spent, budget),
 )

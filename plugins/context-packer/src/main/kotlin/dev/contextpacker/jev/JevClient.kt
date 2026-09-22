@@ -30,7 +30,7 @@ enum class JevBackend(val endpoint: String, val defaultModel: String) {
     TYPESAFE("https://api.typesafe.ai/v1/systemone", "jev-latest"),
 
     /** Vercel AI Gateway's evaluation-model route, as @ai-sdk/gateway calls it. Yes/no questions are `boolean`. */
-    GATEWAY("https://ai-gateway.vercel.sh/v4/ai/evaluation-model", "typesafe-ai/jev-latest"),
+    GATEWAY("https://ai-gateway.vercel.sh/v4/ai/evaluation-model", "typesafe-ai/jev"),
 }
 
 /**

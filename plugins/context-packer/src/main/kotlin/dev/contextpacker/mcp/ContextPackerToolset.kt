@@ -6,6 +6,7 @@ import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.project
 import com.intellij.openapi.components.service
+import dev.contextpacker.BudgetExceededException
 import dev.contextpacker.ContextPackerService
 import dev.contextpacker.MissingKeyException
 import dev.contextpacker.PackReport
@@ -34,6 +35,8 @@ class ContextPackerToolset : McpToolset {
             project.service<ContextPackerService>().pack(task)
         } catch (e: MissingKeyException) {
             throw McpExpectedError(e.message ?: "API key missing")
+        } catch (e: BudgetExceededException) {
+            throw McpExpectedError(e.message ?: "Jev budget used up")
         }
         return render(report, limit.coerceIn(1, 20), project.basePath)
     }

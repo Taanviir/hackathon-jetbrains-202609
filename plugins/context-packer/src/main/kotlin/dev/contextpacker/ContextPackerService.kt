@@ -48,8 +48,13 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
     private val cache = ConcurrentHashMap<String, Cached>()
     @Volatile private var jev: JevClient? = null
 
+    /** Jev input tokens spent in this IDE session, against a cap so a looping agent can't drain an account. */
+    val sessionTokens get() = jev?.calls?.sumOf { it.inputTokens.toLong() } ?: 0L
+    private val sessionBudget = System.getenv("CONTEXT_PACKER_TOKEN_BUDGET")?.toLongOrNull() ?: 20_000_000L
+
     suspend fun pack(task: String, onProgress: (String) -> Unit = {}): PackReport {
         val client = jevClient()
+        if (sessionTokens >= sessionBudget) throw BudgetExceededException(sessionTokens, sessionBudget)
         val before = client.calls.size
         onProgress("Sketching project files")
         val started = System.nanoTime()
@@ -60,7 +65,8 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         val slowest = calls.maxOfOrNull { it.ms } ?: 0
         thisLogger().info(
             "pack: ${docs.size} files · sketch ${sketchMs} ms · pass1+bm25 ${result.pass1Ms} ms · pass2 ${result.pass2Ms} ms · " +
-                "${calls.size} Jev calls, slowest ${slowest} ms, ${calls.count { it.error != null }} failed · cache ${cache.size}",
+                "${calls.size} Jev calls, slowest ${slowest} ms, ${calls.count { it.error != null }} failed · " +
+                "${calls.sumOf { it.inputTokens }} tokens, session ${sessionTokens} · cache ${cache.size}",
         )
         return PackReport(
             result = result,
@@ -87,17 +93,20 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
 
     fun fileFor(path: String): VirtualFile? = project.guessProjectDir()?.findFileByRelativePath(path)
 
-    /** Vercel AI Gateway if its key is set, TypeSafe's own API otherwise. `JEV_BACKEND` forces one. */
+    /**
+     * TypeSafe's own API by default: ~2.5 s a pack. Vercel AI Gateway only with `JEV_BACKEND=gateway`,
+     * or when no TypeSafe key is set; it serves the same model but rate-limits hard (30-60 s a pack).
+     */
     private suspend fun jevClient(): JevClient {
         jev?.let { return it }
         val client = withContext(Dispatchers.IO) {
-            val forced = System.getenv("JEV_BACKEND")?.uppercase()?.let { runCatching { JevBackend.valueOf(it) }.getOrNull() }
-            val gateway = Keys.GATEWAY.get().takeIf { forced == null || forced == JevBackend.GATEWAY }
-            val typesafe = Keys.TYPESAFE.get().takeIf { forced == null || forced == JevBackend.TYPESAFE }
+            val wantGateway = System.getenv("JEV_BACKEND")?.equals("gateway", ignoreCase = true) == true
+            val typesafe = Keys.TYPESAFE.get().takeUnless { wantGateway }
+            val gateway = Keys.GATEWAY.get()
             when {
-                gateway != null -> JevClient(gateway, JevBackend.GATEWAY)
                 typesafe != null -> JevClient(typesafe, JevBackend.TYPESAFE)
-                else -> throw MissingKeyException(Keys.GATEWAY, Keys.TYPESAFE)
+                gateway != null -> JevClient(gateway, JevBackend.GATEWAY, concurrency = 2)
+                else -> throw MissingKeyException(Keys.TYPESAFE, Keys.GATEWAY)
             }
         }
         return client.also { jev = it }
