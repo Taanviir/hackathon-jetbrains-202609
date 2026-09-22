@@ -424,11 +424,22 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         list.selectedValuesList.forEach(picks::removeElement)
     }
 
-    /** Pin a file Jev missed. */
+    /** Pin an open, readable project file that the ranking missed. */
     private fun addOpenFile() {
-        val file = FileEditorManager.getInstance(project).selectedFiles.firstOrNull() ?: return
-        val path = project.guessProjectDir()?.let { VfsUtilCore.getRelativePath(file, it) } ?: return
-        if (service.fileFor(path) == null) return
+        val file = FileEditorManager.getInstance(project).selectedFiles.firstOrNull()
+        if (file == null) {
+            status.text = "Open a project file before adding it."
+            return
+        }
+        val path = project.guessProjectDir()?.let { VfsUtilCore.getRelativePath(file, it) }
+        if (path == null) {
+            status.text = "Only files inside this project can be added."
+            return
+        }
+        if (service.fileFor(path) == null) {
+            status.text = service.sourceProblem(path) ?: "This file is no longer available."
+            return
+        }
         if ((0 until picks.size()).none { picks[it].path == path }) {
             val modelScore = if ((lastReport?.provider ?: provider.selectedItem) == DecisionProvider.KEYWORDS) 0.0 else 1.0
             picks.add(0, PackedFile(path, relevance = modelScore, score = modelScore, bm25Rank = null, isTest = Packer.isTest(path)))
