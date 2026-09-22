@@ -9,11 +9,15 @@ import argparse
 import asyncio
 import json
 import math
+import os
 import re
 import statistics as st
 import time
 from collections import Counter
 from pathlib import Path
+from types import SimpleNamespace
+
+import httpx
 
 from dotenv import load_dotenv
 from typesafe_sdk import AsyncTypeSafeClient, RetryPolicy
@@ -78,20 +82,63 @@ def bm25_rank(task: str, files: dict[str, str], k1=1.2, b=0.75) -> list[str]:
 
 # ---------------------------------------------------------------- Jev
 
+GATEWAY_URL = "https://ai-gateway.vercel.sh/v4/ai/evaluation-model"
+# Hard stop so no run can quietly spend someone's credits. Shared by every Jev in the process.
+TOKEN_BUDGET = int(os.environ.get("JEV_TOKEN_BUDGET", 5_000_000))
+SPENT = {"tokens": 0}
+
+
+class BudgetExceeded(RuntimeError):
+    pass
+
+
 class Jev:
+    """Vercel AI Gateway when AI_GATEWAY_API_KEY is set, TypeSafe's own API otherwise. Never OpenRouter."""
+
     def __init__(self, model: str, concurrency: int):
-        self.client = AsyncTypeSafeClient(model=model, timeout=30.0, retry=RetryPolicy(max_retries=4, timeout=90.0))
+        self.gateway_key = os.environ.get("AI_GATEWAY_API_KEY", "").strip() or None
+        if self.gateway_key:
+            self.model = {"jev-latest": "typesafe-ai/jev-latest", "jev-preview": "typesafe-ai/jev-preview"}.get(model, model)
+            self.http = httpx.AsyncClient(timeout=30.0, headers={
+                "Authorization": f"Bearer {self.gateway_key}", "ai-gateway-protocol-version": "0.0.1",
+                "ai-gateway-auth-method": "api-key", "ai-evaluation-model-specification-version": "4",
+                "ai-model-id": self.model})
+        else:
+            self.model = model
+            self.client = AsyncTypeSafeClient(model=model, timeout=30.0, retry=RetryPolicy(max_retries=4, timeout=90.0))
         self.sem = asyncio.Semaphore(concurrency)
         self.calls: list[dict] = []
+
+    async def _gateway(self, state: dict, questions: dict):
+        qs = {k: {**q, "type": "boolean"} if q.get("type") == "noul" else q for k, q in questions.items()}
+        for attempt in range(5):
+            r = await self.http.post(GATEWAY_URL, json={"state": state, "questions": qs})
+            if r.status_code == 200:
+                body = r.json()
+                answers = {k: SimpleNamespace(noul=a.get("probability"), probabilities=a.get("probabilities"), choice=a.get("choice"))
+                           for k, a in body.get("answers", {}).items()}
+                usage = body.get("usage") or {}
+                return answers, usage.get("inputTokens", 0), self.model
+            if r.status_code not in (408, 429) and r.status_code < 500:
+                raise RuntimeError(f"gateway HTTP {r.status_code}: {r.text[:200]}")
+            await asyncio.sleep(float(r.headers.get("retry-after", 0.5 * 2 ** attempt)))
+        raise RuntimeError(f"gateway gave up: HTTP {r.status_code}: {r.text[:200]}")
 
     async def ask(self, state: dict, questions: dict) -> dict:
         async with self.sem:
             t0 = time.perf_counter()
             try:
-                r = await self.client.system_one(state=state, questions=questions)
-                self.calls.append({"ms": (time.perf_counter() - t0) * 1000, "in": r.usage.input_tokens,
-                                   "q": len(questions), "model": r.model})
-                return r.answers
+                if SPENT["tokens"] >= TOKEN_BUDGET:
+                    raise BudgetExceeded(f"token budget of {TOKEN_BUDGET:,} reached; set JEV_TOKEN_BUDGET to raise it")
+                if self.gateway_key:
+                    answers, tokens, model = await self._gateway(state, questions)
+                else:
+                    r = await self.client.system_one(state=state, questions=questions)
+                    answers, tokens, model = r.answers, r.usage.input_tokens, r.model
+                SPENT["tokens"] += tokens or 0
+                self.calls.append({"ms": (time.perf_counter() - t0) * 1000, "in": tokens or 0,
+                                   "q": len(questions), "model": model})
+                return answers
             except Exception as e:  # recorded, not fatal: one failed batch shouldn't sink a pass
                 self.calls.append({"ms": (time.perf_counter() - t0) * 1000, "error": f"{type(e).__name__}: {e}"[:300],
                                    "q": len(questions)})

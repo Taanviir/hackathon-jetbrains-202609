@@ -7,7 +7,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.ui.Messages
 import dev.contextpacker.Keys
 
-/** Stores keys in the IDE's password store, for IDEs launched without the env vars. */
+/** Stores keys in the IDE's password store, for IDEs launched without the env vars. Empty skips a key. */
 class SetKeysAction : AnAction() {
     override fun getActionUpdateThread() = ActionUpdateThread.BGT
 

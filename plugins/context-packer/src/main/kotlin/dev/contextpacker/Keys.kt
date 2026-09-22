@@ -10,7 +10,10 @@ import com.intellij.ide.passwordSafe.PasswordSafe
  * IDE's password store, which is where "Set API Keys" puts them.
  */
 enum class Keys(val envVar: String) {
+    /** Vercel AI Gateway, preferred for Jev when set. */
+    GATEWAY("AI_GATEWAY_API_KEY"),
     TYPESAFE("TYPESAFE_API_KEY"),
+    /** Only for the text-writing LLM. Jev never goes through OpenRouter. */
     OPENROUTER("OPENROUTER_API_KEY");
 
     private val attributes get() = CredentialAttributes(generateServiceName("Context Packer", envVar))
@@ -24,5 +27,6 @@ enum class Keys(val envVar: String) {
     }
 }
 
-class MissingKeyException(key: Keys) :
-    IllegalStateException("${key.envVar} is not set. Use Tools | Context Packer: Set API Keys, or export it.")
+class MissingKeyException(vararg keys: Keys) : IllegalStateException(
+    keys.joinToString(" or ") { it.envVar } + " is not set. Use Tools | Context Packer: Set API Keys, or export it.",
+)
