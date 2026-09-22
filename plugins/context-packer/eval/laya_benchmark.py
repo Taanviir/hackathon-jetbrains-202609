@@ -277,18 +277,34 @@ def require_checkpoint(health: dict, expected: str | None) -> None:
         )
 
 
+def require_uncached(health: dict) -> None:
+    """Keep response reuse out of this protocol's inference latency and token measurements."""
+    cache = health.get("response_cache")
+    if cache is not None and (not isinstance(cache, dict) or
+                              type(cache.get("capacity")) is not int or cache["capacity"] != 0):
+        raise RuntimeError("Disable the Laya response cache (--response-cache 0) for this uncached retrieval benchmark.")
+
+
 def score_one(endpoint: str, timeout: float, task: str, path: str, text: str) -> dict:
     started = time.perf_counter()
     try:
         res, roundtrip = call_json(endpoint, request_body(task, path, text), timeout)
-        score = float(res["answers"][QUESTION_ID]["noul"])
-        if not math.isfinite(score) or not 0 <= score <= 1:
+        score = res["answers"][QUESTION_ID]["noul"]
+        if type(score) not in (int, float) or not math.isfinite(score) or not 0 <= score <= 1:
             raise ValueError("Invalid probability")
+        if res.get("cache_hit") is True:
+            raise ValueError("Cached prediction cannot be included in uncached inference measurements")
+        tokens = res["usage"]["input_tokens"]
+        latency = res["latency_ms"]
+        if type(tokens) is not int or tokens < 0:
+            raise ValueError("Invalid input token count")
+        if type(latency) not in (int, float) or not math.isfinite(latency) or latency < 0:
+            raise ValueError("Invalid inference latency")
         return {
             "score": score,
-            "input_tokens": int(res["usage"]["input_tokens"]),
+            "input_tokens": tokens,
             "roundtrip_ms": round(roundtrip, 1),
-            "server_ms": float(res["latency_ms"]),
+            "server_ms": latency,
             "model": res["model"],
             "error": None,
         }
@@ -644,6 +660,7 @@ def run_dev_variant(args: argparse.Namespace, repo: Path) -> None:
     if health["models"].get(MODEL) != "ready":
         raise RuntimeError(f"Laya {MODEL} is not ready: {health['models']}")
     require_checkpoint(health, args.expected_checkpoint)
+    require_uncached(health)
     if args.resume and args.output.exists():
         data = json.loads(args.output.read_text(encoding="utf-8"))
         if data["source_koog_head"] != head or data["candidate_limit"] != args.variant_candidates:
@@ -817,6 +834,7 @@ def main() -> None:
     if health["models"].get(MODEL) != "ready":
         raise RuntimeError(f"Laya {MODEL} is not ready: {health['models']}")
     require_checkpoint(health, args.expected_checkpoint)
+    require_uncached(health)
     if args.resume and args.output.exists():
         data = json.loads(args.output.read_text(encoding="utf-8"))
         stored_checkpoint = data.get("expected_checkpoint")

@@ -125,6 +125,34 @@ class LayaBenchmarkTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "server reports"):
             bench.require_checkpoint({"checkpoint": "0" * 40}, expected)
 
+    def test_uncached_protocol_rejects_enabled_or_unknown_cache(self):
+        bench.require_uncached({})  # The original playground exposes no cache field.
+        bench.require_uncached({"response_cache": {"capacity": 0}})
+        for cache in ({"capacity": 128}, {"capacity": "0"}, {"capacity": True}, {}):
+            with self.subTest(cache=cache), self.assertRaisesRegex(RuntimeError, "Disable.*cache"):
+                bench.require_uncached({"response_cache": cache})
+
+    def test_predict_rejects_cache_hits_and_non_numeric_probabilities(self):
+        response = {"answers": {bench.QUESTION_ID: {"noul": 0.5}}, "usage": {"input_tokens": 12},
+                    "latency_ms": 1.0, "model": "english"}
+        for value in ("0.5", True, None, float("nan"), -0.1, 1.1):
+            invalid = {**response, "answers": {bench.QUESTION_ID: {"noul": value}}}
+            with self.subTest(value=value), patch.object(bench, "call_json", return_value=(invalid, 1.0)):
+                self.assertIn("Invalid probability", bench.score_one("http://localhost:8770/api/predict", 1, "task", "a.kt", "source")["error"])
+        with patch.object(bench, "call_json", return_value=({**response, "cache_hit": True}, 1.0)):
+            self.assertIn("Cached prediction", bench.score_one("http://localhost:8770/api/predict", 1, "task", "a.kt", "source")["error"])
+        with patch.object(bench, "call_json", return_value=(response, 1.0)):
+            self.assertIsNone(bench.score_one("http://localhost:8770/api/predict", 1, "task", "a.kt", "source")["error"])
+
+    def test_invalid_usage_and_latency_cannot_enter_benchmark_totals(self):
+        response = {"answers": {bench.QUESTION_ID: {"noul": 0.5}}, "usage": {"input_tokens": 12},
+                    "latency_ms": 1.0, "model": "english"}
+        bad = [{**response, "usage": {"input_tokens": n}} for n in (-1, True, "12")]
+        bad += [{**response, "latency_ms": n} for n in (-1, True, "1", float("inf"))]
+        for invalid in bad:
+            with self.subTest(response=invalid), patch.object(bench, "call_json", return_value=(invalid, 1.0)):
+                self.assertIsNotNone(bench.score_one("http://localhost:8770/api/predict", 1, "task", "a.kt", "source")["error"])
+
     def test_fresh_then_resume_retains_checkpoint_requirement(self):
         expected = "1c5edc17a7acd8701df6fc341c0d179f1c62c982"
         tasks = [bench.Task("a", "pa", "First task", ["A.kt"]),

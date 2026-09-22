@@ -33,6 +33,11 @@ checkpoint cache (or add `--download` to fetch it explicitly):
 
     python tools/laya_server.py --cache PATH_TO_CACHED_HF_HOME
 
+Keep `--response-cache 0` (the default) for this benchmark. The runner rejects an
+enabled response cache and any cached prediction so repeated responses cannot
+appear as new inference in the latency or token totals. Cache timings belong in
+a separate repeated-request experiment.
+
 From the plugin directory in PowerShell, fetch a bounded Koog history:
 
     git clone --depth 100 --filter=blob:limit=100k --no-checkout --single-branch --branch develop https://github.com/JetBrains/koog.git .cache/koog
