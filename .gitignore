@@ -1,7 +1,10 @@
-.idea/
+.gradle/
+.intellijPlatform/
 build/
 out/
-.gradle/
+.idea/
 *.iml
 .env
 local.properties
+tmp/gradle-*.zip
+tmp/gradle-*/
