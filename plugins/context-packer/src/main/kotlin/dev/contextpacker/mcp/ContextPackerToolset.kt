@@ -45,7 +45,7 @@ class ContextPackerToolset : McpToolset {
                 else -> throw IllegalArgumentException("provider must be configured, laya, or jev")
             }
             require(limit in 1..20) { "limit must be between 1 and 20" }
-            project.service<ContextPackerService>().pack(task, selected)
+            project.service<ContextPackerService>().pack(task, source = "an agent over MCP", requestedProvider = selected)
         } catch (e: MissingKeyException) {
             throw McpExpectedError(e.message ?: "API key missing")
         } catch (e: BudgetExceededException) {

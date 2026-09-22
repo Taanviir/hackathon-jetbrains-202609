@@ -131,6 +131,20 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         add(top, BorderLayout.NORTH)
         add(split, BorderLayout.CENTER)
+
+        // An agent's pack shows up here too, so the human can see exactly what context it was handed,
+        // including one made before this window was first opened.
+        service.lastReport?.takeIf { it.source != "tool window" }?.let { report ->
+            task.text = report.result.task
+            show(report)
+        }
+        service.onPack { report ->
+            if (report.source != "tool window") service.scope.launch(Dispatchers.EDT) {
+                task.text = report.result.task
+                picks.clear()
+                show(report)
+            }
+        }
     }
 
     private fun button(text: String, icon: javax.swing.Icon, action: () -> Unit) =
@@ -189,8 +203,9 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
         val cost = if (report.provider == DecisionProvider.LAYA) "local · API fee $0"
             else report.costUsd?.let { "est. API $%.4f".format(it) } ?: "API fee unavailable"
         val tokens = if (report.usageKnown) "%.1fk tokens".format(report.inputTokens / 1000.0) else "tokens unavailable"
-        status.text = "%d of %,d files in %.1f s · %d %s calls · %s · %s%s".format(
-            r.files.size, r.candidates, report.totalMs / 1000.0, report.jevCalls,
+        val who = if (report.source == "tool window") "" else "Asked by ${report.source} · "
+        status.text = "%s%d of %,d files in %.1f s · %d %s calls · %s · %s%s".format(
+            who, r.files.size, r.candidates, report.totalMs / 1000.0, report.jevCalls,
             report.provider.name, tokens, cost, failed,
         )
         status.toolTipText = "sketch %d ms · pass 1 + BM25 %d ms · pass 2 %d ms · %s · scored %d candidates%s".format(
