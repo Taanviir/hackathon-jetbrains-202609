@@ -1,18 +1,21 @@
 """Koog history as an eval set: tasks from commit subjects, files as they were at the parent commit."""
 
 import json
+import os
 import re
 import subprocess
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REPO = ROOT / ".cache" / "koog"
+# Defaults are Koog's, so every published Koog number reproduces unchanged. EVAL_REPO=exposed etc. for others.
+REPO = ROOT / ".cache" / os.environ.get("EVAL_REPO", "koog")
+BRANCH = os.environ.get("EVAL_BRANCH", "develop")
 MAX_BYTES = 100_000
 
 TYPE_RE = re.compile(r"^(fix|feat|refactor|perf)(\([^)]*\))?!?:\s*", re.I)
 SKIP_RE = re.compile(r"release|version|bump|changelog|typo|readme|docs?\b|revert|merge", re.I)
-NOISE_RE = re.compile(r"\s*\(#\d+\)|\bKG-\d+\b:?\s*")
+NOISE_RE = re.compile(r"\s*\(#\d+\)|" + os.environ.get("EVAL_TICKET_RE", r"\bKG-\d+\b:?\s*"))
 
 
 @dataclass
@@ -34,7 +37,7 @@ def clean_subject(subject: str) -> str:
 
 
 def load_tasks(limit: int = 60, min_files: int = 1, max_files: int = 8) -> list[Task]:
-    log = git("log", "--no-merges", "--first-parent", "--format=%x00%H %P%x01%s", "--name-status", "develop")
+    log = git("log", "--no-merges", "--first-parent", "--format=%x00%H %P%x01%s", "--name-status", BRANCH)
     tasks = []
     for chunk in log.split("\x00")[1:]:
         head, _, body = chunk.partition("\n")

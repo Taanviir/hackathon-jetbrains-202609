@@ -21,7 +21,7 @@ class ContextPackerToolset : McpToolset {
         Find the files in the open project that a coding task needs, ranked by relevance. Call this FIRST,
         before searching or listing directories: it scores every file in the project in about three seconds,
         so you can go straight to reading the top results instead of exploring. Returns project-relative paths
-        with a 0-1 relevance score; test files are marked.
+        with a 0-1 relevance score, and the top files labelled edit, test, example or dependency.
         """,
     )
     suspend fun pack_context(
@@ -48,7 +48,8 @@ class ContextPackerToolset : McpToolset {
         ))
         append("score  path\n")
         r.files.take(limit).forEach { f ->
-            append("%.2f   %s%s\n".format(f.score, f.path, if (f.isTest) "  (test)" else ""))
+            val tag = f.role ?: if (f.isTest) "test" else null
+            append("%.2f   %s%s\n".format(f.score, f.path, tag?.let { "  ($it)" } ?: ""))
         }
         append("Read the top few first. Scores come from Jev reading each file's full source against the task, fused with keyword match.")
     }
