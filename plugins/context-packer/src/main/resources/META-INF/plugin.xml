@@ -3,10 +3,11 @@
     <name>Context Packer</name>
     <vendor>Taanviir</vendor>
     <description><![CDATA[
-        <p>Finds the files a coding task needs in about three seconds instead of an agent's
-        minute of exploring. Every file is sketched from the IDE's own code model, scored by
-        Jev, and re-ranked on full source. Available from a tool window and as an MCP tool for
-        agents.</p>
+        <p>Find relevant project source for coding tasks using Jev, local Laya, or local
+        keyword ranking. Inspect and adjust the selected files, copy a bounded source prompt,
+        or request an answer from a configured cloud model. Available from a tool window and
+        as an MCP tool for agents. Laya requires a local model server; keyword ranking needs
+        no model or API key.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
