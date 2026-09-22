@@ -17,7 +17,13 @@ class JevRelevance(private val client: JevClient) : RelevanceScorer {
             items.forEachIndexed { i, (_, text) -> put(key(i), text) }
         }
         val response = client.systemOne(state, keys.keys.associateWith { Questions.noul(question(it)) })
-        return keys.entries.associate { (key, path) -> path to (response.noul(key) ?: 0.0) }
+        return keys.entries.associate { (key, path) ->
+            val probability = response.noul(key)
+            require(probability != null && probability.isFinite() && probability in 0.0..1.0) {
+                "Jev returned no valid relevance probability for $key"
+            }
+            path to probability
+        }
     }
 
     companion object {

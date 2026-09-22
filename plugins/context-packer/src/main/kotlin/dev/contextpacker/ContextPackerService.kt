@@ -3,6 +3,7 @@ package dev.contextpacker
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.smartReadAction
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
@@ -13,9 +14,12 @@ import com.intellij.psi.PsiManager
 import dev.contextpacker.jev.JevBackend
 import dev.contextpacker.jev.JevClient
 import dev.contextpacker.jev.JevRelevance
+import dev.contextpacker.laya.LayaRelevance
+import dev.contextpacker.pack.Bm25
 import dev.contextpacker.pack.Candidates
 import dev.contextpacker.pack.FileDoc
 import dev.contextpacker.pack.PackResult
+import dev.contextpacker.pack.PackConfig
 import dev.contextpacker.pack.Packer
 import dev.contextpacker.pack.RegexSketcher
 import dev.contextpacker.pack.Sketcher
@@ -25,6 +29,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -35,9 +41,16 @@ data class PackReport(
     val inputTokens: Long,
     val failedCalls: Int,
     val jevModel: String,
+    val provider: DecisionProvider = DecisionProvider.JEV,
+    val scoredCandidates: Int = result.candidates,
+    val usageKnown: Boolean = true,
 ) {
-    /** $0.042 per million input tokens; output is free. */
-    val costUsd get() = inputTokens * 0.042 / 1_000_000
+    /** API fee estimate only. Local hardware/electricity are not included. */
+    val costUsd: Double? get() = when {
+        provider == DecisionProvider.LAYA -> 0.0
+        usageKnown -> inputTokens * 0.042 / 1_000_000
+        else -> null
+    }
     val totalMs get() = sketchMs + result.totalMs
 }
 
@@ -46,6 +59,11 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
     private data class Cached(val stamp: Long, val doc: FileDoc)
 
     private val cache = ConcurrentHashMap<String, Cached>()
+    private val packLock = Mutex()
+    private val settings get() = project.service<PackerSettings>()
+    var provider: DecisionProvider
+        get() = settings.provider
+        set(value) { settings.provider = value }
 
     /**
      * Pass 1 reads the spike's regex sketches by default: they're what every number in
@@ -55,34 +73,59 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
      */
     private val psiSketches = System.getenv("CONTEXT_PACKER_PSI_SKETCH") == "1"
     @Volatile private var jev: JevClient? = null
+    private val laya by lazy { LayaRelevance() }
 
     /** Jev input tokens spent in this IDE session, against a cap so a looping agent can't drain an account. */
     val sessionTokens get() = jev?.calls?.sumOf { it.inputTokens.toLong() } ?: 0L
     private val sessionBudget = System.getenv("CONTEXT_PACKER_TOKEN_BUDGET")?.toLongOrNull() ?: 20_000_000L
 
-    suspend fun pack(task: String, onProgress: (String) -> Unit = {}): PackReport {
-        val client = jevClient()
-        if (sessionTokens >= sessionBudget) throw BudgetExceededException(sessionTokens, sessionBudget)
-        val before = client.calls.size
+    suspend fun pack(task: String, requestedProvider: DecisionProvider? = null, onProgress: (String) -> Unit = {}): PackReport = packLock.withLock {
+        require(task.isNotBlank()) { "Describe a coding task before packing context." }
+        require(task.length <= 8_000) { "Keep the task description under 8,000 characters." }
+        val selectedProvider = requestedProvider ?: provider
+        require(selectedProvider != DecisionProvider.LAYA || task.length <= LayaRelevance.MAX_TASK_CHARS) {
+            "Laya has a small input window. Keep the task under ${LayaRelevance.MAX_TASK_CHARS} characters."
+        }
+        val client = if (selectedProvider == DecisionProvider.JEV) jevClient() else null
+        if (client != null && sessionTokens >= sessionBudget) throw BudgetExceededException(sessionTokens, sessionBudget)
+        val ledger = client?.calls ?: laya.calls
+        val before = ledger.size
         onProgress("Sketching project files")
         val started = System.nanoTime()
         val docs = collectDocs()
         val sketchMs = (System.nanoTime() - started) / 1_000_000
-        val result = Packer(JevRelevance(client)).pack(task, docs, onProgress)
-        val calls = client.calls.drop(before)
+        val prefilterStarted = System.nanoTime()
+        // Laya is a small local encoder: bound CPU work and report this lexical prefilter openly.
+        val scoringDocs = if (selectedProvider == DecisionProvider.LAYA && docs.size > LayaRelevance.MAX_CANDIDATES) {
+            val paths = Bm25.rank(task, docs.associate { it.path to it.text }).take(LayaRelevance.MAX_CANDIDATES)
+            val byPath = docs.associateBy { it.path }
+            paths.map(byPath::getValue)
+        } else docs
+        val prefilterMs = (System.nanoTime() - prefilterStarted) / 1_000_000
+        val packer = if (client != null) Packer(JevRelevance(client)) else Packer(
+            laya, PackConfig(batch = 1, pool = 20, perCall = 1, fullChars = LayaRelevance.MAX_EXCERPT_CHARS),
+        )
+        val scored = packer.pack(task, scoringDocs, onProgress)
+        val result = scored.copy(
+            candidates = docs.size, pass1Ms = scored.pass1Ms + prefilterMs, totalMs = scored.totalMs + prefilterMs,
+        )
+        val calls = ledger.drop(before)
         val slowest = calls.maxOfOrNull { it.ms } ?: 0
         thisLogger().info(
             "pack: ${docs.size} files · sketch ${sketchMs} ms · pass1+bm25 ${result.pass1Ms} ms · pass2 ${result.pass2Ms} ms · " +
-                "${calls.size} Jev calls, slowest ${slowest} ms, ${calls.count { it.error != null }} failed · " +
+                "${calls.size} ${selectedProvider.name} calls, slowest ${slowest} ms, ${calls.count { it.error != null }} failed · " +
                 "${calls.sumOf { it.inputTokens }} tokens, session ${sessionTokens} · cache ${cache.size}",
         )
-        return PackReport(
+        PackReport(
             result = result,
             sketchMs = sketchMs,
             jevCalls = calls.size,
             inputTokens = calls.sumOf { it.inputTokens.toLong() },
             failedCalls = calls.count { it.error != null },
-            jevModel = "${client.model} via ${client.backend.name.lowercase()}",
+            jevModel = client?.let { "${it.model} via ${it.backend.name.lowercase()}" } ?: "Laya ${laya.model} (local, short excerpts)",
+            provider = selectedProvider,
+            scoredCandidates = scoringDocs.size,
+            usageKnown = calls.all { it.usageKnown },
         )
     }
 
@@ -91,7 +134,8 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         val base = project.guessProjectDir() ?: return emptyMap()
         return readAction {
             paths.mapNotNull { path ->
-                val file = base.findFileByRelativePath(path) ?: return@mapNotNull null
+                val file = safeFile(base, path) ?: return@mapNotNull null
+                if (file.isDirectory || file.fileType.isBinary || file.length > Candidates.MAX_BYTES) return@mapNotNull null
                 val text = FileDocumentManager.getInstance().getCachedDocument(file)?.text
                     ?: runCatching { VfsUtilCore.loadText(file) }.getOrNull() ?: return@mapNotNull null
                 path to text
@@ -99,7 +143,14 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         }
     }
 
-    fun fileFor(path: String): VirtualFile? = project.guessProjectDir()?.findFileByRelativePath(path)
+    fun fileFor(path: String): VirtualFile? = project.guessProjectDir()?.let { safeFile(it, path) }
+
+    private fun safeFile(base: VirtualFile, path: String): VirtualFile? {
+        val normalized = path.replace('\\', '/')
+        if (normalized.startsWith('/') || ':' in normalized || normalized.split('/').any { it == ".." }) return null
+        val file = base.findFileByRelativePath(normalized) ?: return null
+        return file.takeIf { VfsUtilCore.isAncestor(base, it, true) }
+    }
 
     /**
      * TypeSafe's own API by default: ~2.5 s a pack. Vercel AI Gateway only with `JEV_BACKEND=gateway`,
@@ -123,6 +174,8 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
     /** Many short read actions in parallel, never one long one, so typing is never blocked. */
     private suspend fun collectDocs(): List<FileDoc> = coroutineScope {
         val files = smartReadAction(project) { Candidates.collect(project) }
+        val activePaths = files.mapTo(HashSet()) { it.path }
+        cache.keys.retainAll(activePaths)
         val base = project.guessProjectDir()
         files.chunked(16).map { chunk ->
             async(Dispatchers.Default) { readAction { chunk.mapNotNull { docFor(it, base) } } }
@@ -134,7 +187,7 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         val stamp = document?.modificationStamp ?: file.modificationStamp
         cache[file.path]?.takeIf { it.stamp == stamp }?.let { return it.doc }
         val text = document?.text ?: runCatching { VfsUtilCore.loadText(file) }.getOrNull() ?: return null
-        val path = base?.let { VfsUtilCore.getRelativePath(file, it) } ?: file.path
+        val path = base?.let { VfsUtilCore.getRelativePath(file, it) } ?: return null
         val sketch = if (!psiSketches) RegexSketcher.sketch(path, text) else try {
             PsiManager.getInstance(project).findFile(file)?.let { Sketcher.sketch(it, path, text) }
         } catch (e: CancellationException) {

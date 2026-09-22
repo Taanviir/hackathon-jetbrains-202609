@@ -27,6 +27,6 @@ object Bm25 {
                 ln(1 + (n - d + 0.5) / (d + 0.5)) * tf * (k1 + 1) / (tf + k1 * (1 - b + b * len / avg))
             }
         }
-        return docs.keys.sortedByDescending { scores.getValue(it) }
+        return docs.keys.sortedWith(compareByDescending<String> { scores.getValue(it) }.thenBy { it })
     }
 }
