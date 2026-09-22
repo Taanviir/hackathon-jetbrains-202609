@@ -85,11 +85,13 @@ class IntelliJevProjectService(private val project: Project) {
     }
 
     fun explainContext(task: String, candidates: List<ContextCandidate>): String {
+        if (candidates.isEmpty()) return "No source candidates found for this task. Try a more specific description or check the project files."
         val evidence = candidates.take(10).joinToString("\n") { "- ${it.role.label}: ${it.file.path} (${it.reason}, score ${it.score})" }
         return askModel("You are an IDE assistant. Explain, concisely, why these files are useful for this coding task. Do not claim you inspected their bodies. Task: $task\nCandidates:\n$evidence")
     }
 
     fun explainBugs(candidates: List<BugCandidate>): String {
+        if (candidates.isEmpty()) return "No related-code candidates found for the selected fix. Try selecting code with distinctive identifiers."
         val evidence = candidates.take(10).joinToString("\n") { "- ${it.file.path}:${it.line + 1}: ${it.evidence}" }
         return askModel("You are an IDE assistant. Give a concise review plan for these unverified possible related bugs. Clearly say they are candidates, not confirmed defects.\nEvidence:\n$evidence")
     }
