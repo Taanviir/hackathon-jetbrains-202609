@@ -11,7 +11,6 @@ import com.intellij.openapi.vfs.VFileProperty
 import com.intellij.openapi.vfs.VirtualFile
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
-import com.google.gson.JsonParser
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -182,8 +181,7 @@ $context"""
             checkNotInterrupted()
             val response = http.send(request, HttpResponse.BodyHandlers.ofString())
             if (response.statusCode() !in 200..299) error("${settings.provider()} returned HTTP ${response.statusCode()}: ${response.body().take(400)}")
-            Result.success(JsonParser.parseString(response.body()).asJsonObject.getAsJsonArray("choices")[0].asJsonObject
-                .getAsJsonObject("message").get("content").asString)
+            Result.success(CodingResponseParser.content(response.body()))
         } catch (e: ProcessCanceledException) {
             throw e
         } catch (e: InterruptedException) {
@@ -267,7 +265,7 @@ $context"""
         } catch (e: Exception) {
             checkNotInterrupted()
             log("Jev safety gate unavailable; continued with manual-review workflow: ${e.message}")
-            null
+            "Jev risk estimate unavailable; review this proposal manually. "
         }
     }
 
