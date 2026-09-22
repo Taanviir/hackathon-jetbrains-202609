@@ -94,11 +94,15 @@ class Packer(private val scorer: RelevanceScorer, private val config: PackConfig
 
     private class Scores(val scores: Map<String, Double>, val failed: Int)
 
-    /** One failed batch costs its files a score of zero, not the whole pack. */
+    /**
+     * One failed batch costs its files a score of zero, not the whole pack. If every batch fails,
+     * Jev isn't answering at all, and quietly returning a keyword-only ranking would be a lie.
+     */
     private suspend fun scoreAll(task: String, items: List<Pair<String, String>>, groupSize: Int): Scores = coroutineScope {
         val parts = items.chunked(groupSize).map { group ->
             async { runCatching { scorer.score(task, group) } }
         }.awaitAll()
+        if (parts.isNotEmpty() && parts.all { it.isFailure }) throw parts.first().exceptionOrNull()!!
         val scores = HashMap<String, Double>()
         parts.forEach { part -> part.getOrNull()?.let(scores::putAll) }
         items.forEach { (path, _) -> scores.putIfAbsent(path, 0.0) }

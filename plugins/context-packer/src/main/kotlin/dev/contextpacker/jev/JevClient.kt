@@ -105,7 +105,7 @@ class JevClient(
                 return parsed
             }
             lastStatus = response.statusCode()
-            lastError = "HTTP ${response.statusCode()}: ${response.body().take(MAX_ERROR_BODY)}"
+            lastError = describe(response.statusCode()) + " (HTTP ${response.statusCode()}): ${response.body().take(MAX_ERROR_BODY)}"
             if (response.statusCode() !in RETRY_STATUSES) break
             wait = retryAfterMs(response) ?: backoffMs(attempt + 1)
         }
@@ -124,6 +124,15 @@ class JevClient(
     }
 
     private fun elapsedMs(started: Long) = (System.nanoTime() - started) / 1_000_000
+
+    private fun describe(status: Int) = when (status) {
+        401, 403 -> "Jev rejected the API key"
+        402 -> "No credits left on this Jev account"
+        413 -> "Request too large for Jev"
+        429 -> "Jev rate limit hit"
+        in 500..599 -> "Jev is having trouble"
+        else -> "Jev request failed"
+    }
 
     companion object {
         private val RETRY_STATUSES = setOf(408, 429) + (500..599)
