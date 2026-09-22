@@ -84,6 +84,33 @@ class PackerTest {
     }
 
     @Test
+    fun `confident roles label the top files, unsure or unrelated ones stay unlabelled`() = runBlocking {
+        val roler = RoleScorer { _, items ->
+            items.associate { (p, _) ->
+                p to when {
+                    p.endsWith("RetryPolicy.kt") -> mapOf("edit" to 0.9, "unrelated" to 0.1)
+                    p.endsWith("Test.kt") -> mapOf("test" to 0.45, "edit" to 0.4, "unrelated" to 0.15)
+                    else -> mapOf("unrelated" to 0.95, "edit" to 0.05)
+                }
+            }
+        }
+        val result = Packer(FakeScorer(), PackConfig(pool = 10), roler = roler).pack("add backoff to retry", docs)
+        assertEquals("edit", result.files.first { it.path == "src/RetryPolicy.kt" }.role)
+        assertEquals(null, result.files.first { it.path.endsWith("RetryPolicyTest.kt") }.role)  // 0.45 < 0.5
+        assertTrue(result.files.filter { it.path.startsWith("src/F") }.all { it.role == null })
+    }
+
+    @Test
+    fun `preview scores only BM25's shortlist, in one full-source pass`() = runBlocking {
+        val scorer = FakeScorer()
+        val result = Packer(scorer, PackConfig(previewPool = 30)).preview("add backoff to retry", docs)
+        assertTrue(result.preview)
+        assertTrue("no sketches in a preview", scorer.batches.flatten().none { it.second.startsWith("sketch") })
+        assertEquals(30, scorer.batches.flatten().size)
+        assertEquals("src/RetryPolicy.kt", result.files.first().path)
+    }
+
+    @Test
     fun `test paths are recognised across layouts`() {
         listOf("a/src/test/kotlin/X.kt", "a/src/jvmTest/kotlin/X.kt", "a/integration-tests/X.kt", "a/src/FooTest.kt", "a/FooSpec.kt")
             .forEach { assertTrue(it, Packer.isTest(it)) }

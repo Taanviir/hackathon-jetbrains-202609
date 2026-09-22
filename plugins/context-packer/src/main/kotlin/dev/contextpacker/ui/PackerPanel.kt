@@ -27,6 +27,7 @@ import dev.contextpacker.pack.PackedFile
 import dev.contextpacker.pack.Packer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
@@ -40,6 +41,9 @@ import javax.swing.DefaultListModel
 import javax.swing.JButton
 import javax.swing.JList
 import javax.swing.JPanel
+import javax.swing.event.DocumentEvent
+
+private const val PREVIEW_DEBOUNCE_MS = 700L
 
 /** Type a task, pack, check the picks, then copy them as a prompt or ask an LLM directly. */
 class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
@@ -87,6 +91,9 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private var lastReport: PackReport? = null
     private var job: Job? = null
+    private var previewJob: Job? = null
+    /** Set while the panel writes the task itself (replaying an agent's pack), so that doesn't trigger a preview. */
+    private var settingTask = false
 
     init {
         border = JBUI.Borders.empty(6)
@@ -118,15 +125,43 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
         // An agent's pack shows up here too, so the human can see exactly what context it was handed,
         // including one made before this window was first opened.
         service.lastReport?.takeIf { it.source != "tool window" }?.let { report ->
-            task.text = report.result.task
+            setTask(report.result.task)
             show(report)
         }
         service.onPack { report ->
             if (report.source != "tool window") service.scope.launch(Dispatchers.EDT) {
-                task.text = report.result.task
-                picks.clear()
+                previewJob?.cancel()
+                setTask(report.result.task)
                 show(report)
             }
+        }
+        task.document.addDocumentListener(object : com.intellij.ui.DocumentAdapter() {
+            override fun textChanged(e: DocumentEvent) {
+                if (!settingTask) schedulePreview()
+            }
+        })
+    }
+
+    private fun setTask(text: String) {
+        settingTask = true
+        try { task.text = text } finally { settingTask = false }
+    }
+
+    /** Search-as-you-type: after a 700 ms pause, a lite ranking (~5 Jev calls). Pack still runs the full pipeline. */
+    private fun schedulePreview() {
+        previewJob?.cancel()
+        val text = task.text.trim()
+        if (text.length < 12 || text.split(Regex("\\s+")).size < 3 || job?.isActive == true) return
+        previewJob = service.scope.launch {
+            delay(PREVIEW_DEBOUNCE_MS)
+            val report = try {
+                service.preview(text)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return@launch  // a preview is a nicety; the Pack button still reports real errors
+            }
+            withContext(Dispatchers.EDT) { if (task.text.trim() == text && job?.isActive != true) show(report) }
         }
     }
 
@@ -135,6 +170,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun runPack() {
         val text = task.text.trim().ifEmpty { return }
+        previewJob?.cancel()
         job?.cancel()
         packButton.isEnabled = false
         picks.clear()
@@ -160,9 +196,18 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun show(report: PackReport) {
         lastReport = report
+        picks.clear()
         report.result.files.forEach(picks::addElement)
         val r = report.result
         val failed = if (report.failedCalls > 0) " · ${report.failedCalls} calls failed" else ""
+        if (r.preview) {
+            status.text = "Preview · top %d in %.1f s · press Pack for the full ranking%s".format(
+                r.files.size, report.totalMs / 1000.0, failed,
+            )
+            status.toolTipText = "Lite mode while you type: BM25's top ${r.files.size + 10} files, one Jev pass. " +
+                "Not the measured pipeline."
+            return
+        }
         val who = if (report.source == "tool window") "" else "Asked by ${report.source} · "
         status.text = "%s%d of %,d files in %.1f s · %d Jev calls · %.1fk tokens · $%.4f%s".format(
             who, r.files.size, r.candidates, report.totalMs / 1000.0, report.jevCalls,
@@ -230,10 +275,12 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
     private class PickRenderer : ColoredListCellRenderer<PackedFile>() {
         override fun customizeCellRenderer(list: JList<out PackedFile>, value: PackedFile, index: Int, selected: Boolean, focus: Boolean) {
             append("%.2f  ".format(value.score), SimpleTextAttributes.GRAYED_ATTRIBUTES)
-            if (value.isTest) append("test  ", SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES)
+            val role = value.role ?: if (value.isTest) "test" else null
+            if (role != null) append("%-5s ".format(role), if (role == "edit") SimpleTextAttributes.LINK_BOLD_ATTRIBUTES else SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES)
             append(value.path.substringAfterLast('/'), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
             append("  " + value.path.substringBeforeLast('/', ""), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES)
-            toolTipText = value.path + (value.bm25Rank?.let { " · Jev %.2f · keyword rank $it".format(value.relevance) } ?: " · added by hand")
+            toolTipText = value.path + (value.bm25Rank?.let { " · Jev %.2f · keyword rank $it".format(value.relevance) } ?: " · added by hand") +
+                (value.role?.let { " · role $it %.2f".format(value.roleConfidence ?: 0.0) } ?: "")
         }
     }
 }

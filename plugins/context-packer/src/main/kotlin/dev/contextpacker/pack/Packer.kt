@@ -21,6 +21,8 @@ data class PackConfig(
     /** Stage 3: how many of the top files one comparative Jev `choice` reorders, and how much its probability counts. */
     val stage3K: Int = 10,
     val stage3Weight: Double = 2.0,
+    /** Search-as-you-type scores only BM25's top files, in one pass. */
+    val previewPool: Int = 30,
     val keep: Int = 20,
 )
 
@@ -32,6 +34,9 @@ data class PackedFile(
     val score: Double,
     val bm25Rank: Int?,
     val isTest: Boolean,
+    /** Jev's label for why the file is here (edit, test, example, dependency), when it's confident. */
+    val role: String? = null,
+    val roleConfidence: Double? = null,
 )
 
 data class PackResult(
@@ -43,6 +48,8 @@ data class PackResult(
     val stage3Ms: Long,
     val totalMs: Long,
     val failedBatches: Int,
+    /** A quick lite-mode ranking while the task is still being typed, not the measured pipeline. */
+    val preview: Boolean = false,
 )
 
 /** Scores a batch of (path, text) pairs against a task in a single call, each file on its own. */
@@ -55,6 +62,11 @@ fun interface ChoiceScorer {
     suspend fun choose(task: String, items: List<Pair<String, String>>): Map<String, Double>
 }
 
+/** Labels each file with the role it plays in the task, as a probability per role. */
+fun interface RoleScorer {
+    suspend fun roles(task: String, items: List<Pair<String, String>>): Map<String, Map<String, Double>>
+}
+
 /**
  * The pipeline measured in spike/RESULTS.md. Jev alone on sketches loses to keyword search, but as a
  * re-ranker over a pooled shortlist, reading full source and fused with BM25, it lifts recall@10 on
@@ -64,6 +76,7 @@ class Packer(
     private val scorer: RelevanceScorer,
     private val config: PackConfig = PackConfig(),
     private val chooser: ChoiceScorer? = null,
+    private val roler: RoleScorer? = null,
 ) {
 
     suspend fun pack(task: String, docs: List<FileDoc>, onProgress: (String) -> Unit = {}): PackResult = coroutineScope {
@@ -96,12 +109,15 @@ class Packer(
         val ranked = pool.sortedByDescending { fused.getValue(it) }
 
         // Stage 3: one comparative choice over the top K reorders them. If it fails, the order above stands.
+        // Role labels are a separate call in parallel, so they can't shift the measured stage-3 answer.
         val top = ranked.take(config.stage3K)
-        val picks = chooser?.let { c ->
-            onProgress("Comparing the top ${top.size}")
-            runCatching { c.choose(task, full(top)) }
-        }
+        onProgress("Comparing the top ${top.size}")
+        val picksJob = chooser?.let { c -> async { runCatching { c.choose(task, full(top)) } } }
+        val rolesJob = roler?.let { r -> async { runCatching { r.roles(task, full(top)) } } }
+        val picks = picksJob?.await()
+        val roles = rolesJob?.await()
         val choice = picks?.getOrNull().orEmpty()
+        val roleOf = roles?.getOrNull().orEmpty()
         val done = System.nanoTime()
 
         val scale = 1 + config.bm25Weight + if (choice.isEmpty()) 0.0 else config.stage3Weight
@@ -113,6 +129,8 @@ class Packer(
                 score = (fused.getValue(path) + config.stage3Weight * (choice[path] ?: 0.0)) / scale,
                 bm25Rank = pos?.plus(1),
                 isTest = isTest(path),
+                role = roleOf[path]?.maxByOrNull { it.value }?.takeIf { it.value >= ROLE_MIN && it.key != "unrelated" }?.key,
+                roleConfidence = roleOf[path]?.maxOfOrNull { it.value },
             )
         }.sortedByDescending { it.score }.take(config.keep)
 
@@ -124,8 +142,28 @@ class Packer(
             pass2Ms = (pass2Done - pass1Done) / 1_000_000,
             stage3Ms = (done - pass2Done) / 1_000_000,
             totalMs = (done - started) / 1_000_000,
-            failedBatches = pass1.failed + pass2.failed + pass2b.failed + if (picks?.isFailure == true) 1 else 0,
+            failedBatches = pass1.failed + pass2.failed + pass2b.failed +
+                (if (picks?.isFailure == true) 1 else 0) + (if (roles?.isFailure == true) 1 else 0),
         )
+    }
+
+    /**
+     * Lite mode for search-as-you-type: BM25's top files, one Jev pass on full source, fused. About five calls and
+     * a second or so. Marked as a preview: it isn't the measured pipeline, and pressing Pack runs that.
+     */
+    suspend fun preview(task: String, docs: List<FileDoc>): PackResult = coroutineScope {
+        val started = System.nanoTime()
+        val byPath = docs.associateBy { it.path }
+        val bm25Ranked = async(Dispatchers.Default) { Bm25.rank(task, docs.associate { it.path to it.text }) }.await()
+        val pool = bm25Ranked.take(config.previewPool)
+        val pass = scoreAll(task, pool.map { it to "path: $it\n${byPath.getValue(it).text.take(config.fullChars)}" }, config.perCall)
+        val done = System.nanoTime()
+        val files = pool.mapIndexed { i, path ->
+            val relevance = pass.scores[path] ?: 0.0
+            PackedFile(path, relevance, (relevance + config.bm25Weight / (1 + i / 10.0)) / (1 + config.bm25Weight), i + 1, isTest(path))
+        }.sortedByDescending { it.score }.take(config.keep)
+        PackResult(task, files, docs.size, pass1Ms = 0, pass2Ms = (done - started) / 1_000_000, stage3Ms = 0,
+            totalMs = (done - started) / 1_000_000, failedBatches = pass.failed, preview = true)
     }
 
     private class Scores(val scores: Map<String, Double>, val failed: Int)
@@ -146,6 +184,8 @@ class Packer(
     }
 
     companion object {
+        /** A role label shows only when Jev puts at least this much probability on it. */
+        const val ROLE_MIN = 0.5
         private val TEST_DIR = Regex("(^|/)[\\w-]*[tT]est[\\w-]*/")
         private val TEST_FILE = Regex("(Test|Tests|Spec|IT)\\.[A-Za-z]+$")
 

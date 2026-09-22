@@ -82,7 +82,7 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         val docs = collectDocs()
         val sketchMs = (System.nanoTime() - started) / 1_000_000
         val jevScorer = JevRelevance(client)
-        val result = Packer(jevScorer, chooser = jevScorer).pack(task, docs, onProgress)
+        val result = Packer(jevScorer, chooser = jevScorer, roler = jevScorer).pack(task, docs, onProgress)
         val calls = client.calls.drop(before)
         val slowest = calls.maxOfOrNull { it.ms } ?: 0
         thisLogger().info(
@@ -103,6 +103,18 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
             lastReport = report
             listeners.forEach { it(report) }
         }
+    }
+
+    /** Search-as-you-type: a lite ranking in about a second. Not the measured pipeline, and never shown to agents. */
+    suspend fun preview(task: String): PackReport {
+        val client = jevClient()
+        if (sessionTokens >= sessionBudget) throw BudgetExceededException(sessionTokens, sessionBudget)
+        val before = client.calls.size
+        val docs = collectDocs()
+        val result = Packer(JevRelevance(client)).preview(task, docs)
+        val calls = client.calls.drop(before)
+        return PackReport(result, "preview", 0, calls.size, calls.sumOf { it.inputTokens.toLong() },
+            calls.count { it.error != null }, "${client.model} via ${client.backend.name.lowercase()}")
     }
 
     /** Fills the sketch cache without calling Jev, so the first real pack skips the sketching step. */
