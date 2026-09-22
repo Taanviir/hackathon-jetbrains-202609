@@ -234,12 +234,18 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()), Di
         cancelWork(Work.BUGS)
         val editor = if (useCurrentEditor) FileEditorManager.getInstance(project).selectedTextEditor else null
         val liveSelection = editor?.selectionModel?.selectedText?.takeIf { it.isNotBlank() }
-        if (liveSelection != null && editor != null) {
-            selectedFix = liveSelection
-            selectedFixFile = FileDocumentManager.getInstance().getFile(editor.document)
-            val start = editor.selectionModel.selectionStart
-            val end = (editor.selectionModel.selectionEnd - 1).coerceAtLeast(start)
-            selectedFixLines = editor.document.getLineNumber(start)..editor.document.getLineNumber(end)
+        if (useCurrentEditor) {
+            if (liveSelection != null && editor != null) {
+                selectedFix = liveSelection
+                selectedFixFile = FileDocumentManager.getInstance().getFile(editor.document)
+                val start = editor.selectionModel.selectionStart
+                val end = (editor.selectionModel.selectionEnd - 1).coerceAtLeast(start)
+                selectedFixLines = editor.document.getLineNumber(start)..editor.document.getLineNumber(end)
+            } else {
+                selectedFix = null
+                selectedFixFile = null
+                selectedFixLines = null
+            }
         }
         val fix = selectedFix?.takeIf { it.isNotBlank() }
         val generation = ++bugsGeneration
@@ -326,7 +332,7 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()), Di
 private class ContextRenderer : DefaultListCellRenderer() {
     override fun getListCellRendererComponent(list: JList<*>, value: Any?, index: Int, selected: Boolean, focus: Boolean): java.awt.Component {
         val c = super.getListCellRendererComponent(list, value, index, selected, focus) as JLabel
-        (value as? ContextCandidate)?.let { c.text = "[${it.role.label}] ${it.file.path}  · ${it.score}% — ${it.reason}" }
+        (value as? ContextCandidate)?.let { c.text = "[${it.role.label}] ${it.file.path}  · ${it.score} ranking points — ${it.reason}" }
         return c
     }
 }
