@@ -31,12 +31,14 @@ class IntelliJevProjectService(private val project: Project) {
     fun events(): List<RunEvent> = events.toList()
 
     fun findContext(task: String): List<ContextCandidate> {
+        checkNotInterrupted()
         val terms = task.lowercase().split(Regex("[^a-z0-9]+"))
             .filter { it.length > 2 }.toSet()
         val files = mutableListOf<VirtualFile>()
         project.baseDir?.let { collectSourceFiles(it, files, 1_000) }
         log("Context scan inspected ${files.size} source files")
         val candidates = files.map { file ->
+            checkNotInterrupted()
             val nameTokens = file.nameWithoutExtension.lowercase().split(Regex("[^a-z0-9]+"))
             val matched = terms.count { term -> nameTokens.any { it.contains(term) } }
             val role = when {
@@ -51,6 +53,7 @@ class IntelliJevProjectService(private val project: Project) {
     }
 
     fun findBugTwins(selectedFix: String, sourceFile: VirtualFile? = null, sourceLines: IntRange? = null): List<BugCandidate> {
+        checkNotInterrupted()
         val signature = RelatedCode.signature(selectedFix)
         if (signature.isEmpty()) {
             log("Select a fix with identifiers before looking for related code")
@@ -60,8 +63,10 @@ class IntelliJevProjectService(private val project: Project) {
         project.baseDir?.let { root ->
             val files = mutableListOf<VirtualFile>(); collectSourceFiles(root, files, 1_000)
             files.forEach { file ->
+                checkNotInterrupted()
                 var matchesInFile = 0
                 readText(file, Int.MAX_VALUE).lineSequence().forEachIndexed { i, line ->
+                    if (i % 128 == 0) checkNotInterrupted()
                     if (matchesInFile >= 5 || (file == sourceFile && sourceLines?.contains(i) == true)) return@forEachIndexed
                     val shared = RelatedCode.sharedTerms(line, signature)
                     if (shared.isNotEmpty()) {
@@ -91,16 +96,19 @@ class IntelliJevProjectService(private val project: Project) {
 
     /** Creates reviewable replacements for existing project source files only. */
     fun proposeChanges(task: String, suppliedContext: List<ContextCandidate>): AgentProposal {
+        checkNotInterrupted()
         if (task.isBlank()) return AgentProposal("Describe the change you want first.", emptyList())
         val candidates = suppliedContext.ifEmpty { findContext(task) }.filter { it.file.length <= 12_000 }.take(8)
         // Capture before any network request. The user can keep editing while the model runs;
         // applyChange must compare against this snapshot, never a later read of the file.
         val snapshots = candidates.mapNotNull { candidate ->
+            checkNotInterrupted()
             val text = readSource(candidate.file)?.takeIf { it.length <= 12_000 } ?: return@mapNotNull null
             Triple(candidate, relativePath(candidate.file), text)
         }
         if (snapshots.isEmpty()) return AgentProposal("No readable source files under 12 KB were found. Narrow the task or choose a smaller file.", emptyList())
         val reviewNote = guardProposalWithJev(task, snapshots.map { it.first })
+        checkNotInterrupted()
         val context = snapshots.joinToString("\n\n") { (candidate, relative, source) ->
             // JSON quotes prevent file text, Markdown fences, and paths from changing the envelope.
             JsonObject().apply {
@@ -122,8 +130,16 @@ $context"""
         val raw = modelReply(prompt).getOrElse {
             return AgentProposal(it.message ?: "The coding-model request failed.", emptyList())
         }
-        val parsed = runCatching { EditProposalParser.parse(raw, snapshots.associate { it.second to it.third }) }.getOrElse {
-            return AgentProposal("The model did not return a valid edit proposal: ${it.message}", emptyList())
+        val parsed = try {
+            EditProposalParser.parse(raw, snapshots.associate { it.second to it.third })
+        } catch (e: ProcessCanceledException) {
+            throw e
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw e
+        } catch (e: Exception) {
+            checkNotInterrupted()
+            return AgentProposal("The model did not return a valid edit proposal: ${e.message}", emptyList())
         }
         val files = snapshots.associate { it.second to it.first.file }
         val changes = parsed.changes.map { ProposedChange(files.getValue(it.path), it.before, it.after, it.summary) }
@@ -136,6 +152,7 @@ $context"""
     }
 
     private fun modelReply(prompt: String): Result<String> {
+        checkNotInterrupted()
         val settings = IntelliJevSettings.instance()
         val apiKey = settings.generationKey() ?: return Result.failure(IllegalStateException(
             "Coding model is not configured. Save an OpenRouter (or OpenAI) key in Settings.",
@@ -160,6 +177,7 @@ $context"""
                 .header("Authorization", "Bearer $apiKey").header("Content-Type", "application/json")
             if (settings.provider() == "OpenRouter") requestBuilder.header("X-OpenRouter-Title", "IntelliJev")
             val request = requestBuilder.POST(HttpRequest.BodyPublishers.ofString(body.toString())).build()
+            checkNotInterrupted()
             val response = http.send(request, HttpResponse.BodyHandlers.ofString())
             if (response.statusCode() !in 200..299) error("${settings.provider()} returned HTTP ${response.statusCode()}: ${response.body().take(400)}")
             Result.success(JsonParser.parseString(response.body()).asJsonObject.getAsJsonArray("choices")[0].asJsonObject
@@ -170,6 +188,7 @@ $context"""
             Thread.currentThread().interrupt()
             throw e
         } catch (e: Exception) {
+            checkNotInterrupted()
             val message = "AI request failed: ${e.message}"
             log(message)
             Result.failure(IllegalStateException(message, e))
@@ -178,6 +197,7 @@ $context"""
 
     /** TypeSafe Jev ranks task relevance; local ranking stays visible when no Jev key is configured. */
     private fun rankContextWithJev(task: String, candidates: List<ContextCandidate>): List<ContextCandidate> {
+        checkNotInterrupted()
         val settings = IntelliJevSettings.instance()
         if (settings.jevKey().isNullOrBlank() || candidates.isEmpty()) {
             log("Jev is not configured; showing local candidates")
@@ -200,17 +220,29 @@ $context"""
                 addProperty("instructions", "How useful is candidate $index (${relativePath(candidate.file)}) to solve the task? Use its path and preview. Level 0 is irrelevant, 1 is useful context, 2 is likely needed for an edit.")
             })
         } }
-        return runCatching {
+        return try {
+            checkNotInterrupted()
             val answers = JevClient(settings.jevKey()!!).decide(state, questions)
+            checkNotInterrupted()
             candidates.mapIndexed { index, candidate ->
                 val score = JevClient.score(answers, "relevance_$index")
                 candidate.copy(score = (score * 50).toInt().coerceIn(0, 100), reason = "Jev relevance ${"%.2f".format(score)}/2 · ${candidate.reason}")
             }.sortedByDescending { it.score }
-        }.onFailure { log("Jev context ranking failed; used local ranking: ${it.message}") }.getOrDefault(candidates)
+        } catch (e: ProcessCanceledException) {
+            throw e
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw e
+        } catch (e: Exception) {
+            checkNotInterrupted()
+            log("Jev context ranking failed; used local ranking: ${e.message}")
+            candidates
+        }
     }
 
     /** Jev supplies a risk signal shown to the developer; it cannot veto a proposed edit. */
     private fun guardProposalWithJev(task: String, candidates: List<ContextCandidate>): String? {
+        checkNotInterrupted()
         val settings = IntelliJevSettings.instance()
         if (settings.jevKey().isNullOrBlank()) return null
         val state = JsonObject().apply { addProperty("task", task); add("files", JsonArray().apply { candidates.forEach { add(relativePath(it.file)) } }) }
@@ -220,27 +252,44 @@ $context"""
                 addProperty("instructions", "Assess the risk of asking a coding model to propose a change for this task and file set. Do not authorize edits; only classify risk.")
             })
         }
-        return runCatching {
+        return try {
+            checkNotInterrupted()
             val risk = JevClient.score(JevClient(settings.jevKey()!!).decide(state, questions), "risk")
+            checkNotInterrupted()
             if (risk >= 1.5) "Jev estimates elevated review risk (${"%.2f".format(risk)}/2). Inspect the proposed changes carefully. " else null
-        }.onFailure { log("Jev safety gate unavailable; continued with manual-review workflow: ${it.message}") }.getOrNull()
+        } catch (e: ProcessCanceledException) {
+            throw e
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw e
+        } catch (e: Exception) {
+            checkNotInterrupted()
+            log("Jev safety gate unavailable; continued with manual-review workflow: ${e.message}")
+            null
+        }
     }
 
     private fun relativePath(file: VirtualFile): String = project.basePath?.let { base -> file.path.removePrefix(base).trimStart('/', '\\') } ?: file.name
     private fun readText(file: VirtualFile, maxChars: Int): String = readSource(file)?.take(maxChars).orEmpty()
 
     private fun readSource(file: VirtualFile): String? = try {
+        checkNotInterrupted()
         ApplicationManager.getApplication().runReadAction(Computable {
             if (!file.isValid || file.isDirectory) null
             else FileDocumentManager.getInstance().getCachedDocument(file)?.text ?: VfsUtilCore.loadText(file)
         })
     } catch (e: ProcessCanceledException) {
         throw e
+    } catch (e: InterruptedException) {
+        Thread.currentThread().interrupt()
+        throw e
     } catch (e: Exception) {
+        checkNotInterrupted()
         null
     }
 
     private fun collectSourceFiles(root: VirtualFile, target: MutableList<VirtualFile>, limit: Int) {
+        checkNotInterrupted()
         if (target.size >= limit || root.`is`(VFileProperty.SYMLINK) || root.name in setOf(".git", "build", "out", ".idea", "node_modules", "vendor", "dist", "target", "venv", ".venv", ".gradle", ".next", "coverage")) return
         if (!root.isDirectory) {
             val name = root.name.lowercase()
@@ -250,5 +299,9 @@ $context"""
             return
         }
         root.children.forEach { collectSourceFiles(it, target, limit) }
+    }
+
+    private fun checkNotInterrupted() {
+        if (Thread.currentThread().isInterrupted) throw InterruptedException("IntelliJev work was cancelled")
     }
 }

@@ -1,5 +1,6 @@
 package dev.intellijev.ui
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -15,11 +16,17 @@ import com.intellij.ui.components.JBTextField
 import dev.intellijev.core.*
 import java.awt.BorderLayout
 import java.awt.FlowLayout
+import java.util.concurrent.Future
 import javax.swing.*
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 
-class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()) {
+class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()), Disposable {
+    private enum class Work { CONTEXT, BUGS, PROPOSAL }
+
+    private val workLock = Any()
+    private val runningWork = mutableMapOf<Work, Future<*>>()
+    @Volatile private var disposed = false
     private val service = project.getService(IntelliJevProjectService::class.java)
     private val contextModel = DefaultListModel<ContextCandidate>()
     private val bugsModel = DefaultListModel<BugCandidate>()
@@ -153,6 +160,7 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun invalidateTaskResults() {
+        cancelWork(Work.CONTEXT, Work.PROPOSAL)
         contextGeneration++
         proposalGeneration++
         lastContextTask = null
@@ -174,16 +182,18 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     fun scanContext() {
+        if (disposed) return
+        cancelWork(Work.CONTEXT, Work.PROPOSAL)
         val currentTask = task.text
         val generation = ++contextGeneration
         proposalGeneration++
         lastContextTask = null
         proposalModel.clear()
-        background("Finding context") {
+        background(Work.CONTEXT, "Finding context") {
             val results = service.findContext(currentTask)
             val analysis = service.explainContext(currentTask, results)
             SwingUtilities.invokeLater {
-                if (project.isDisposed || generation != contextGeneration || task.text != currentTask) return@invokeLater
+                if (disposed || project.isDisposed || generation != contextGeneration || task.text != currentTask) return@invokeLater
                 contextModel.clear(); results.forEach(contextModel::addElement)
                 contextAnalysis.text = analysis; lastContextTask = currentTask; refreshRuns()
             }
@@ -191,6 +201,8 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     fun scanBugs(useCurrentEditor: Boolean = true) {
+        if (disposed) return
+        cancelWork(Work.BUGS)
         val editor = if (useCurrentEditor) FileEditorManager.getInstance(project).selectedTextEditor else null
         val liveSelection = editor?.selectionModel?.selectedText?.takeIf { it.isNotBlank() }
         if (liveSelection != null && editor != null) {
@@ -209,25 +221,27 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         val sourceFile = selectedFixFile
         val sourceLines = selectedFixLines
-        background("Finding possible related code") {
+        background(Work.BUGS, "Finding possible related code") {
         val results = service.findBugTwins(fix, sourceFile, sourceLines)
         val analysis = service.explainBugs(results)
         SwingUtilities.invokeLater {
-            if (project.isDisposed || generation != bugsGeneration) return@invokeLater
+            if (disposed || project.isDisposed || generation != bugsGeneration) return@invokeLater
             bugsModel.clear(); results.forEach(bugsModel::addElement)
             bugAnalysis.text = analysis; refreshRuns()
         }
         }
     }
     private fun runAgent(output: JBTextArea) {
+        if (disposed) return
+        cancelWork(Work.PROPOSAL)
         val currentTask = task.text
         val selectedContext = if (lastContextTask == currentTask) (0 until contextModel.size()).map { contextModel.getElementAt(it) } else emptyList()
         val generation = ++proposalGeneration
         val contextAtStart = contextGeneration
-        background("Running coding agent") {
+        background(Work.PROPOSAL, "Running coding agent") {
         val proposal = service.proposeChanges(currentTask, selectedContext)
         SwingUtilities.invokeLater {
-            if (project.isDisposed || generation != proposalGeneration || contextAtStart != contextGeneration || task.text != currentTask) return@invokeLater
+            if (disposed || project.isDisposed || generation != proposalGeneration || contextAtStart != contextGeneration || task.text != currentTask) return@invokeLater
             proposalModel.clear(); proposal.changes.forEach(proposalModel::addElement)
             output.text = proposal.summary; refreshRuns()
         }
@@ -255,8 +269,22 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()) {
         service.log("Applied reviewed change to ${change.file.name}"); refreshRuns(); open(change.file)
         return true
     }
-    private fun background(label: String, work: () -> Unit) {
-        service.log(label); ApplicationManager.getApplication().executeOnPooledThread(work)
+    private fun cancelWork(vararg kinds: Work) {
+        synchronized(workLock) { kinds.forEach { runningWork.remove(it)?.cancel(true) } }
+    }
+    private fun background(kind: Work, label: String, work: () -> Unit) {
+        synchronized(workLock) {
+            if (disposed) return
+            service.log(label)
+            runningWork[kind] = ApplicationManager.getApplication().executeOnPooledThread(work)
+        }
+    }
+    override fun dispose() {
+        synchronized(workLock) {
+            disposed = true
+            runningWork.values.forEach { it.cancel(true) }
+            runningWork.clear()
+        }
     }
     private fun refreshRuns() { runsModel.clear(); service.events().forEach { runsModel.addElement("${it.time}  ${it.message}") } }
     private fun open(file: VirtualFile, line: Int = 0) { OpenFileDescriptor(project, file, line, 0).navigate(true) }

@@ -8,6 +8,8 @@ import com.intellij.ui.content.ContentFactory
 class IntelliJevToolWindowFactory : ToolWindowFactory {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = IntelliJevPanel(project)
-        toolWindow.contentManager.addContent(ContentFactory.getInstance().createContent(panel, "", false))
+        val content = ContentFactory.getInstance().createContent(panel, "", false)
+        content.setDisposer(panel)
+        toolWindow.contentManager.addContent(content)
     }
 }

@@ -25,6 +25,7 @@ class JevClient(private val apiKey: String) {
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
             .build()
+        if (Thread.currentThread().isInterrupted) throw InterruptedException("Jev request was cancelled")
         val response = http.send(request, HttpResponse.BodyHandlers.ofString())
         if (response.statusCode() !in 200..299) error("TypeSafe Jev HTTP ${response.statusCode()}: ${response.body().take(300)}")
         return JsonParser.parseString(response.body()).asJsonObject.getAsJsonObject("answers")
