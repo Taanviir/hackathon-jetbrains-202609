@@ -273,4 +273,15 @@ class JevClientTest {
         assertEquals(4, client.calls.size)
         assertEquals(80, client.calls.sumOf { it.inputTokens })
     }
+
+    @Test
+    fun `roles ask one choice per file in a single call`() = runBlocking {
+        val client = JevClient("k", endpoint = serve(fixtureName = "systemone_roles.json"))
+        val roles = JevRelevance(client).roles("Add backoff", listOf("src/A.kt" to "a", "src/ATest.kt" to "t"))
+        assertEquals(0.8, roles.getValue("src/A.kt").getValue("edit"), 1e-9)
+        assertEquals(0.7, roles.getValue("src/ATest.kt").getValue("test"), 1e-9)
+        val qs = Json.parseToJsonElement(requests.single().second).jsonObject["questions"]!!.jsonObject
+        assertEquals(setOf("role_f000", "role_f001"), qs.keys)
+        assertEquals(JevRelevance.ROLES.keys, qs["role_f000"]!!.jsonObject["criteria"]!!.jsonObject.keys)
+    }
 }

@@ -95,6 +95,9 @@ passes. Each pass sends at most 1,000 source characters plus the path and task;
 this character limit is not an exact tokenizer budget. Scores are fused with
 keyword rank. The status tooltip and MCP response identify the provider and
 candidate count. Laya has not inherited Jev's measured retrieval claims.
+Laya retains the regex sketch format used in its frozen evaluation, independently
+of Jev's corrected sketcher and optional PSI sketches. Switching providers
+invalidates cached sketches when their format differs.
 
 The displayed **API fee is $0** for local inference. Hardware, electricity and
 setup/download time are excluded. The optional **Ask LLM** button still uses the

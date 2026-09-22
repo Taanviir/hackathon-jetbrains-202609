@@ -63,6 +63,27 @@ class PackerTest {
     }
 
     @Test
+    fun `pass-2 failures degrade the ranking instead of failing the pack`() = runBlocking {
+        val fullTextDown = FakeScorer(failOn = { batch -> batch.all { it.second.startsWith("path: ") } })
+        val result = Packer(fullTextDown, PackConfig(pool = 10)).pack("add backoff to retry", docs)
+        assertTrue(result.failedBatches > 0)
+        assertTrue(result.files.isNotEmpty())
+    }
+
+    @Test
+    fun `strict local protocol fails when every full source score fails`() {
+        for (overlap in listOf(false, true)) {
+            assertThrows(IllegalStateException::class.java) {
+                runBlocking {
+                    val fullTextDown = FakeScorer(failOn = { batch -> batch.all { it.second.startsWith("path: ") } })
+                    Packer(fullTextDown, PackConfig(pool = 10, overlapPasses = overlap, requireFullSourceScores = true))
+                        .pack("add backoff to retry", docs)
+                }
+            }
+        }
+    }
+
+    @Test
     fun `when Jev answers nothing at all, the pack fails instead of passing off BM25 as Jev`() = runBlocking {
         try {
             Packer(FakeScorer(failOn = { true }), PackConfig(pool = 10)).pack("add backoff to retry", docs)
@@ -297,6 +318,55 @@ class PackerTest {
             job.cancel()
         }
         Unit
+    }
+
+    @Test
+    fun `confident roles label the top files, unsure or unrelated ones stay unlabelled`() = runBlocking {
+        val roler = RoleScorer { _, items ->
+            items.associate { (p, _) ->
+                p to when {
+                    p.endsWith("RetryPolicy.kt") -> mapOf("edit" to 0.9, "unrelated" to 0.1)
+                    p.endsWith("Test.kt") -> mapOf("test" to 0.45, "edit" to 0.4, "unrelated" to 0.15)
+                    else -> mapOf("unrelated" to 0.95, "edit" to 0.05)
+                }
+            }
+        }
+        val result = Packer(FakeScorer(), PackConfig(pool = 10), roler = roler).pack("add backoff to retry", docs)
+        assertEquals("edit", result.files.first { it.path == "src/RetryPolicy.kt" }.role)
+        assertEquals(null, result.files.first { it.path.endsWith("RetryPolicyTest.kt") }.role)  // 0.45 < 0.5
+        assertTrue(result.files.filter { it.path.startsWith("src/F") }.all { it.role == null })
+    }
+
+    @Test
+    fun `invalid roles preserve ranking and disclose one failed stage`() = runBlocking {
+        val baseline = Packer(FakeScorer(), PackConfig(pool = 10)).pack("add backoff to retry", docs)
+        val badRoles = listOf(emptyMap(), mapOf("edit" to Double.NaN), mapOf("invented" to 1.0))
+        for (bad in badRoles) {
+            val roler = RoleScorer { _, items -> items.associate { it.first to bad } }
+            val result = Packer(FakeScorer(), PackConfig(pool = 10), roler = roler).pack("add backoff to retry", docs)
+            assertEquals(baseline.files, result.files)
+            assertEquals(1, result.failedBatches)
+        }
+    }
+
+    @Test
+    fun `role cancellation stops the pack rather than presenting partial success`() {
+        assertThrows(CancellationException::class.java) {
+            runBlocking {
+                val roler = RoleScorer { _, _ -> throw CancellationException("role cancelled") }
+                Packer(FakeScorer(), PackConfig(pool = 10), roler = roler).pack("add backoff to retry", docs)
+            }
+        }
+    }
+
+    @Test
+    fun `preview scores only BM25's shortlist, in one full-source pass`() = runBlocking {
+        val scorer = FakeScorer()
+        val result = Packer(scorer, PackConfig(previewPool = 30)).preview("add backoff to retry", docs)
+        assertTrue(result.preview)
+        assertTrue("no sketches in a preview", scorer.batches.flatten().none { it.second.startsWith("sketch") })
+        assertEquals(30, scorer.batches.flatten().size)
+        assertEquals("src/RetryPolicy.kt", result.files.first().path)
     }
 
     @Test

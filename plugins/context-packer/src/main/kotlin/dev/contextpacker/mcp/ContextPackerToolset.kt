@@ -23,7 +23,8 @@ class ContextPackerToolset : McpToolset {
     @McpDescription(
         """
         Locate relevant source files in the open project when a coding task's edit targets are unknown.
-        Returns ranked project-relative paths with test files marked; it does not edit files.
+        Returns ranked project-relative paths with test files marked; Jev can also label top files
+        as likely edit, test, example or dependency. It does not edit files.
         Use provider=keywords for full-corpus local BM25 with no model or API key, provider=laya for
         the local decision model, provider=jev for the configured API, or configured for the IDE preference.
         Laya scores short excerpts from a keyword shortlist of at most 60 files; keywords ranks every
@@ -78,7 +79,9 @@ class ContextPackerToolset : McpToolset {
         } else {
             append("score  path\n")
             r.files.take(limit).forEach { f ->
-                append("%.2f   %s%s\n".format(f.score, f.path, if (f.isTest) "  (test)" else ""))
+                val role = if (report.provider == DecisionProvider.JEV) f.role else null
+                val tag = role ?: if (f.isTest) "test" else null
+                append("%.2f   %s%s\n".format(f.score, f.path, tag?.let { "  ($it)" } ?: ""))
             }
         }
         append("Provider: ${report.jevModel}; ${if (report.provider == DecisionProvider.KEYWORDS) "ranked" else "scored"} ${report.scoredCandidates} candidates. ")

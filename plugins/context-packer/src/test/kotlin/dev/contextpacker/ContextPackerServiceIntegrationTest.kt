@@ -59,4 +59,28 @@ class ContextPackerServiceIntegrationTest : BasePlatformTestCase() {
         val texts = offEdt { service.texts(listOf(valid) + rejected) }
         assertEquals(mapOf(valid to source), texts)
     }
+
+    fun testTypingPreviewUsesNoModelAndPreservesExplicitPackForEveryProvider(): Unit {
+        myFixture.addFileToProject("src/RetryPolicy.java", "class RetryPolicy { void retryBackoff() {} }")
+        val service = project.getService(ContextPackerService::class.java)
+        val previous = offEdt { service.pack("retry backoff", requestedProvider = DecisionProvider.KEYWORDS) }
+        val saved = service.provider
+        try {
+            for (selected in DecisionProvider.entries) {
+                service.provider = selected
+                val report = offEdt { service.preview("update retry backoff") }
+                assertEquals(DecisionProvider.KEYWORDS, report.provider)
+                assertTrue(report.result.preview)
+                assertEquals("src/RetryPolicy.java", report.result.files.first().path)
+                assertEquals(0, report.jevCalls)
+                assertEquals(0L, report.inputTokens)
+                assertEquals(0L, service.sessionTokens)
+                assertEquals(0.0, report.costUsd!!, 0.0)
+                assertEquals(selected, service.provider)
+                assertSame(previous, service.lastReport)
+            }
+        } finally {
+            service.provider = saved
+        }
+    }
 }

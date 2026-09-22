@@ -100,10 +100,15 @@ SPENT = _load_ledger()
 
 
 def _record(tokens: int):
-    SPENT["tokens"] += tokens
-    SPENT["calls"] = SPENT.get("calls", 0) + 1
+    """Re-read before adding, then replace atomically: other processes (the hook, the MCP server) write too."""
+    current = _load_ledger()
+    current["tokens"] = current.get("tokens", 0) + tokens
+    current["calls"] = current.get("calls", 0) + 1
+    SPENT.update(current)
     LEDGER.parent.mkdir(parents=True, exist_ok=True)
-    LEDGER.write_text(json.dumps(SPENT))
+    tmp = LEDGER.with_suffix(f".{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(current))
+    os.replace(tmp, LEDGER)
 
 
 class BudgetExceeded(RuntimeError):
@@ -146,10 +151,10 @@ class Jev:
     async def ask(self, state: dict, questions: dict) -> dict:
         async with self.sem:
             t0 = time.perf_counter()
+            if _load_ledger().get("tokens", 0) >= TOKEN_BUDGET:  # outside the try: this must stop the run
+                raise BudgetExceeded(f"Jev budget of {TOKEN_BUDGET:,} tokens reached ({LEDGER}); "
+                                     "raise JEV_TOKEN_BUDGET deliberately to continue")
             try:
-                if SPENT["tokens"] >= TOKEN_BUDGET:
-                    raise BudgetExceeded(f"Jev budget of {TOKEN_BUDGET:,} tokens reached ({LEDGER}); "
-                                         "raise JEV_TOKEN_BUDGET deliberately to continue")
                 if self.gateway_key:
                     answers, tokens, model = await self._gateway(state, questions)
                 else:

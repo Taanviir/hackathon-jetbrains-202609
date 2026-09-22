@@ -1,0 +1,121 @@
+{
+  "artifacts": [
+    {
+      "file": "laya-benchmark.json.gz",
+      "format": "gzip JSON, mtime=0, no embedded filename",
+      "source_name": "laya-benchmark.json",
+      "stored_bytes": 194060,
+      "stored_sha256": "11f8049e24754975589be77a2a131f6d00a0c2786406818875e6b50174208a8d",
+      "uncompressed_bytes": 2159887,
+      "uncompressed_sha256": "1401eb3c39acb8ecbd1e5fe24f4d06f72c06a57cf0facaf45bba0ea109e32582"
+    },
+    {
+      "file": "laya-benchmark-extended.json.gz",
+      "format": "gzip JSON, mtime=0, no embedded filename",
+      "source_name": "laya-benchmark-extended.json",
+      "stored_bytes": 778118,
+      "stored_sha256": "2d0f9f07e400a52fb35b1fcc3b826cadeb0f00c9f094cdb1e76a6f5b8505328e",
+      "uncompressed_bytes": 8702398,
+      "uncompressed_sha256": "2b944e126f8d49bdce9c3bb5a8b6f4a23cbfd064f2c735a7942ca7c464022e2b"
+    },
+    {
+      "file": "laya-benchmark-extension-manifest.json.gz",
+      "format": "gzip JSON, mtime=0, no embedded filename",
+      "source_name": "laya-benchmark-extension-manifest.json",
+      "stored_bytes": 4320,
+      "stored_sha256": "23cd55ca67c29fe04bf4d9da6d5feb461a597500a1de550c15b814799d1971cd",
+      "uncompressed_bytes": 18000,
+      "uncompressed_sha256": "dae05b2e0fcdfef3ba4323cf84906180c6d9a702a83edd7a6c0ef9a706076e8e"
+    },
+    {
+      "file": "laya-benchmark-incident.json.gz",
+      "format": "gzip JSON, mtime=0, no embedded filename",
+      "source_name": "laya-benchmark-incident.json",
+      "stored_bytes": 168931,
+      "stored_sha256": "4516c0e35f72b4facd12f495e5b386c31216caebaeae312dd66dba5a26d13298",
+      "uncompressed_bytes": 1893592,
+      "uncompressed_sha256": "7b1b316a06d1d958a19185f185fe3fcd277877bf59c43b6200f8ce81ff7533d7"
+    },
+    {
+      "file": "laya-benchmark-dev-window.json.gz",
+      "format": "gzip JSON, mtime=0, no embedded filename",
+      "source_name": "laya-benchmark-dev-window.json",
+      "stored_bytes": 5238,
+      "stored_sha256": "57f3561763558aea5e6525100ded9b0b0f9d388d51e8929a22e17dbe3fa49ff4",
+      "uncompressed_bytes": 66333,
+      "uncompressed_sha256": "d32f729d5f94b9bcb541e90cfd3905b0033d244a2ca5ae219c6e5a935e46ea32"
+    },
+    {
+      "file": "laya-benchmark-cache.json.gz",
+      "format": "gzip JSON, mtime=0, no embedded filename",
+      "source_name": "laya-benchmark-cache.json",
+      "stored_bytes": 5468,
+      "stored_sha256": "68e981d6abfea976028e137db8f54588ed23674136b6a4cdf6356b36db854a84",
+      "uncompressed_bytes": 69021,
+      "uncompressed_sha256": "ef9c63e2b5f4eafd1f2dfd0002a89d31cb465b7fda471a46ca79f2bfc4f2f03c"
+    },
+    {
+      "file": "laya-benchmark-server-portable.json.gz",
+      "format": "gzip JSON, mtime=0, no embedded filename",
+      "source_name": "laya-benchmark-server-portable.json",
+      "stored_bytes": 3780,
+      "stored_sha256": "eb5c943b557a45958802b2348c967c8ae75dd2224c7bedc17383cc0e2f2e559f",
+      "uncompressed_bytes": 36442,
+      "uncompressed_sha256": "ca7d72fc90caa7618b2afe059f6a795865df22e2cfb26552a7d4e5f76caade65"
+    },
+    {
+      "file": "laya-benchmark-server-playground.json.gz",
+      "format": "gzip JSON, mtime=0, no embedded filename",
+      "source_name": "laya-benchmark-server-playground.json",
+      "stored_bytes": 4209,
+      "stored_sha256": "a278b7846b12085fb61154543a3156e28a838d9a70495c9f84e3587e95eedeca",
+      "uncompressed_bytes": 36438,
+      "uncompressed_sha256": "bd789481143ee8bc6b2b5a3fb1b2931ef4296751370afb2f5a18eea447a23f3e"
+    },
+    {
+      "file": "laya-benchmark-soak-manifest.json.gz",
+      "format": "gzip JSON, mtime=0, no embedded filename",
+      "source_name": "laya-benchmark-soak-manifest.json",
+      "stored_bytes": 9323,
+      "stored_sha256": "79e58a3806f92c60ce900947ea2b774e6b0085b2e7b5fdcb9f07e497095343d3",
+      "uncompressed_bytes": 53988,
+      "uncompressed_sha256": "1a6f5b543c0ed37141aeff878d127f0c53db65381b140b646e230ec74b44f42b"
+    },
+    {
+      "file": "laya-benchmark.md",
+      "format": "Markdown",
+      "source_name": "laya-benchmark.md",
+      "stored_bytes": 5231,
+      "stored_sha256": "fb4381b313742f790a16dd26a993c7256040da998ad8c7f5bd64b853f3e25d2d"
+    },
+    {
+      "file": "laya-benchmark-extension.md",
+      "format": "Markdown",
+      "source_name": "laya-benchmark-extension.md",
+      "stored_bytes": 6042,
+      "stored_sha256": "059fa286eca5b8aad2f73316e55a21970467d04f0c45f640e656bbe3d558672e"
+    },
+    {
+      "file": "laya-benchmark-dev-window.md",
+      "format": "Markdown",
+      "source_name": "laya-benchmark-dev-window.md",
+      "stored_bytes": 1275,
+      "stored_sha256": "ee0749237d387e012acef49b12862f13e6c3c73465b84278c9509dfc1f50987d"
+    },
+    {
+      "file": "laya-benchmark-cache.md",
+      "format": "Markdown",
+      "source_name": "laya-benchmark-cache.md",
+      "stored_bytes": 1263,
+      "stored_sha256": "35ff17576f13e632dea008bf0f92f5eb8c7cbb4637b1af55a9871e1e5a916f3b"
+    },
+    {
+      "file": "laya-benchmark-server-resources.md",
+      "format": "Markdown",
+      "source_name": "laya-benchmark-server-resources.md",
+      "stored_bytes": 1827,
+      "stored_sha256": "4b24c3daf428f600e5fe90dddc4b5b880aca236038de913addf5599c7c22ebab"
+    }
+  ],
+  "scope": "Public Koog/Laya benchmark evidence; no model weights, credentials, or private prompts"
+}

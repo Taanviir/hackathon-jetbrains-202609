@@ -6,6 +6,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.vfs.VfsUtilCore
@@ -29,6 +30,7 @@ import dev.contextpacker.pack.Packer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
@@ -47,6 +49,8 @@ import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 import javax.swing.event.ListDataEvent
 import javax.swing.event.ListDataListener
+
+private const val PREVIEW_DEBOUNCE_MS = 700L
 
 /** Type a task, pack, check the picks, then copy them as a prompt or ask an LLM directly. */
 class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Disposable {
@@ -68,6 +72,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private val cancelButton = JButton("Cancel").apply {
         isEnabled = false
         addActionListener {
+            cancelPreview()
             promptSerial++
             answerSerial++
             promptJob?.cancel()
@@ -81,7 +86,10 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private val provider = JComboBox(DecisionProvider.entries.toTypedArray()).apply {
         selectedItem = service.provider
         toolTipText = "Fast keywords reads source locally with no model. Laya uses a local server; Jev uses your configured API."
-        addActionListener { service.provider = selectedItem as DecisionProvider }
+        addActionListener {
+            service.provider = selectedItem as DecisionProvider
+            cancelPreview()
+        }
     }
     private val status = JBTextArea(5, 24).apply {
         text = " "
@@ -121,6 +129,11 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
     private var lastReport: PackReport? = null
     private var job: Job? = null
+    private var previewJob: Job? = null
+    private var previewSerial = 0L
+    /** Suppress a new preview while replaying an agent's task into the editor. */
+    private var settingTask = false
+    private var replacingPicks = false
     private var promptJob: Job? = null
     private var answerJob: Job? = null
     @Volatile private var requestSerial = 0
@@ -139,9 +152,13 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             override fun changedUpdate(e: DocumentEvent) = onTaskChanged()
         })
         picks.addListDataListener(object : ListDataListener {
-            override fun intervalAdded(e: ListDataEvent) = invalidatePromptAndAnswer()
-            override fun intervalRemoved(e: ListDataEvent) = invalidatePromptAndAnswer()
-            override fun contentsChanged(e: ListDataEvent) = invalidatePromptAndAnswer()
+            private fun changed() {
+                if (!replacingPicks) cancelPreview()
+                invalidatePromptAndAnswer()
+            }
+            override fun intervalAdded(e: ListDataEvent) = changed()
+            override fun intervalRemoved(e: ListDataEvent) = changed()
+            override fun contentsChanged(e: ListDataEvent) = changed()
         })
         val top = JPanel(BorderLayout(0, 4)).apply {
             add(JBScrollPane(task), BorderLayout.CENTER)
@@ -176,9 +193,59 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         removePackListener = service.onPack(replayLast = true) { report ->
             val localIntent = requestSerial
             val inputAtNotice = inputSerial
-            if (report.source != "tool window") service.scope.launch(Dispatchers.EDT) {
+            if (report.source != "tool window" && !report.result.preview) service.scope.launch(Dispatchers.EDT) {
                 if (!disposed && localIntent == requestSerial && inputAtNotice == inputSerial && service.lastReport === report) {
                     showExternalReport(report)
+                }
+            }
+        }
+    }
+
+    private fun setTask(text: String) {
+        settingTask = true
+        try { task.text = text } finally { settingTask = false }
+    }
+
+    private fun cancelPreview() {
+        previewSerial++
+        previewJob?.cancel()
+        previewJob = null
+    }
+
+    /** Search-as-you-type uses local full-corpus keywords only; Pack uses the selected provider. */
+    private fun schedulePreview() {
+        cancelPreview()
+        val text = task.text.trim()
+        if (disposed || text.length < 12 || text.split(Regex("\\s+")).size < 3 ||
+            (0 until picks.size()).any { picks[it].bm25Rank == null }
+        ) return
+        val serial = previewSerial
+        val taskAtStart = taskSerial
+        val requestAtStart = requestSerial
+        val inputAtStart = inputSerial
+        val providerAtStart = provider.selectedItem
+        previewJob = service.scope.launch {
+            try {
+                delay(PREVIEW_DEBOUNCE_MS)
+                service.preview(text)
+                    .takeIf { it.provider == DecisionProvider.KEYWORDS && it.result.preview }
+                    ?.let { report ->
+                        withContext(Dispatchers.EDT) {
+                            if (!disposed && serial == previewSerial && taskAtStart == taskSerial &&
+                                requestAtStart == requestSerial && inputAtStart == inputSerial &&
+                                provider.selectedItem == providerAtStart && task.text.trim() == text
+                            ) show(report)
+                        }
+                    }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: ProcessCanceledException) {
+                throw e
+            } catch (e: Exception) {
+                // A local preview is optional; the explicit Pack action reports errors.
+            } finally {
+                withContext(NonCancellable + Dispatchers.EDT) {
+                    if (serial == previewSerial) previewJob = null
                 }
             }
         }
@@ -208,17 +275,33 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             cancelButton.isEnabled = false
             status.text = "Task changed; pack again"
         }
+        if (!settingTask) {
+            if (lastReport != null) {
+                val pinned = (0 until picks.size()).map(picks::getElementAt).filter { it.bm25Rank == null }
+                lastReport = null
+                replacingPicks = true
+                try {
+                    picks.clear()
+                    pinned.forEach(picks::addElement)
+                } finally {
+                    replacingPicks = false
+                }
+                status.text = if (pinned.isEmpty()) "Task changed; local keyword preview pending"
+                    else "Task changed; pinned files kept. Press Pack for a new ranking"
+            }
+            schedulePreview()
+        }
     }
 
     private fun showExternalReport(report: PackReport) {
+        cancelPreview()
         requestSerial++
         job?.cancel()
         invalidatePromptAndAnswer()
         packButton.isEnabled = true
         provider.isEnabled = true
         cancelButton.isEnabled = false
-        task.text = report.result.task
-        picks.clear()
+        setTask(report.result.task)
         show(report)
     }
 
@@ -226,6 +309,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         disposed = true
         removePackListener?.invoke()
         removePackListener = null
+        cancelPreview()
         job?.cancel()
         promptJob?.cancel()
         answerJob?.cancel()
@@ -233,6 +317,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
     private fun runPack() {
         val text = task.text.trim().ifEmpty { return }
+        cancelPreview()
         job?.cancel()
         promptSerial++
         promptJob?.cancel()
@@ -285,8 +370,21 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
     private fun show(report: PackReport) {
         lastReport = report
-        report.result.files.forEach(picks::addElement)
+        replacingPicks = true
+        try {
+            picks.clear()
+            report.result.files.forEach(picks::addElement)
+        } finally {
+            replacingPicks = false
+        }
         val r = report.result
+        if (r.preview) {
+            status.text = "Local keyword preview · %d of %,d files · %.1f s\nNo model calls · Pack for the selected provider".format(
+                r.files.size, r.candidates, report.totalMs / 1000.0,
+            )
+            status.toolTipText = "Full-corpus BM25 over local source and paths. No model or network request; press Pack to use the selected provider."
+            return
+        }
         val failed = if (r.failedBatches > 0) " · ${r.failedBatches} incomplete batches" else ""
         val cost = when (report.provider) {
             DecisionProvider.KEYWORDS -> "API fee $0 · local compute excluded"
@@ -330,6 +428,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private fun addOpenFile() {
         val file = FileEditorManager.getInstance(project).selectedFiles.firstOrNull() ?: return
         val path = project.guessProjectDir()?.let { VfsUtilCore.getRelativePath(file, it) } ?: return
+        if (service.fileFor(path) == null) return
         if ((0 until picks.size()).none { picks[it].path == path }) {
             val modelScore = if ((lastReport?.provider ?: provider.selectedItem) == DecisionProvider.KEYWORDS) 0.0 else 1.0
             picks.add(0, PackedFile(path, relevance = modelScore, score = modelScore, bm25Rank = null, isTest = Packer.isTest(path)))
@@ -337,6 +436,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }
 
     private fun currentPrompt(onReady: (String, Int) -> Unit) {
+        cancelPreview()
         promptJob?.cancel()
         answerJob?.cancel()
         answerSerial++
@@ -436,11 +536,14 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             val keywords = (lastReport?.provider ?: provider.selectedItem) == DecisionProvider.KEYWORDS
             if (keywords) append(value.bm25Rank?.let { "#$it  " } ?: "pinned  ", SimpleTextAttributes.GRAYED_ATTRIBUTES)
             else append("%.2f  ".format(value.score), SimpleTextAttributes.GRAYED_ATTRIBUTES)
-            if (value.isTest) append("test  ", SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES)
+            val role = if (keywords) null else value.role
+            val tag = role ?: if (value.isTest) "test" else null
+            if (tag != null) append("%-5s ".format(tag), if (role == "edit") SimpleTextAttributes.LINK_BOLD_ATTRIBUTES else SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES)
             append(value.path.substringAfterLast('/'), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
             append("  " + value.path.substringBeforeLast('/', ""), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES)
             toolTipText = if (keywords) value.path + (value.bm25Rank?.let { " · full-corpus BM25 keyword rank #$it" } ?: " · added by hand")
-            else value.path + (value.bm25Rank?.let { " · relevance %.2f · keyword rank $it".format(value.relevance) } ?: " · added by hand")
+            else value.path + (value.bm25Rank?.let { " · model relevance %.2f · keyword rank $it".format(value.relevance) } ?: " · added by hand") +
+                (role?.let { label -> value.roleConfidence?.let { " · role $label %.2f".format(it) } } ?: "")
         }
     }
 }
