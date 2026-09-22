@@ -73,6 +73,16 @@ run can write to `.cache/laya-benchmark-extended.json` and its matching
 Markdown path. Our exact 25-task continuation manifest is delivered separately
 as `laya-benchmark-extension-manifest.json`.
 
+To recompute the paired 30-task recall interval from the committed saved
+rankings, without a model server, run from the plugin directory:
+
+    python eval/paired_recall.py --input eval/results/laya/laya-benchmark-extended.json.gz --output .cache/paired-recall.json
+
+The script validates the 3-development/30-held-out split and saved per-task
+recall, hashes the decompressed source JSON, and refuses to overwrite an
+existing output. Its default seed is 20260923 with 10,000 task resamples;
+`--seed` and `--resamples` can be set explicitly.
+
 ## Protocol
 
 The first three eligible first-parent, non-merge commits are development
