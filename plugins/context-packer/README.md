@@ -1,6 +1,6 @@
 # Context Packer
 
-An IntelliJ plugin that finds the files a coding task needs in about three seconds, so an agent
+An IntelliJ plugin that finds the files a coding task needs in about four seconds, so an agent
 can skip the part where it reads the repository one file at a time.
 
 Type a task, or let an agent call the `pack_context` MCP tool, and it scores every source file in
@@ -65,9 +65,11 @@ Needs an IntelliJ-based IDE, 2025.2 or newer.
      about 30% of calls under load (429s and 503s), so a pack takes 30-60 s.
    - `OPENROUTER_API_KEY`, only for the **Ask LLM** button. Jev never goes through OpenRouter.
 
-   Environment variables with the same names work too, and win over stored keys. Each IDE session
-   stops after 20M Jev input tokens (about 37 packs, $0.84) so a looping agent can't drain an
-   account; set `CONTEXT_PACKER_TOKEN_BUDGET` to change that.
+   Environment variables with the same names work too, and win over stored keys. A changed key takes
+   effect on the next pack. Each IDE session stops after 20M Jev input tokens (about 30 packs, $0.84)
+   so a looping agent can't drain an account; set `CONTEXT_PACKER_TOKEN_BUDGET` to change that.
+4. Optional: `CONTEXT_PACKER_EXTENSIONS=kt` restricts candidates to Kotlin, which is exactly the set every
+   published number was measured on. By default the plugin scores all source languages.
 
 ## Use it
 
@@ -88,7 +90,18 @@ server on in **Settings | Tools | MCP Server**, then point your agent at it. For
 claude mcp add --transport sse jetbrains http://127.0.0.1:64342/sse
 ```
 
-The tool's description tells the agent to call it before searching. Whatever an agent asks for
+**Better: let the agent start with the files.** Strong agents tend to trust their own search: headless
+Claude Code ignored `pack_context` in five tries, even when told to use it. So there's also a Claude Code
+hook, `agent/pack_hook.py`. It runs on every request before Claude sees it, asks the IDE's Context Packer,
+and hands Claude the ranked files as context, so nothing has to be chosen. Put this in a project's
+`.claude/settings.local.json`:
+
+```json
+{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "timeout": 60,
+  "command": "cd <repo>/plugins/context-packer/eval && uv run --project . python ../agent/pack_hook.py"}]}]}}
+```
+
+The hook gives up after 25 s and never blocks a prompt. The tool's description tells the agent to call it before searching. Whatever an agent asks for
 also appears in the tool window, marked as asked by an agent, so you can see the context it was
 given. If the IDE runs on Windows and the agent in WSL, localhost only reaches the IDE with WSL's
 mirrored networking turned on.
@@ -138,7 +151,7 @@ uv run python stage3.py --split dev --k 10     # choose stage 3 on dev, then --s
 uv run python make_report.py                   # rebuilds reports/context-packer-eval/
 ```
 
-Plugin tests are `./gradlew test`, 19 of them, headless, and CI runs them on every PR. For a licence-free sandbox IDE with the
+Plugin tests are `./gradlew test`, 23 of them, headless, and CI runs them on every PR. For a licence-free sandbox IDE with the
 MCP server on, run `OPEN_PROJECT=/path/to/project ./gradlew runIdeCommunity`.
 
 ## Limits

@@ -55,6 +55,14 @@ class PackerTest {
     }
 
     @Test
+    fun `pass-2 failures degrade the ranking instead of failing the pack`() = runBlocking {
+        val fullTextDown = FakeScorer(failOn = { batch -> batch.all { it.second.startsWith("path: ") } })
+        val result = Packer(fullTextDown, PackConfig(pool = 10)).pack("add backoff to retry", docs)
+        assertTrue(result.failedBatches > 0)
+        assertTrue(result.files.isNotEmpty())
+    }
+
+    @Test
     fun `when Jev answers nothing at all, the pack fails instead of passing off BM25 as Jev`() = runBlocking {
         try {
             Packer(FakeScorer(failOn = { true }), PackConfig(pool = 10)).pack("add backoff to retry", docs)

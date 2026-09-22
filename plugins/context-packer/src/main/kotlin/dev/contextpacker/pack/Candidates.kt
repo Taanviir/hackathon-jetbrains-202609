@@ -12,6 +12,13 @@ object Candidates {
         "md", "txt", "json", "yml", "yaml", "toml", "properties", "xml", "html", "css", "csv", "lock", "svg", "sql",
     )
 
+    /**
+     * Optional allowlist of extensions, e.g. "kt". The eval scored Kotlin files only, so setting this to kt makes
+     * the plugin rank exactly the candidate set the published numbers were measured on.
+     */
+    private val ONLY: Set<String>? = System.getenv("CONTEXT_PACKER_EXTENSIONS")
+        ?.split(',')?.map { it.trim().lowercase().removePrefix(".") }?.filter { it.isNotEmpty() }?.toSet()?.ifEmpty { null }
+
     /** Call inside a read action. */
     fun collect(project: Project): List<VirtualFile> {
         val index = ProjectFileIndex.getInstance(project)
@@ -27,7 +34,8 @@ object Candidates {
 
     private fun isSource(file: VirtualFile): Boolean {
         val type = file.fileType
+        val ext = file.extension?.lowercase()
         return !type.isBinary && type is LanguageFileType && file.length <= MAX_BYTES &&
-            file.extension?.lowercase() !in SKIP_EXTENSIONS
+            ext !in SKIP_EXTENSIONS && (ONLY == null || ext in ONLY)
     }
 }
