@@ -24,6 +24,7 @@ object KeywordPacker {
             candidates = docs.size,
             pass1Ms = elapsed,
             pass2Ms = 0,
+            stage3Ms = 0,
             totalMs = elapsed,
             failedBatches = 0,
         )

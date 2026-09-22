@@ -1,9 +1,15 @@
 package dev.contextpacker.pack
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -118,6 +124,23 @@ class PackerTest {
     }
 
     @Test
+    fun `an entirely failed early pool still keeps a successful later full source batch`() = runBlocking {
+        val candidates = listOf(
+            FileDoc("src/A.kt", "sketch A", "alpha alpha"),
+            FileDoc("src/B.kt", "sketch B", "beta beta"),
+        )
+        val scorer = RelevanceScorer { _, items ->
+            val (path, text) = items.single()
+            if (path == "src/A.kt" && text.startsWith("path: ")) error("early full source failed")
+            mapOf(path to if (path == "src/B.kt") 0.9 else 0.1)
+        }
+        val result = Packer(scorer, PackConfig(batch = 1, pool = 1, perCall = 1)).pack("alpha", candidates)
+        assertEquals(1, result.failedBatches)
+        assertEquals(0.0, result.files.first { it.path == "src/A.kt" }.relevance, 0.0)
+        assertEquals(0.9, result.files.first { it.path == "src/B.kt" }.relevance, 0.0)
+    }
+
+    @Test
     fun `cancellation propagates even when other batches can score`() {
         val candidates = listOf(FileDoc("src/A.kt", "sketch A", "full A"), FileDoc("src/B.kt", "sketch B", "full B"))
         val scorer = RelevanceScorer { _, items ->
@@ -138,6 +161,9 @@ class PackerTest {
             PackConfig(fullChars = 0), PackConfig(keep = 0),
             PackConfig(bm25Weight = -0.1), PackConfig(bm25Weight = Double.NaN),
             PackConfig(bm25Weight = Double.POSITIVE_INFINITY),
+            PackConfig(stage3K = 0), PackConfig(stage3Weight = -0.1),
+            PackConfig(stage3Weight = Double.NaN), PackConfig(stage3Weight = Double.POSITIVE_INFINITY),
+            PackConfig(bm25Weight = Double.MAX_VALUE, stage3Weight = Double.MAX_VALUE),
         )
         invalidConfigs.forEach { config ->
             assertThrows(IllegalArgumentException::class.java) { Packer(scorer, config) }
@@ -151,6 +177,125 @@ class PackerTest {
             runBlocking { packer.pack("change A", listOf(docs[0], docs[0])) }
         }
         assertTrue(scorer.batches.isEmpty())
+    }
+
+    @Test
+    fun `stage 3 reorders only the top files by the comparative choice`() = runBlocking {
+        val prefersTest = ChoiceScorer { _, items -> items.associate { (p, _) -> p to if (p.endsWith("Test.kt")) 0.95 else 0.05 / items.size } }
+        val without = Packer(FakeScorer(), PackConfig(pool = 10)).pack("add backoff to retry", docs)
+        val with = Packer(FakeScorer(), PackConfig(pool = 10), chooser = prefersTest).pack("add backoff to retry", docs)
+        assertEquals("src/RetryPolicy.kt", without.files.first().path)
+        assertEquals("src/jvmTest/RetryPolicyTest.kt", with.files.first().path)
+        assertEquals(without.files.map { it.path }.toSet(), with.files.map { it.path }.toSet())
+    }
+
+    @Test
+    fun `a failed stage 3 keeps the order and counts as one failed batch`() = runBlocking {
+        val broken = ChoiceScorer { _, _ -> error("choice down") }
+        val without = Packer(FakeScorer(), PackConfig(pool = 10)).pack("add backoff to retry", docs)
+        val with = Packer(FakeScorer(), PackConfig(pool = 10), chooser = broken).pack("add backoff to retry", docs)
+        assertEquals(without.files.map { it.path }, with.files.map { it.path })
+        assertEquals(1, with.failedBatches)
+    }
+
+    @Test
+    fun `invalid or incomplete stage 3 choices preserve the pre-choice files and count a failure`() = runBlocking {
+        val candidates = listOf(FileDoc("src/A.kt", "sketch A", "full A"), FileDoc("src/B.kt", "sketch B", "full B"))
+        val scorer = RelevanceScorer { _, items -> items.associate { it.first to 0.5 } }
+        val config = PackConfig(batch = 2, pool = 2, perCall = 2)
+        val baseline = Packer(scorer, config).pack("change A", candidates)
+        val badChoices = listOf(
+            emptyMap(),
+            mapOf("src/A.kt" to 0.9),
+            mapOf("src/A.kt" to 0.9, "src/Other.kt" to 0.1),
+            mapOf("src/A.kt" to Double.NaN, "src/B.kt" to 0.1),
+            mapOf("src/A.kt" to Double.POSITIVE_INFINITY, "src/B.kt" to 0.1),
+            mapOf("src/A.kt" to -0.1, "src/B.kt" to 0.1),
+            mapOf("src/A.kt" to 1.1, "src/B.kt" to 0.1),
+        )
+        badChoices.forEach { bad ->
+            val result = Packer(scorer, config, ChoiceScorer { _, _ -> bad }).pack("change A", candidates)
+            assertEquals("choice $bad", baseline.files, result.files)
+            assertEquals("choice $bad", 1, result.failedBatches)
+        }
+    }
+
+    @Test
+    fun `stage 3 cancellation and provider outage abort the pack`() {
+        val candidates = listOf(FileDoc("src/A.kt", "sketch A", "full A"), FileDoc("src/B.kt", "sketch B", "full B"))
+        val scorer = RelevanceScorer { _, items -> items.associate { it.first to 0.5 } }
+        assertThrows(CancellationException::class.java) {
+            runBlocking { Packer(scorer, chooser = ChoiceScorer { _, _ -> throw CancellationException("cancelled") }).pack("change A", candidates) }
+        }
+        assertThrows(ScorerUnavailableException::class.java) {
+            runBlocking { Packer(scorer, chooser = ChoiceScorer { _, _ -> throw ScorerUnavailableException("offline") }).pack("change A", candidates) }
+        }
+    }
+
+    @Test
+    fun `stage 3 skips fewer than two candidates including an empty project`() = runBlocking {
+        var choiceCalls = 0
+        val scorer = RelevanceScorer { _, items -> items.associate { it.first to 0.5 } }
+        val packer = Packer(scorer, chooser = ChoiceScorer { _, _ -> choiceCalls++; emptyMap() })
+        assertTrue(packer.pack("change A", emptyList()).files.isEmpty())
+        assertEquals(0, packer.pack("change A", listOf(FileDoc("src/A.kt", "sketch A", "full A"))).failedBatches)
+        assertEquals(0, choiceCalls)
+    }
+
+    @Test
+    fun `sequential passes do not read full source until sketch scoring completes`() = runBlocking {
+        val sketchStarted = CompletableDeferred<Unit>()
+        val releaseSketch = CompletableDeferred<Unit>()
+        val fullStarted = CompletableDeferred<Unit>()
+        val scorer = RelevanceScorer { _, items ->
+            if (items.first().second.startsWith("sketch")) {
+                sketchStarted.complete(Unit)
+                releaseSketch.await()
+            } else fullStarted.complete(Unit)
+            items.associate { it.first to 0.5 }
+        }
+        val candidates = listOf(FileDoc("src/A.kt", "sketch A", "full A"), FileDoc("src/B.kt", "sketch B", "full B"))
+        val job = async(Dispatchers.Default) {
+            Packer(scorer, PackConfig(batch = 2, pool = 2, perCall = 2, overlapPasses = false)).pack("change A", candidates)
+        }
+        try {
+            withTimeout(3_000) { sketchStarted.await() }
+            assertNull(withTimeoutOrNull(300) { fullStarted.await() })
+            releaseSketch.complete(Unit)
+            withTimeout(3_000) { job.await() }
+            assertTrue(fullStarted.isCompleted)
+        } finally {
+            releaseSketch.complete(Unit)
+            job.cancel()
+        }
+    }
+
+    @Test
+    fun `overlap starts the BM25 full source pass while sketch scoring is pending`() = runBlocking {
+        val sketchStarted = CompletableDeferred<Unit>()
+        val releaseSketch = CompletableDeferred<Unit>()
+        val fullStarted = CompletableDeferred<Unit>()
+        val scorer = RelevanceScorer { _, items ->
+            if (items.first().second.startsWith("sketch")) {
+                sketchStarted.complete(Unit)
+                releaseSketch.await()
+            } else fullStarted.complete(Unit)
+            items.associate { it.first to 0.5 }
+        }
+        val candidates = listOf(FileDoc("src/A.kt", "sketch A", "full A"), FileDoc("src/B.kt", "sketch B", "full B"))
+        val job = async(Dispatchers.Default) {
+            Packer(scorer, PackConfig(batch = 2, pool = 2, perCall = 2, overlapPasses = true)).pack("change A", candidates)
+        }
+        try {
+            withTimeout(3_000) { sketchStarted.await() }
+            withTimeout(3_000) { fullStarted.await() }
+            assertFalse(releaseSketch.isCompleted)
+            releaseSketch.complete(Unit)
+            withTimeout(3_000) { job.await() }
+        } finally {
+            releaseSketch.complete(Unit)
+            job.cancel()
+        }
     }
 
     @Test

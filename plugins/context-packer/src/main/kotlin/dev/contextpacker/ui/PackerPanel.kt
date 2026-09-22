@@ -309,9 +309,10 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         status.toolTipText = if (report.provider == DecisionProvider.KEYWORDS) {
             "Read ${report.scoredCandidates} files in ${report.sketchMs} ms; ranked the full corpus with BM25 in ${r.pass1Ms} ms. No model or network request."
         } else {
-            "sketch %d ms · pass 1 + BM25 %d ms · pass 2 %d ms · %s · scored %d candidates%s".format(
-                report.sketchMs, r.pass1Ms, r.pass2Ms, report.jevModel, report.scoredCandidates,
-                if (report.provider == DecisionProvider.LAYA) " after keyword prefilter; local compute cost excluded" else "",
+            "sketch %d ms · pass 1 + BM25 %d ms · remaining pass 2 %d ms · stage 3 %d ms · %s · scored %d candidates%s".format(
+                report.sketchMs, r.pass1Ms, r.pass2Ms, r.stage3Ms, report.jevModel, report.scoredCandidates,
+                if (report.provider == DecisionProvider.LAYA) " after keyword prefilter; sequential passes; local compute cost excluded"
+                else "; passes overlap; phase times measure elapsed wall time",
             )
         }
     }

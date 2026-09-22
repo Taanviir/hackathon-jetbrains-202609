@@ -30,6 +30,7 @@ IDE_TIMINGS = [  # idea.log "pack:" lines, Koog, 2,206 files
     ("Fresh IDE, regex sketches (shipped)", 1_388, 4_224, 1_015, 6.6),
     ("Warm, sketches cached", 70, 3_378, 864, 4.4),
     ("After warm-up on project open", 44, 3_141, 836, 4.1),
+    ("Shipped: + stage 3, passes overlapped", 100, 2_245, 1_643 + 373, 4.4),
 ]
 GATEWAY = [  # probes against ai-gateway.vercel.sh, 2026-09-22
     ("1 call, 60 sketches", "0 of 1 ok (503)"),
@@ -45,6 +46,7 @@ SPEND = [
     ("Agent A/B rerun, Jev (ledger)", "5.3M", "$0.22", "Vague wording, same cap."),
     ("Agent A/Bs, GLM on OpenRouter", "-", "$0.53", "Both arms, both runs, 10 tasks each."),
     ("LLM re-ranker baseline, GLM", "2.3M", "$0.52", "70 tasks, under a $0.80 cap."),
+    ("Stage 3, Jev (ledger)", "2.2M", "$0.09", "Two dev shapes, one test run."),
 ]
 
 
@@ -70,6 +72,13 @@ dev_rank = sorted(names, key=lambda n: (-fusion.score(dev, n, 10), -fusion.score
 chosen = next(n for n in dev_rank if n not in ("bm25", "jev_sketch"))
 T = {n: {k: fusion.score(test, n, k) for k in (5, 10, 20)} for n in ("bm25", "jev_rerank", chosen)}
 CI = {k: fusion.bootstrap_diff(test, chosen, "bm25", k) for k in (5, 10)}
+
+
+def _boot(per, n=2000, seed=7):
+    import random
+    rng = random.Random(seed)
+    means = sorted(st.mean(rng.choice(per) for _ in per) for _ in range(n))
+    return st.mean(per), means[int(.025 * n)], means[int(.975 * n)]
 ceiling = st.mean(fusion.recall(t["pool"], t["truth"], len(t["pool"])) for t in test)
 
 
@@ -86,6 +95,15 @@ AB_VAGUE = json.loads((HERE / "results" / "agent_ab_o40_t10_vague.json").read_te
 VAGUE_TASKS = json.loads((HERE / "results" / "vague_tasks.json").read_text())
 LLM = json.loads((HERE / "results" / "rerank_llm_pool30.json").read_text())["summary"]
 
+# Stage 3: comparative choice over the top 10, chosen on dev (add2), measured once on test.
+import stage3  # noqa: E402
+S3_DEV = json.loads((HERE / "results" / "stage3_dev_k10_c6000.json").read_text())["report"]
+S3_DEV15 = json.loads((HERE / "results" / "stage3_dev_k15_c4000.json").read_text())["report"]
+_s3 = json.loads((HERE / "results" / "stage3_test_k10_c6000.json").read_text())
+S3_TEST = _s3["report"]
+_by_sha = {r["sha"]: r["dump"] for r in load("clean110.json")["rows"]}
+SHIPPED_PER = [(stage3.rerank(_by_sha[r["sha"]], r["fused"], r["probs"], 10, "add2"), _by_sha[r["sha"]]) for r in _s3["rows"]]
+
 
 def ab_summary(rows):
     seen = lambda a: [r[a]["first_seen_s"] if r[a]["first_seen_s"] is not None else r[a]["wall_s"] for r in rows]
@@ -98,6 +116,11 @@ def ab_summary(rows):
 
 
 AB_SUM, AB_VSUM = ab_summary(AB), ab_summary(AB_VAGUE)
+
+# What ships: the chosen fusion plus stage 3. Stage 3 only reorders the top 10, so @10 and @20 are unchanged.
+T["shipped"] = {5: st.mean(fusion.recall(rk, d["truth"], 5) for rk, d in SHIPPED_PER), 10: T[chosen][10], 20: T[chosen][20]}
+CI_SHIPPED5 = _boot([fusion.recall(rk, d["truth"], 5) - fusion.recall(d["bm25"], d["truth"], 5) for rk, d in SHIPPED_PER])
+assert len(SHIPPED_PER) == len(test)
 
 # ---------------------------------------------------------------- rendering helpers
 
@@ -122,7 +145,7 @@ def bar_chart() -> str:
                      f'<text x="{L - 8}" y="{y(v) + 4:.1f}" class="tick" text-anchor="end">{v:.2f}</text>')
     for i, k in enumerate(groups):
         cx = L + gw * i + gw / 2
-        for j, (key, cls, label) in enumerate((("bm25", "s2", "BM25"), (chosen, "s1", "Context Packer"))):
+        for j, (key, cls, label) in enumerate((("bm25", "s2", "BM25"), ("shipped", "s1", "Context Packer"))):
             v = T[key][k]
             x = cx - bw - gap / 2 if j == 0 else cx + gap / 2
             top, r = y(v), 4
@@ -148,7 +171,7 @@ def ci_chart() -> str:
         parts.append(f'<line x1="{x(v):.1f}" x2="{x(v):.1f}" y1="10" y2="{H - 28}" class="{"zero" if v == 0 else "grid"}"/>'
                      f'<text x="{x(v):.1f}" y="{H - 10}" class="tick" text-anchor="middle">{v:+.1f}</text>')
     for i, k in enumerate((5, 10)):
-        m, lo, hi = CI[k]
+        m, lo, hi = CI_SHIPPED5 if k == 5 else CI[k]
         cy = 34 + i * 38
         tip = f"recall@{k}: {m:+.3f}, 95% CI [{lo:+.3f}, {hi:+.3f}]"
         parts.append(f'<g class="mark" data-tip="{e(tip)}"><rect x="{L}" y="{cy - 14}" width="{W - L - R}" height="28" class="hit"/>'
@@ -252,7 +275,7 @@ better than keyword search, and does handing those files to an agent help it? Me
   <div class="tile"><div class="n">{pct(T[chosen][10])}</div><div class="l">recall@10, Context Packer<br>70 held-out tasks</div></div>
   <div class="tile"><div class="n">{pct(T["bm25"][10])}</div><div class="l">recall@10, BM25 keyword search<br>same tasks</div></div>
   <div class="tile"><div class="n">{CI[10][0]:+.2f}</div><div class="l">difference, 95% CI<br>[{CI[10][1]:+.2f}, {CI[10][2]:+.2f}]</div></div>
-  <div class="tile"><div class="n">4.1 s</div><div class="l">one pack in the IDE<br>2,206 files, about $0.03</div></div>
+  <div class="tile"><div class="n">4.4 s</div><div class="l">one pack in the IDE<br>2,206 files, about $0.03</div></div>
 </div>
 
 <h2>The headline</h2>
@@ -265,7 +288,8 @@ was chosen on {len(dev)} dev tasks, then measured once on {len(test)} test tasks
   {table(["70 held-out tasks", "recall@5", "recall@10", "recall@20"], [
       ["BM25 keyword search", pct(T["bm25"][5]), pct(T["bm25"][10]), pct(T["bm25"][20])],
       ["Jev re-rank alone", pct(T["jev_rerank"][5]), pct(T["jev_rerank"][10]), pct(T["jev_rerank"][20])],
-      [b("Context Packer (Jev + BM25)"), b(pct(T[chosen][5])), b(pct(T[chosen][10])), b(pct(T[chosen][20]))],
+      ["Jev + BM25 (passes 1 and 2)", pct(T[chosen][5]), pct(T[chosen][10]), pct(T[chosen][20])],
+      [b("Context Packer as shipped (+ stage 3)"), b(pct(T["shipped"][5])), b(pct(T["shipped"][10])), b(pct(T["shipped"][20]))],
   ])}
 </div>
 <div class="card">
@@ -279,6 +303,8 @@ was chosen on {len(dev)} dev tasks, then measured once on {len(test)} test tasks
   <li><strong>Pass 1.</strong> Jev reads 60 sketches per call and gives, for each, P("implementing the task requires reading or editing this file"). BM25 ranks the full text alongside.</li>
   <li><strong>Pool</strong> the top 60 of each, then <strong>pass 2</strong>: Jev asks the same question over the pool's <em>full source</em>, 6 files per call.</li>
   <li><strong>Fuse</strong>: <code>score = jev + 1 / (1 + bm25_rank / 10)</code>, chosen on dev.</li>
+  <li><strong>Stage 3</strong>: one Jev <code>choice</code> over the top 10, "which file must be edited?", adds
+  <code>2 × p</code> to each. Passes 1 and 2 judge each file alone; this one compares them.</li>
 </ol>
 
 <h2>How we got here</h2>
@@ -320,6 +346,19 @@ recall@5 {LLM["jev_fused-llm@5"][0]:+.2f} [{LLM["jev_fused-llm@5"][1]:+.2f}, {LL
 recall@10 {LLM["jev_fused-llm@10"][0]:+.2f} [{LLM["jev_fused-llm@10"][1]:+.2f}, {LLM["jev_fused-llm@10"][2]:+.2f}].
 Jev's advantage is not judgement but economics: about 30× faster and 3.5× cheaper, which is what lets an agent call it
 before every task. The shipped pipeline also pools Jev's own picks with BM25's, which this 30-file comparison leaves out.</p>
+
+<h2>Stage 3: a comparative question</h2>
+<p>The LLM's lead is at the very top. Passes 1 and 2 ask about each file on its own, while an LLM ranking a list
+compares them. Jev's <code>choice</code> type returns a probability per option, so one extra call can ask which of the
+top files is the one to edit. Two shapes were tried on dev, the best was fixed, then test was run once.</p>
+{table(["", "dev recall@5", "test recall@5", "recall@10"], [
+    ["Passes 1 and 2 only", pct(S3_DEV["baseline"]["5"]), pct(S3_TEST["baseline"]["5"]), pct(S3_TEST["baseline"]["10"])],
+    ["Stage 3, top 15 at 4,000 chars (add1)", pct(S3_DEV15["add1"]["5"]), "not run", "-"],
+    [b("Stage 3, top 10 at 6,000 chars (add2), shipped"), b(pct(S3_DEV["add2"]["5"])), b(pct(S3_TEST["add2"]["5"])), pct(S3_TEST["add2"]["10"])],
+])}
+<p>On test, stage 3 adds {S3_TEST["add2-baseline@5"][0]:+.3f} to recall@5, 95% interval
+[{S3_TEST["add2-baseline@5"][1]:+.3f}, {S3_TEST["add2-baseline@5"][2]:+.3f}]: small, but it clears zero. It costs one
+Jev call and about 0.4 s. It narrows the LLM's top-five lead rather than closing it.</p>
 
 <h2>In the IDE</h2>
 <p>Timings from the plugin's own log on Koog, 2,206 candidate files. The first version built sketches from the IDE's

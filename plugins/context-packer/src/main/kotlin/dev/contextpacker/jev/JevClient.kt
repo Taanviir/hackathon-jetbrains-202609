@@ -43,7 +43,8 @@ class JevClient(
     val backend: JevBackend = JevBackend.TYPESAFE,
     val model: String = backend.defaultModel,
     private val endpoint: String = backend.endpoint,
-    concurrency: Int = 16,
+    /** One pack is ~55 calls. 48 in flight stays far inside TypeSafe's 1,200 a minute and makes pass 1 one wave. */
+    concurrency: Int = 48,
     private val timeout: Duration = Duration.ofSeconds(30),
     private val maxRetries: Int = 4,
     private val http: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(),
@@ -220,5 +221,11 @@ object Questions {
     fun noul(instructions: String): JsonObject = buildJsonObject {
         put("type", "noul")
         put("instructions", instructions)
+    }
+
+    fun choice(instructions: String, criteria: Map<String, String>): JsonObject = buildJsonObject {
+        put("type", "choice")
+        put("instructions", instructions)
+        put("criteria", buildJsonObject { criteria.forEach { (k, v) -> put(k, v) } })
     }
 }

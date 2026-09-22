@@ -241,4 +241,36 @@ class JevClientTest {
         assertNull("the model travels in a header, not the body", sent["model"])
         assertEquals("boolean", sent["questions"]!!.jsonObject["f000"]!!.jsonObject["type"]!!.jsonPrimitive.content)
     }
+
+    @Test
+    fun `stage 3 sends one choice over the files and maps probabilities back to paths`() = runBlocking {
+        val client = JevClient("k", endpoint = serve(fixtureName = "systemone_choice.json"))
+        val probs = JevRelevance(client).choose("Add backoff", listOf("src/A.kt" to "a", "src/B.kt" to "b"))
+        assertEquals(mapOf("src/A.kt" to 0.2, "src/B.kt" to 0.8), probs)
+        val q = Json.parseToJsonElement(requests.single().second).jsonObject["questions"]!!.jsonObject["pick"]!!.jsonObject
+        assertEquals("choice", q["type"]!!.jsonPrimitive.content)
+        assertEquals(setOf("f000", "f001"), q["criteria"]!!.jsonObject.keys)
+    }
+
+    @Test
+    fun `stage 3 rejects missing partial extra and invalid probabilities`() = runBlocking {
+        val responses = listOf(
+            """{"answers":{"pick":{"type":"choice"}},"usage":{"input_tokens":20}}""",
+            """{"answers":{"pick":{"probabilities":{"f000":1.0}}},"usage":{"input_tokens":20}}""",
+            """{"answers":{"pick":{"probabilities":{"f000":0.2,"f001":0.8,"unknown":0.1}}},"usage":{"input_tokens":20}}""",
+            """{"answers":{"pick":{"probabilities":{"f000":-0.2,"f001":1.2}}},"usage":{"input_tokens":20}}""",
+        )
+        val client = JevClient("k", endpoint = serve(responseBodies = responses))
+        val scorer = JevRelevance(client)
+        repeat(responses.size) {
+            try {
+                scorer.choose("Add backoff", listOf("src/A.kt" to "a", "src/B.kt" to "b"))
+                fail("Invalid comparative answers must not silently become zero scores")
+            } catch (_: IllegalArgumentException) {
+                // Packer retains the earlier ranking and marks this scoring batch incomplete.
+            }
+        }
+        assertEquals(4, client.calls.size)
+        assertEquals(80, client.calls.sumOf { it.inputTokens })
+    }
 }
