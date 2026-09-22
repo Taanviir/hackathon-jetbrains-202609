@@ -1,7 +1,9 @@
-"""Claude Code A/B: headless Claude Code finds the files for real Koog tasks, with and without pack_context.
+"""Claude Code A/B: headless Claude Code finds the files for real Koog tasks, with and without Context Packer.
 
 Same model, prompt and read-only tools in both arms, on a checkout at each task's parent commit. The only
-difference is whether the pack_context MCP server is attached. Runs one at a time so the Jev ledger stays exact.
+difference is a UserPromptSubmit hook (agent/pack_hook.py) that packs the context before Claude starts, so the
+model never has to choose to call a tool. (Given the tool instead, Sonnet ignored it; see claude_adoption.json.)
+Runs one at a time so the Jev ledger stays exact.
 
     uv run python claude_ab.py --tasks 8
 """
@@ -27,21 +29,21 @@ PROMPT = ("Find the source files in this repository that must be edited to imple
           "anything and do not write code.\n\nTask: {task}\n\nWhen you are done, end your reply with one line in "
           "exactly this form, most likely first, up to 10 repository-relative paths:\nFILES: path/one.kt, path/two.kt")
 READ_ONLY = "Read,Grep,Glob,LS,ToolSearch"  # ToolSearch loads deferred MCP tool schemas
-# Identical in both arms, like a line in CLAUDE.md. Without it Sonnet ignored the tool in both smoke runs.
-NUDGE = "If the mcp__pack__pack_context tool is available, call it first with the task, before any Grep or Glob."
 DENY = "Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,Task"
 
 
 def run(task: koog.Task, text: str, with_pack: bool, model: str, budget: int) -> dict:
     root = worktree(task)
-    servers = {} if not with_pack else {"pack": {
-        "command": "uv", "args": ["run", "--project", str(HERE), "python", str(HERE / "pack_mcp.py")],
-        "env": {"TASK_PARENT": task.parent, "JEV_TOKEN_BUDGET": str(budget), "PATH": os.environ["PATH"]}}}
-    cfg = RESULTS / f"mcp_{'pack' if with_pack else 'none'}.json"
-    cfg.write_text(json.dumps({"mcpServers": servers}))
+    hook = (f"cd {HERE} && TASK_PARENT={task.parent} JEV_TOKEN_BUDGET={budget} "
+            f"uv run --project {HERE} python {HERE.parent / 'agent' / 'pack_hook.py'}")
+    settings = {"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": hook, "timeout": 60}]}]}} if with_pack else {}
+    cfg, mcp = RESULTS / f"settings_{'pack' if with_pack else 'none'}.json", RESULTS / "mcp_none.json"
+    cfg.write_text(json.dumps(settings))
+    mcp.write_text(json.dumps({"mcpServers": {}}))
+    ledger_before = js._load_ledger()["tokens"]
     cmd = ["claude", "-p", PROMPT.format(task=text), "--model", model, "--output-format", "stream-json", "--verbose",
-           "--strict-mcp-config", "--mcp-config", str(cfg), "--append-system-prompt", NUDGE,
-           "--allowedTools", READ_ONLY + (",mcp__pack__pack_context" if with_pack else ""), "--disallowedTools", DENY]
+           "--settings", str(cfg), "--strict-mcp-config", "--mcp-config", str(mcp),
+           "--allowedTools", READ_ONLY, "--disallowedTools", DENY]
     t0 = time.perf_counter()
     p = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=600)
     wall = time.perf_counter() - t0
@@ -51,8 +53,6 @@ def run(task: koog.Task, text: str, with_pack: bool, model: str, budget: int) ->
             ev = json.loads(line)
         except ValueError:
             continue
-        if ev.get("type") == "system" and ev.get("subtype") == "init":
-            init = {"mcp_servers": ev.get("mcp_servers"), "mcp_tools": [t for t in ev.get("tools", []) if t.startswith("mcp__")]}
         if ev.get("type") == "assistant":
             for block in ev.get("message", {}).get("content", []):
                 if block.get("type") == "tool_use":
@@ -68,7 +68,7 @@ def run(task: koog.Task, text: str, with_pack: bool, model: str, budget: int) ->
             "cache_read": u.get("cache_read_input_tokens", 0), "cache_write": u.get("cache_creation_input_tokens", 0),
             "output_tokens": u.get("output_tokens", 0), "tools": tools, "answer": answer, "answered": bool(m),
             "recall": len(set(answer) & set(task.truth)) / len(task.truth), "is_error": result.get("is_error"),
-            "stderr": p.stderr[-300:] if p.returncode else "", "init": init}
+            "stderr": p.stderr[-300:] if p.returncode else "", "jev_tokens": js._load_ledger()["tokens"] - ledger_before}
 
 
 def main():
@@ -78,6 +78,7 @@ def main():
     ap.add_argument("--model", default="sonnet")
     ap.add_argument("--only", choices=["explore", "pack"])
     ap.add_argument("--jev-cap", type=int, default=7_100_000, help="more Jev input tokens this run may spend")
+
     args = ap.parse_args()
     budget = js.SPENT["tokens"] + args.jev_cap
     vague = {v["sha"]: v["vague"] for v in json.loads((RESULTS / "vague_tasks.json").read_text())}
@@ -85,14 +86,14 @@ def main():
     rows = []
     for t in tasks:
         text = vague.get(t.sha[:8], t.task)
+
         row = {"sha": t.sha[:8], "task": text, "truth": t.truth}
         for arm in ("explore", "pack"):
             if args.only and arm != args.only:
                 continue
             row[arm] = r = run(t, text, arm == "pack", args.model, budget)
-            print(f"   init: {r['init']}", flush=True)
             print(f"{t.sha[:8]} {arm:7s} {r['wall_s']:5.1f}s turns={r['turns']} cost=${r['cost_usd'] or 0:.3f} "
-                  f"in={r['input_tokens'] + r['cache_read'] + r['cache_write']:,} recall={r['recall']:.2f} tools={r['tools']}"
+                  f"in={r['input_tokens'] + r['cache_read'] + r['cache_write']:,} recall={r['recall']:.2f} tools={r['tools']} jev={r['jev_tokens']:,}"
                   + (f" ERR {r['stderr']}" if r['stderr'] else ""), flush=True)
         rows.append(row)
     RESULTS.mkdir(exist_ok=True)
