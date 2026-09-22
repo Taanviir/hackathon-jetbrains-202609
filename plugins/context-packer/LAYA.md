@@ -39,6 +39,11 @@ is not required. The tested environment was Python 3.10.0, Laya 0.3.5,
 torch 2.14.0+cpu and transformers 5.17.0; the source pin alone does not pin every
 transitive dependency.
 
+The model checkpoint is pinned to `1c5edc17a7acd8701df6fc341c0d179f1c62c982`, the
+snapshot used for this evaluation. `--revision <40-character commit>` explicitly
+selects another checkpoint; `/api/health` reports the loaded checkpoint. Moving
+branch names are rejected so a later download cannot silently change this default.
+
 From another terminal, confirm the server has loaded before packing:
 
 ```powershell

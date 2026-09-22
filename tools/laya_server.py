@@ -13,6 +13,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
 import os
+import re
 from pathlib import Path
 import sys
 import threading
@@ -22,6 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8770
+DEFAULT_REVISION = "1c5edc17a7acd8701df6fc341c0d179f1c62c982"
 MAX_BODY = 1 << 20
 MAX_QUESTIONS = 32
 DEFAULT_CACHE = Path(__file__).resolve().parents[1] / "plugins" / "context-packer" / ".cache" / "laya"
@@ -84,13 +86,20 @@ def validate_payload(payload: object) -> tuple[str | dict, dict]:
 class EnglishModel:
     """The real adapter; constructed only after CLI cache and offline settings are applied."""
 
-    def __init__(self) -> None:
+    def __init__(self, revision: str = DEFAULT_REVISION) -> None:
         import laya
         import torch
+        from huggingface_hub import snapshot_download
         from laya import Router
 
-        self.router = Router(max_loaded=1, default="english")
+        snapshot = snapshot_download(
+            "convaiinnovations/laya", revision=revision,
+            allow_patterns=["rl_agent_config.json", "model.safetensors", "tokenizer/*", "encoder/*"],
+            local_files_only=os.environ.get("HF_HUB_OFFLINE") == "1",
+        )
+        self.router = Router(models={"english": snapshot}, max_loaded=1, default="english")
         agent = self.router.load("english")
+        self.checkpoint = revision
         self.version = laya.__version__
         self.torch_version = torch.__version__
         self.device = str(agent.device)
@@ -163,6 +172,7 @@ class Handler(BaseHTTPRequestHandler):
                 "version": model.version,
                 "torch": model.torch_version,
                 "device": model.device,
+                "checkpoint": getattr(model, "checkpoint", None),
             })
         elif self.path == "/api/predict":
             self._send(405, {"error": "method not allowed"})
@@ -241,10 +251,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Serve the English Laya checkpoint on 127.0.0.1")
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE, help="Hugging Face cache directory")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--revision", default=DEFAULT_REVISION, help="40-character model checkpoint commit (pinned by default)")
     parser.add_argument("--download", action="store_true", help="allow fetching English weights into --cache")
     args = parser.parse_args(argv)
     if not 1 <= args.port <= 65_535:
         parser.error("--port must be between 1 and 65535")
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", args.revision):
+        parser.error("--revision must be a 40-character checkpoint commit, not a moving branch")
     cache = args.cache.expanduser().resolve()
     cache.mkdir(parents=True, exist_ok=True)
     os.environ["HF_HOME"] = str(cache)
@@ -256,7 +269,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print("Loading the English Laya checkpoint...", flush=True)
     try:
-        model = EnglishModel()
+        model = EnglishModel(args.revision.lower())
     except Exception as error:
         print(f"Could not load English Laya ({type(error).__name__}). Check --cache or pass --download.", file=sys.stderr)
         return 1
