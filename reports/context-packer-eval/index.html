@@ -58,7 +58,7 @@ ol.timeline { padding-left: 20px; } ol.timeline li { margin: 8px 0; }
 </head>
 <body>
 <main>
-<p class="meta"><a href="../../">All reports</a> · Context Packer · 22 September 2026</p>
+<p class="meta"><a href="../../">All reports</a> · Context Packer · 23 September 2026</p>
 <h1>Context Packer eval</h1>
 <p class="lede">Can Jev, a model that answers typed questions but never writes text, find the files a coding task needs
 better than keyword search, and does handing those files to an agent help it? Measured on real JetBrains/koog commits.</p>
@@ -67,7 +67,7 @@ better than keyword search, and does handing those files to an agent help it? Me
   <div class="tile"><div class="n">0.69</div><div class="l">recall@10, Context Packer<br>70 held-out tasks</div></div>
   <div class="tile"><div class="n">0.53</div><div class="l">recall@10, BM25 keyword search<br>same tasks</div></div>
   <div class="tile"><div class="n">+0.16</div><div class="l">difference, 95% CI<br>[+0.10, +0.23]</div></div>
-  <div class="tile"><div class="n">4.4 s</div><div class="l">one pack in the IDE<br>2,206 files, about $0.03</div></div>
+  <div class="tile"><div class="n">4.1 s</div><div class="l">one pack in the IDE<br>2,206 files, about $0.03</div></div>
 </div>
 
 <h2>The headline</h2>
@@ -111,12 +111,24 @@ was chosen on 40 dev tasks, then measured once on 70 test tasks nobody had looke
 <p>Pass 1 is two-thirds of the Jev calls. Scoring only BM25's top files with pass 2 costs little recall:</p>
 <div class="tw"><table class=""><thead><tr><th>test, 70 tasks</th><th>recall@5</th><th>recall@10</th><th>Jev calls per pack</th></tr></thead><tbody><tr><td>Full pipeline</td><td>0.54</td><td>0.69</td><td>~56</td></tr><tr><td>BM25 top 60 → pass 2</td><td>0.53</td><td>0.66</td><td>10</td></tr><tr><td>BM25 top 40 → pass 2</td><td>0.52</td><td>0.65</td><td>7</td></tr><tr><td>BM25 alone</td><td>0.41</td><td>0.53</td><td>0</td></tr></tbody></table></div>
 
+<h2>Against an LLM re-ranker</h2>
+<p>The obvious question: why not have an LLM re-rank BM25's shortlist? Same 70 test tasks, same pool (BM25's top
+30), same full source per file. z-ai/glm-5.3-flash read all 30 files in one call and listed the ones the task needs;
+Jev's scores for the same 30 files were already saved.</p>
+<div class="tw"><table class=""><thead><tr><th>BM25 top 30, re-ranked by</th><th>recall@5</th><th>recall@10</th><th>time per task</th><th>cost per task</th></tr></thead><tbody><tr><td>nothing (BM25 order)</td><td>0.41</td><td>0.53</td><td>0</td><td>0</td></tr><tr><td>Jev + BM25</td><td>0.52</td><td>0.65</td><td><strong>~1 s</strong></td><td><strong>~$0.002</strong></td></tr><tr><td>LLM (z-ai/glm-5.3-flash)</td><td><strong>0.61</strong></td><td><strong>0.67</strong></td><td>29 s median</td><td>$0.0074</td></tr></tbody></table></div>
+<p><strong>The LLM picks the top five better; at ten they tie.</strong> Jev + BM25 minus LLM, paired bootstrap:
+recall@5 -0.09 [-0.15, -0.03],
+recall@10 -0.02 [-0.07, +0.03].
+Jev's advantage is not judgement but economics: about 30× faster and 3.5× cheaper, which is what lets an agent call it
+before every task. The shipped pipeline also pools Jev's own picks with BM25's, which this 30-file comparison leaves out.</p>
+
 <h2>In the IDE</h2>
 <p>Timings from the plugin's own log on Koog, 2,206 candidate files. The first version built sketches from the IDE's
 Structure View, which runs Kotlin analysis at about 19 ms a file. The shipped version uses the regex sketcher the eval
 measured (a parity test checks the Kotlin port against it).</p>
-<div class="tw"><table class=""><thead><tr><th></th><th>sketch</th><th>pass 1 + BM25</th><th>pass 2</th><th>total</th></tr></thead><tbody><tr><td>Fresh IDE, Structure View sketches</td><td>42.7 s</td><td>2.9 s</td><td>2.2 s</td><td><strong>47.7 s</strong></td></tr><tr><td>Fresh IDE, regex sketches (shipped)</td><td>1.4 s</td><td>4.2 s</td><td>1.0 s</td><td><strong>6.6 s</strong></td></tr><tr><td>Warm, sketches cached</td><td>0.1 s</td><td>3.4 s</td><td>0.9 s</td><td><strong>4.4 s</strong></td></tr></tbody></table></div>
-<p class="note">Every pack: 53-56 Jev calls, 0 failed, about 0.65M input tokens ($0.03).</p>
+<div class="tw"><table class=""><thead><tr><th></th><th>sketch</th><th>pass 1 + BM25</th><th>pass 2</th><th>total</th></tr></thead><tbody><tr><td>Fresh IDE, Structure View sketches</td><td>42.7 s</td><td>2.9 s</td><td>2.2 s</td><td><strong>47.7 s</strong></td></tr><tr><td>Fresh IDE, regex sketches (shipped)</td><td>1.4 s</td><td>4.2 s</td><td>1.0 s</td><td><strong>6.6 s</strong></td></tr><tr><td>Warm, sketches cached</td><td>0.1 s</td><td>3.4 s</td><td>0.9 s</td><td><strong>4.4 s</strong></td></tr><tr><td>After warm-up on project open</td><td>0.0 s</td><td>3.1 s</td><td>0.8 s</td><td><strong>4.1 s</strong></td></tr></tbody></table></div>
+<p class="note">Every pack: 53-56 Jev calls, 0 failed, about 0.65M input tokens ($0.03). Since the warm-up pass, the
+plugin sketches every file in the background when a project opens (11 s alongside indexing, no Jev calls).</p>
 
 <h3>Why TypeSafe's API and not the free gateway</h3>
 <p>Vercel's AI Gateway serves the same Jev model for free, but under load it mostly refused:</p>
@@ -134,12 +146,22 @@ is whether a <code>pack_context</code> tool exists. Every run ends when the agen
 <code>grep</code> often hits at once, while the harness's Python <code>pack_context</code> took a median of 9.2 s (the plugin
 takes 4.4 s). The agent also kept exploring after it had the pack. Ten tasks is too few to call any of these differences
 significant.</p>
+<h3>Rerun with vaguer wording</h3>
+<p>Commit subjects often name the exact class or field, which hands <code>grep</code> the answer. So GLM rewrote the
+same 10 tasks without any code identifiers, keeping product names a person would say (Ollama, Langfuse). For example,
+<em>"AIAgentError populated incorrectly for reflective…"</em> became <em>"Fix the agent error being populated incorrectly during reflective mode."</em>.</p>
+<div class="tw"><table class=""><thead><tr><th>10 tasks, vague wording</th><th>without pack_context</th><th>with pack_context</th></tr></thead><tbody><tr><td>Final recall</td><td>0.72</td><td>0.72</td></tr><tr><td>Wall time, median</td><td><strong>51 s</strong></td><td>61 s</td></tr><tr><td>LLM calls, mean</td><td>15.7</td><td><strong>13.1</strong></td></tr><tr><td>Tokens, mean</td><td>190k</td><td><strong>176k</strong></td></tr><tr><td>Time to first right file, median</td><td><strong>4.3 s</strong></td><td>7.9 s</td></tr></tbody></table></div>
+<p>Vaguer wording cost <em>both</em> agents recall equally (0.97 to 0.72) and did not
+favour the packer: product names still give <code>grep</code> a way in. Running BM25 alongside pass 1 cut the harness's
+<code>pack_context</code> from 9.2 s to 3.5 s, yet a grep-first
+agent still reaches a right file sooner. <strong>Across both runs: the packer does not make this agent faster.</strong>
+It saves some calls and tokens, and ten tasks can't separate that from noise.</p>
 <details><summary>Per task</summary>
 <div class="tw"><table class=""><thead><tr><th>task</th><th>wall, explore</th><th>wall, pack</th><th>calls, explore</th><th>calls, pack</th><th>first right file, explore</th><th>first right file, pack</th><th>recall, explore</th><th>recall, pack</th></tr></thead><tbody><tr><td>Update Koog trip planning agent example</td><td>96 s</td><td>38 s</td><td>19</td><td>4</td><td>1.9 s</td><td>13.7 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Add OpenAI GPT-5.5 and GPT-5.5 Pro models</td><td>76 s</td><td>76 s</td><td>15</td><td>16</td><td>2.3 s</td><td>15.5 s</td><td>0.67</td><td>0.67</td></tr><tr><td>AIAgentError populated incorrectly for reflective…</td><td>113 s</td><td>97 s</td><td>19</td><td>19</td><td>28.3 s</td><td>28.3 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Consider tool&#x27;s customName in tools from callable</td><td>47 s</td><td>69 s</td><td>10</td><td>12</td><td>4.3 s</td><td>14.7 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Return tool calls ahead of assistant message in OllamaClient</td><td>93 s</td><td>45 s</td><td>18</td><td>11</td><td>1.6 s</td><td>19.9 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Accept text/plain Content-Type on Ollama non-streaming responses</td><td>60 s</td><td>68 s</td><td>19</td><td>13</td><td>19.9 s</td><td>11.5 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Process Ollama batch embeddings</td><td>82 s</td><td>69 s</td><td>19</td><td>19</td><td>9.0 s</td><td>7.9 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Add trace attributes to all Langfuse spans, not j…</td><td>31 s</td><td>17 s</td><td>12</td><td>4</td><td>1.1 s</td><td>11.7 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Stop additionalProperties leaking as additional_properties to Op</td><td>101 s</td><td>187 s</td><td>19</td><td>19</td><td>22.9 s</td><td>9.5 s</td><td>1.00</td><td>1.00</td></tr><tr><td>Refactor LLAMA model definitions for clarity</td><td>102 s</td><td>66 s</td><td>19</td><td>15</td><td>4.2 s</td><td>9.0 s</td><td>1.00</td><td>1.00</td></tr></tbody></table></div>
 </details>
 
 <h2>What it cost</h2>
-<div class="tw"><table class=""><thead><tr><th></th><th>input tokens</th><th>cost</th><th>note</th></tr></thead><tbody><tr><td>Spike and eval, first TypeSafe account</td><td>126M</td><td>$5.30</td><td>Ran dry at task 111 of the 136-task run.</td></tr><tr><td>Agent A/B, Jev (ledger)</td><td>5.3M</td><td>$0.22</td><td>Capped at 11M tokens by the ledger.</td></tr><tr><td>In-IDE checks, Jev</td><td>2.6M</td><td>$0.11</td><td>Four packs across three IDE restarts (idea.log).</td></tr><tr><td>Agent A/B, GLM on OpenRouter</td><td>-</td><td>$0.29</td><td>Both arms, 10 tasks.</td></tr></tbody></table></div>
+<div class="tw"><table class=""><thead><tr><th></th><th>input tokens</th><th>cost</th><th>note</th></tr></thead><tbody><tr><td>Spike and eval, first TypeSafe account</td><td>126M</td><td>$5.30</td><td>Ran dry at task 111 of the 136-task run.</td></tr><tr><td>Agent A/B, Jev (ledger)</td><td>5.3M</td><td>$0.22</td><td>Capped at 11M tokens by the ledger.</td></tr><tr><td>In-IDE checks, Jev</td><td>2.6M</td><td>$0.11</td><td>Four packs across three IDE restarts (idea.log).</td></tr><tr><td>Agent A/B rerun, Jev (ledger)</td><td>5.3M</td><td>$0.22</td><td>Vague wording, same cap.</td></tr><tr><td>Agent A/Bs, GLM on OpenRouter</td><td>-</td><td>$0.53</td><td>Both arms, both runs, 10 tasks each.</td></tr><tr><td>LLM re-ranker baseline, GLM</td><td>2.3M</td><td>$0.52</td><td>70 tasks, under a $0.80 cap.</td></tr></tbody></table></div>
 <p class="note">Jev lists at $0.042 per million input tokens, output free. After the first account ran dry, every eval run
 checks a persistent ledger and stops at a token cap, and the plugin caps each IDE session at 20M tokens.</p>
 
@@ -148,7 +170,9 @@ checks a persistent ledger and stops at a token cap, and the plugin caps each ID
   <li>One repository (Koog), one language (Kotlin). The sketcher handles other languages, but they aren't evaluated.</li>
   <li>Commit subjects stand in for tasks. Real requests are often vaguer, which should favour Jev over keywords, but that isn't measured.</li>
   <li>Recall counts only files the commit modified. A pick that's useful to read but wasn't edited counts as a miss.</li>
-  <li>The agent A/B is 10 tasks, with one model.</li>
+  <li>The agent A/B is 10 tasks, with one model, and that model keeps exploring after it has the pack.</li>
+  <li>The LLM baseline is one model (GLM-5.3 Flash) on a 30-file pool. A stronger model would likely widen its lead
+  at the top and its latency gap.</li>
 </ul>
 <p class="meta">Generated by <code>plugins/context-packer/eval/make_report.py</code> from the run files. Code and raw notes:
 <code>plugins/context-packer/</code>, <code>spike/RESULTS.md</code>.</p>

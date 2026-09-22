@@ -29,6 +29,7 @@ IDE_TIMINGS = [  # idea.log "pack:" lines, Koog, 2,206 files
     ("Fresh IDE, Structure View sketches", 42_701, 2_864, 2_159, 47.7),
     ("Fresh IDE, regex sketches (shipped)", 1_388, 4_224, 1_015, 6.6),
     ("Warm, sketches cached", 70, 3_378, 864, 4.4),
+    ("After warm-up on project open", 44, 3_141, 836, 4.1),
 ]
 GATEWAY = [  # probes against ai-gateway.vercel.sh, 2026-09-22
     ("1 call, 60 sketches", "0 of 1 ok (503)"),
@@ -41,7 +42,9 @@ SPEND = [
     ("Spike and eval, first TypeSafe account", "126M", "$5.30", "Ran dry at task 111 of the 136-task run."),
     ("Agent A/B, Jev (ledger)", "5.3M", "$0.22", "Capped at 11M tokens by the ledger."),
     ("In-IDE checks, Jev", "2.6M", "$0.11", "Four packs across three IDE restarts (idea.log)."),
-    ("Agent A/B, GLM on OpenRouter", "-", "$0.29", "Both arms, 10 tasks."),
+    ("Agent A/B rerun, Jev (ledger)", "5.3M", "$0.22", "Vague wording, same cap."),
+    ("Agent A/Bs, GLM on OpenRouter", "-", "$0.53", "Both arms, both runs, 10 tasks each."),
+    ("LLM re-ranker baseline, GLM", "2.3M", "$0.52", "70 tasks, under a $0.80 cap."),
 ]
 
 
@@ -79,20 +82,22 @@ SKIP = {n: {k: st.mean(fusion.recall(skip_pass1(d, n), d["truth"], k) for d in t
 
 ab = json.loads((HERE / "results" / "agent_ab_o40_t10.json").read_text())
 AB = ab["rows"]
+AB_VAGUE = json.loads((HERE / "results" / "agent_ab_o40_t10_vague.json").read_text())["rows"]
+VAGUE_TASKS = json.loads((HERE / "results" / "vague_tasks.json").read_text())
+LLM = json.loads((HERE / "results" / "rerank_llm_pool30.json").read_text())["summary"]
 
 
-def arm(a, k):
-    return [r[a][k] for r in AB]
+def ab_summary(rows):
+    seen = lambda a: [r[a]["first_seen_s"] if r[a]["first_seen_s"] is not None else r[a]["wall_s"] for r in rows]
+    return {a: {
+        "recall": st.mean(r[a]["recall"] for r in rows), "wall": st.median(r[a]["wall_s"] for r in rows),
+        "calls": st.mean(r[a]["llm_calls"] for r in rows),
+        "tokens": st.mean(r[a]["prompt_tokens"] + r[a]["completion_tokens"] for r in rows),
+        "cost": sum(r[a]["cost"] for r in rows), "seen": st.median(seen(a)),
+        "pack_s": st.median(r[a]["pack_s"] for r in rows)} for a in ("explore", "pack")}
 
 
-def first_seen(a):
-    return [r[a]["first_seen_s"] if r[a]["first_seen_s"] is not None else r[a]["wall_s"] for r in AB]
-
-
-AB_SUM = {a: {
-    "recall": st.mean(arm(a, "recall")), "wall": st.median(arm(a, "wall_s")), "calls": st.mean(arm(a, "llm_calls")),
-    "tokens": st.mean(r[a]["prompt_tokens"] + r[a]["completion_tokens"] for r in AB), "cost": sum(arm(a, "cost")),
-    "seen": st.median(first_seen(a))} for a in ("explore", "pack")}
+AB_SUM, AB_VSUM = ab_summary(AB), ab_summary(AB_VAGUE)
 
 # ---------------------------------------------------------------- rendering helpers
 
@@ -247,7 +252,7 @@ better than keyword search, and does handing those files to an agent help it? Me
   <div class="tile"><div class="n">{pct(T[chosen][10])}</div><div class="l">recall@10, Context Packer<br>70 held-out tasks</div></div>
   <div class="tile"><div class="n">{pct(T["bm25"][10])}</div><div class="l">recall@10, BM25 keyword search<br>same tasks</div></div>
   <div class="tile"><div class="n">{CI[10][0]:+.2f}</div><div class="l">difference, 95% CI<br>[{CI[10][1]:+.2f}, {CI[10][2]:+.2f}]</div></div>
-  <div class="tile"><div class="n">4.4 s</div><div class="l">one pack in the IDE<br>2,206 files, about $0.03</div></div>
+  <div class="tile"><div class="n">4.1 s</div><div class="l">one pack in the IDE<br>2,206 files, about $0.03</div></div>
 </div>
 
 <h2>The headline</h2>
@@ -300,13 +305,30 @@ was chosen on {len(dev)} dev tasks, then measured once on {len(test)} test tasks
     ["BM25 alone", pct(T["bm25"][5]), pct(T["bm25"][10]), "0"],
 ])}
 
+<h2>Against an LLM re-ranker</h2>
+<p>The obvious question: why not have an LLM re-rank BM25's shortlist? Same 70 test tasks, same pool (BM25's top
+30), same full source per file. {e(LLM["model"])} read all 30 files in one call and listed the ones the task needs;
+Jev's scores for the same 30 files were already saved.</p>
+{table(["BM25 top 30, re-ranked by", "recall@5", "recall@10", "time per task", "cost per task"], [
+    ["nothing (BM25 order)", pct(LLM["bm25@5"]), pct(LLM["bm25@10"]), "0", "0"],
+    ["Jev + BM25", pct(LLM["jev_fused@5"]), pct(LLM["jev_fused@10"]), b("~1 s"), b("~$0.002")],
+    [f"LLM ({e(LLM['model'])})", b(pct(LLM["llm@5"])), b(pct(LLM["llm@10"])), f'{LLM["llm_latency_s_median"]:.0f} s median',
+     f'${LLM["llm_cost_total"] / LLM["tasks"]:.4f}'],
+])}
+<p><strong>The LLM picks the top five better; at ten they tie.</strong> Jev + BM25 minus LLM, paired bootstrap:
+recall@5 {LLM["jev_fused-llm@5"][0]:+.2f} [{LLM["jev_fused-llm@5"][1]:+.2f}, {LLM["jev_fused-llm@5"][2]:+.2f}],
+recall@10 {LLM["jev_fused-llm@10"][0]:+.2f} [{LLM["jev_fused-llm@10"][1]:+.2f}, {LLM["jev_fused-llm@10"][2]:+.2f}].
+Jev's advantage is not judgement but economics: about 30× faster and 3.5× cheaper, which is what lets an agent call it
+before every task. The shipped pipeline also pools Jev's own picks with BM25's, which this 30-file comparison leaves out.</p>
+
 <h2>In the IDE</h2>
 <p>Timings from the plugin's own log on Koog, 2,206 candidate files. The first version built sketches from the IDE's
 Structure View, which runs Kotlin analysis at about 19 ms a file. The shipped version uses the regex sketcher the eval
 measured (a parity test checks the Kotlin port against it).</p>
 {table(["", "sketch", "pass 1 + BM25", "pass 2", "total"],
        [[e(n), f"{s / 1000:.1f} s", f"{p1 / 1000:.1f} s", f"{p2 / 1000:.1f} s", b(f"{t} s")] for n, s, p1, p2, t in IDE_TIMINGS])}
-<p class="note">Every pack: 53-56 Jev calls, 0 failed, about 0.65M input tokens ($0.03).</p>
+<p class="note">Every pack: 53-56 Jev calls, 0 failed, about 0.65M input tokens ($0.03). Since the warm-up pass, the
+plugin sketches every file in the background when a project opens (11 s alongside indexing, no Jev calls).</p>
 
 <h3>Why TypeSafe's API and not the free gateway</h3>
 <p>Vercel's AI Gateway serves the same Jev model for free, but under load it mostly refused:</p>
@@ -331,6 +353,22 @@ is whether a <code>pack_context</code> tool exists. Every run ends when the agen
 <code>grep</code> often hits at once, while the harness's Python <code>pack_context</code> took a median of 9.2 s (the plugin
 takes 4.4 s). The agent also kept exploring after it had the pack. Ten tasks is too few to call any of these differences
 significant.</p>
+<h3>Rerun with vaguer wording</h3>
+<p>Commit subjects often name the exact class or field, which hands <code>grep</code> the answer. So GLM rewrote the
+same 10 tasks without any code identifiers, keeping product names a person would say (Ollama, Langfuse). For example,
+<em>"{e(VAGUE_TASKS[2]["original"])}"</em> became <em>"{e(VAGUE_TASKS[2]["vague"])}"</em>.</p>
+{table(["10 tasks, vague wording", "without pack_context", "with pack_context"], [
+    ["Final recall", pct(AB_VSUM["explore"]["recall"]), pct(AB_VSUM["pack"]["recall"])],
+    ["Wall time, median", b(f'{AB_VSUM["explore"]["wall"]:.0f} s'), f'{AB_VSUM["pack"]["wall"]:.0f} s'],
+    ["LLM calls, mean", f'{AB_VSUM["explore"]["calls"]:.1f}', b(f'{AB_VSUM["pack"]["calls"]:.1f}')],
+    ["Tokens, mean", f'{AB_VSUM["explore"]["tokens"] / 1000:.0f}k', b(f'{AB_VSUM["pack"]["tokens"] / 1000:.0f}k')],
+    ["Time to first right file, median", b(f'{AB_VSUM["explore"]["seen"]:.1f} s'), f'{AB_VSUM["pack"]["seen"]:.1f} s'],
+])}
+<p>Vaguer wording cost <em>both</em> agents recall equally (0.97 to {pct(AB_VSUM["explore"]["recall"])}) and did not
+favour the packer: product names still give <code>grep</code> a way in. Running BM25 alongside pass 1 cut the harness's
+<code>pack_context</code> from {AB_SUM["pack"]["pack_s"]:.1f} s to {AB_VSUM["pack"]["pack_s"]:.1f} s, yet a grep-first
+agent still reaches a right file sooner. <strong>Across both runs: the packer does not make this agent faster.</strong>
+It saves some calls and tokens, and ten tasks can't separate that from noise.</p>
 <details><summary>Per task</summary>
 {table(["task", "wall, explore", "wall, pack", "calls, explore", "calls, pack", "first right file, explore", "first right file, pack", "recall, explore", "recall, pack"], ab_rows)}
 </details>
@@ -345,7 +383,9 @@ checks a persistent ledger and stops at a token cap, and the plugin caps each ID
   <li>One repository (Koog), one language (Kotlin). The sketcher handles other languages, but they aren't evaluated.</li>
   <li>Commit subjects stand in for tasks. Real requests are often vaguer, which should favour Jev over keywords, but that isn't measured.</li>
   <li>Recall counts only files the commit modified. A pick that's useful to read but wasn't edited counts as a miss.</li>
-  <li>The agent A/B is 10 tasks, with one model.</li>
+  <li>The agent A/B is 10 tasks, with one model, and that model keeps exploring after it has the pack.</li>
+  <li>The LLM baseline is one model (GLM-5.3 Flash) on a 30-file pool. A stronger model would likely widen its lead
+  at the top and its latency gap.</li>
 </ul>
 <p class="meta">Generated by <code>plugins/context-packer/eval/make_report.py</code> from the run files. Code and raw notes:
 <code>plugins/context-packer/</code>, <code>spike/RESULTS.md</code>.</p>
