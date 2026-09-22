@@ -64,6 +64,10 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
 
     private val listeners = java.util.concurrent.CopyOnWriteArrayList<(PackReport) -> Unit>()
 
+    /** The latest pack, so a tool window opened afterwards can still show what an agent was given. */
+    @Volatile var lastReport: PackReport? = null
+        private set
+
     /** Called after every pack, whoever asked, so the tool window can show what an agent was given. */
     fun onPack(listener: (PackReport) -> Unit) {
         listeners += listener
@@ -93,7 +97,10 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
             inputTokens = calls.sumOf { it.inputTokens.toLong() },
             failedCalls = calls.count { it.error != null },
             jevModel = "${client.model} via ${client.backend.name.lowercase()}",
-        ).also { report -> listeners.forEach { it(report) } }
+        ).also { report ->
+            lastReport = report
+            listeners.forEach { it(report) }
+        }
     }
 
     /** Full text of each path, for building a prompt out of the picks. */

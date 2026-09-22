@@ -115,7 +115,12 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
         add(top, BorderLayout.NORTH)
         add(split, BorderLayout.CENTER)
 
-        // An agent's pack shows up here too, so the human can see exactly what context it was handed.
+        // An agent's pack shows up here too, so the human can see exactly what context it was handed,
+        // including one made before this window was first opened.
+        service.lastReport?.takeIf { it.source != "tool window" }?.let { report ->
+            task.text = report.result.task
+            show(report)
+        }
         service.onPack { report ->
             if (report.source != "tool window") service.scope.launch(Dispatchers.EDT) {
                 task.text = report.result.task

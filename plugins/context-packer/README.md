@@ -67,6 +67,10 @@ to drop one, and use **Add open file** to pin one it missed. Then **Copy prompt*
 plus every picked file on the clipboard, or **Ask LLM** sends it to `z-ai/glm-5.3-flash` through
 OpenRouter. Set `CONTEXT_PACKER_LLM_MODEL` to use a different model.
 
+![An agent's pack shown in the tool window](docs/tool-window-agent-pack.png)
+
+*An agent called `pack_context` over MCP; the tool window shows what it was handed, 4.4 s later.*
+
 **From an agent.** The plugin adds a `pack_context` tool to the IDE's built-in MCP server. Turn the
 server on in **Settings | Tools | MCP Server**, then point your agent at it. For Claude Code:
 
@@ -74,7 +78,8 @@ server on in **Settings | Tools | MCP Server**, then point your agent at it. For
 claude mcp add --transport sse jetbrains http://127.0.0.1:64342/sse
 ```
 
-The tool's description tells the agent to call it before searching. If the IDE runs on Windows and
+The tool's description tells the agent to call it before searching. Whatever an agent asks for also
+appears in the tool window, marked as asked by an agent, so you can see the context it was given. If the IDE runs on Windows and
 the agent in WSL, localhost only reaches the IDE with WSL's mirrored networking turned on.
 
 ## Demo script
