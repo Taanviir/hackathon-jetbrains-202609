@@ -171,8 +171,14 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
             paths.map(byPath::getValue)
         } else docs
         val prefilterMs = (System.nanoTime() - prefilterStarted) / 1_000_000
-        val packer = if (client != null) Packer(JevRelevance(client)) else Packer(
-            laya, PackConfig(batch = 1, pool = 20, perCall = 1, fullChars = LayaRelevance.MAX_EXCERPT_CHARS),
+        val packer = if (client != null) {
+            val jevScorer = JevRelevance(client)
+            Packer(jevScorer, chooser = jevScorer)
+        } else Packer(
+            laya, PackConfig(
+                batch = 1, pool = 20, perCall = 1, fullChars = LayaRelevance.MAX_EXCERPT_CHARS,
+                overlapPasses = false,
+            ),
         )
         val scored = packer.pack(task, scoringDocs, onProgress)
         val result = scored.copy(
@@ -182,7 +188,8 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         val slowest = calls.maxOfOrNull { it.ms } ?: 0
         thisLogger().info(
             "pack: ${docs.size} files · sketch ${sketchMs} ms · pass1+bm25 ${result.pass1Ms} ms · pass2 ${result.pass2Ms} ms · " +
-                "${calls.size} ${selectedProvider.name} calls, slowest ${slowest} ms, ${calls.count { it.error != null }} failed · " +
+                "stage3 ${result.stage3Ms} ms · ${calls.size} ${selectedProvider.name} HTTP attempts, slowest ${slowest} ms, " +
+                "${calls.count { it.error != null }} request errors, ${result.failedBatches} incomplete scoring batches · " +
                 "${calls.sumOf { it.inputTokens }} tokens, session ${sessionTokens} · cache ${cache.size}",
         )
         PackReport(

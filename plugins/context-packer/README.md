@@ -17,11 +17,11 @@ Settings were chosen on 40 dev tasks, then measured once on 70 test tasks nobody
 | 70 held-out tasks | recall@5 | recall@10 | recall@20 |
 | --- | --- | --- | --- |
 | BM25 keyword search | 0.42 | 0.53 | 0.63 |
-| **Context Packer** | **0.54** | **0.69** | **0.80** |
+| **Context Packer** | **0.57** | **0.69** | **0.80** |
 
 That's +16 points of recall@10, with a 95% bootstrap interval of +10 to +23. In the IDE on Koog
-(2,206 files) a pack takes about 4.5 s warm and 6.6 s in a freshly started IDE, for 53-56 Jev calls
-and about $0.03. Details, including the version that *didn't* beat BM25 and why, are in
+(2,206 files) a pack takes about 4.4 s, for 54-56 Jev calls and about $0.03. Files are sketched in the
+background when the project opens; packs requested before warm-up finishes can still include setup time. Details, including the version that *didn't* beat BM25 and why, are in
 [spike/RESULTS.md](spike/RESULTS.md).
 
 ## How it works
@@ -45,6 +45,13 @@ plugin does the looking.
 5. **Pass 2.** Jev asks the same question again over the *full source* of just the pool, 6 files
    per call. Sketches hide what many tasks are about, and a small pool makes full source affordable.
 6. **Fuse.** Jev's score and BM25 rank count equally. That weighting was chosen on dev tasks.
+7. **Stage 3.** One more Jev call, a `choice` over the top 10: "which file must be edited?". Passes 1
+   and 2 judge each file alone; this compares them, and lifts recall@5 on held-out tasks from 0.54 to
+   0.57 (+0.03, interval +0.006 to +0.07) for about 0.4 s.
+
+The overlap and comparative stage apply to Jev. Laya keeps its sequential, one-file-per-request
+two-pass protocol; Fast keywords makes no model requests. Reported phase times measure elapsed
+wall time, so Jev's pass-2 time is the work remaining after pass 1 finishes.
 
 Jev alone on sketches loses to plain keyword search (0.39 against 0.46 recall@10 in the spike).
 It's the re-rank on full source, fused with BM25, that wins.
@@ -129,7 +136,7 @@ Full numbers are in the [eval report](https://taanviir.github.io/hackathon-jetbr
 **Against an LLM re-ranker.** GLM-5.3 Flash re-ranked BM25's top 30 on full source, on the same 70 tasks. It picks
 the top five better (recall@5 0.61 against 0.52 for Jev + BM25, a significant gap), and at ten they tie (0.67 against
 0.65). Jev does it in about 1 s for about $0.002, where the LLM takes 29 s and $0.007. Jev's edge is speed and cost,
-not judgement.
+not judgement. Stage 3 narrows the top-five gap but doesn't close it.
 
 **Inside an agent.** The same GLM agent ran 10 held-out tasks with and without `pack_context`, twice: once with commit
 subjects, once with identifier-free rewrites. Final recall was identical in both. With the packer the agent used 7-22%
@@ -151,6 +158,7 @@ uv run python jev_spike.py hybrid --tasks 136 --top 60      # saves every score 
 uv run python fusion.py ../.cache/spike_runs/<that file>.json --dev 40
 cd ../eval && uv run python agent_ab.py --tasks 10 --offset 40 [--vague]
 uv run python rerank_llm.py --pool 30          # LLM baseline, stops at RERANK_MAX_COST_USD
+uv run python stage3.py --split dev --k 10     # choose stage 3 on dev, then --split test once
 uv run python make_report.py                   # rebuilds reports/context-packer-eval/
 ```
 

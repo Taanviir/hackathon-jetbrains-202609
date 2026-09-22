@@ -85,12 +85,15 @@ class ContextPackerToolset : McpToolset {
         append(when (report.provider) {
             DecisionProvider.KEYWORDS -> "Full-corpus lexical rank only; no model relevance or confidence. No model requests, 0 API tokens, API fee $0; local compute cost is excluded. "
             DecisionProvider.LAYA -> "Laya reads short excerpts after a keyword prefilter. API fee is $0; local compute cost is excluded. "
-            DecisionProvider.JEV -> "Jev reads bounded source excerpts; " + (report.costUsd?.let { "the API fee estimate is $%.4f. ".format(it) }
+            DecisionProvider.JEV -> "Jev reads bounded source excerpts and compares its top candidates when available; " + (report.costUsd?.let { "the API fee estimate is $%.4f. ".format(it) }
                 ?: "token usage and API fee are unavailable. ")
         })
         if (r.failedBatches > 0) append("WARNING: ${r.failedBatches} scoring batches failed; ranking is incomplete. ")
-        append(if (report.provider == DecisionProvider.KEYWORDS) "Ranks come from BM25 over paths and full source. "
-            else "Scores combine model relevance and keyword rank. ")
+        append(when (report.provider) {
+            DecisionProvider.KEYWORDS -> "Ranks come from BM25 over paths and full source. "
+            DecisionProvider.LAYA -> "Scores combine model relevance and keyword rank. "
+            DecisionProvider.JEV -> "Scores combine model relevance, keyword rank, and comparative choice when available. "
+        })
         append("Read the top files before changing code; request more context if needed.")
     }
 }
