@@ -6,6 +6,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.vfs.ReadonlyStatusHandler
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
@@ -15,6 +16,8 @@ import dev.intellijev.core.*
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import javax.swing.*
+import javax.swing.event.DocumentEvent
+import javax.swing.event.DocumentListener
 
 class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val service = project.getService(IntelliJevProjectService::class.java)
@@ -23,12 +26,24 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val runsModel = DefaultListModel<String>()
     private val proposalModel = DefaultListModel<ProposedChange>()
     private val task = JBTextField("Fix coupon expiry boundary and update checkout validation")
+    private val tabs = JTabbedPane()
+    private var contextGeneration = 0L
+    private var bugsGeneration = 0L
+    private var proposalGeneration = 0L
+    private var lastContextTask: String? = null
+    private var selectedFix: String? = null
+    private var selectedFixFile: VirtualFile? = null
+    private var selectedFixLines: IntRange? = null
     private val contextAnalysis = JBTextArea("Add your TypeSafe key in Settings to rank context with Jev. A coding-model key enables prose explanations.").apply { isEditable = false; lineWrap = true; wrapStyleWord = true }
     private val bugAnalysis = JBTextArea("Bug Twins is an experimental keyword scan. A coding-model key enables a review plan.").apply { isEditable = false; lineWrap = true; wrapStyleWord = true }
 
     init {
         border = BorderFactory.createEmptyBorder(8, 8, 8, 8)
-        val tabs = JTabbedPane()
+        task.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: DocumentEvent) = invalidateTaskResults()
+            override fun removeUpdate(e: DocumentEvent) = invalidateTaskResults()
+            override fun changedUpdate(e: DocumentEvent) = invalidateTaskResults()
+        })
         tabs.addTab("Context", contextTab())
         tabs.addTab("Related Bugs", bugsTab())
         tabs.addTab("Coding Agent", agentTab())
@@ -47,7 +62,7 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()) {
         list.addListSelectionListener { if (!it.valueIsAdjusting) list.selectedValue?.let { candidate -> open(candidate.file) } }
         add(header, BorderLayout.NORTH)
         add(JSplitPane(JSplitPane.VERTICAL_SPLIT, JBScrollPane(list), JBScrollPane(contextAnalysis)).apply { resizeWeight = 0.7 }, BorderLayout.CENTER)
-        add(JLabel("Scans common source/configuration formats locally. It does not submit code until you run the Coding Agent."), BorderLayout.SOUTH)
+        add(JLabel("Scan may send short source previews to Jev and task/path metadata to the coding model when keys are set."), BorderLayout.SOUTH)
     }
 
     private fun bugsTab(): JComponent = JPanel(BorderLayout(0, 8)).apply {
@@ -67,9 +82,38 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun sideQuestionTab(): JComponent = JPanel(BorderLayout(0, 8)).apply {
-        val question = JBTextArea("Ask a tangential question here. This text stays separate from the task context.", 5, 20)
+        val notes = project.getService(SideQuestionState::class.java)
+        val question = JBTextArea().apply {
+            rows = 5
+            columns = 20
+            text = notes.note()
+            emptyText.text = "Write a side question here. It stays separate from task context."
+            lineWrap = true
+            wrapStyleWord = true
+        }
+        val saved = JLabel("Stored in this project's local workspace settings.")
+        question.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: DocumentEvent) { saved.text = "Unsaved changes." }
+            override fun removeUpdate(e: DocumentEvent) { saved.text = "Unsaved changes." }
+            override fun changedUpdate(e: DocumentEvent) { saved.text = "Unsaved changes." }
+        })
         add(JBScrollPane(question), BorderLayout.CENTER)
-        add(JButton("Save isolated note").apply { addActionListener { service.log("Saved isolated side question"); refreshRuns() } }, BorderLayout.SOUTH)
+        add(JPanel(BorderLayout(8, 0)).apply {
+            add(saved, BorderLayout.CENTER)
+            add(JButton("Save isolated note").apply {
+                addActionListener {
+                    try {
+                        notes.save(question.text)
+                        saved.text = "Saved locally for this project."
+                        service.log("Saved isolated side question")
+                        refreshRuns()
+                    } catch (e: IllegalArgumentException) {
+                        saved.text = e.message ?: "Side question is too long."
+                        JOptionPane.showMessageDialog(this@IntelliJevPanel, saved.text, "IntelliJev", JOptionPane.WARNING_MESSAGE)
+                    }
+                }
+            }, BorderLayout.EAST)
+        }, BorderLayout.SOUTH)
     }
 
     private fun agentTab(): JComponent = JPanel(BorderLayout(0, 8)).apply {
@@ -78,7 +122,7 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()) {
         val after = JBTextArea().apply { isEditable = false; font = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12) }
         val list = JBList(proposalModel).apply { cellRenderer = ProposalRenderer() }
         list.addListSelectionListener { if (!it.valueIsAdjusting) list.selectedValue?.let { change -> before.text = change.before; after.text = change.after } }
-        val apply = JButton("Apply selected change").apply { addActionListener { list.selectedValue?.let { applyChange(it); proposalText.text = "Applied ${it.file.name}. Use Undo to revert." } } }
+        val apply = JButton("Apply selected change").apply { addActionListener { list.selectedValue?.let { if (applyChange(it)) proposalText.text = "Applied ${it.file.name}. Use Undo to revert." } } }
         val controls = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
             add(JButton("Propose reviewed changes").apply { addActionListener { runAgent(proposalText) } }); add(Box.createHorizontalStrut(8)); add(apply)
         }
@@ -108,46 +152,114 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()) {
         add(Box.createVerticalStrut(10)); add(JLabel("Jev ranks context and estimates review risk. The coding model proposes edits for your approval."))
     }
 
-    fun scanContext() = background("Finding context") {
-        val results = service.findContext(task.text)
-        val analysis = service.explainContext(task.text, results)
-        SwingUtilities.invokeLater { contextModel.clear(); results.forEach(contextModel::addElement); contextAnalysis.text = analysis; refreshRuns() }
+    private fun invalidateTaskResults() {
+        contextGeneration++
+        proposalGeneration++
+        lastContextTask = null
+        proposalModel.clear()
     }
-    fun scanBugs() = background("Finding related-bug candidates") {
-        val results = service.findBugTwins()
+
+    fun findContextFromSelection(selection: String?) {
+        tabs.selectedIndex = 0
+        if (!selection.isNullOrBlank()) task.text = selection.trim().replace(Regex("\\s+"), " ").take(500)
+        scanContext()
+    }
+
+    fun findRelatedCodeFromSelection(selection: String, file: VirtualFile?, lines: IntRange) {
+        selectedFix = selection
+        selectedFixFile = file
+        selectedFixLines = lines
+        tabs.selectedIndex = 1
+        scanBugs(useCurrentEditor = false)
+    }
+
+    fun scanContext() {
+        val currentTask = task.text
+        val generation = ++contextGeneration
+        proposalGeneration++
+        lastContextTask = null
+        proposalModel.clear()
+        background("Finding context") {
+            val results = service.findContext(currentTask)
+            val analysis = service.explainContext(currentTask, results)
+            SwingUtilities.invokeLater {
+                if (project.isDisposed || generation != contextGeneration || task.text != currentTask) return@invokeLater
+                contextModel.clear(); results.forEach(contextModel::addElement)
+                contextAnalysis.text = analysis; lastContextTask = currentTask; refreshRuns()
+            }
+        }
+    }
+
+    fun scanBugs(useCurrentEditor: Boolean = true) {
+        val editor = if (useCurrentEditor) FileEditorManager.getInstance(project).selectedTextEditor else null
+        val liveSelection = editor?.selectionModel?.selectedText?.takeIf { it.isNotBlank() }
+        if (liveSelection != null && editor != null) {
+            selectedFix = liveSelection
+            selectedFixFile = FileDocumentManager.getInstance().getFile(editor.document)
+            val start = editor.selectionModel.selectionStart
+            val end = (editor.selectionModel.selectionEnd - 1).coerceAtLeast(start)
+            selectedFixLines = editor.document.getLineNumber(start)..editor.document.getLineNumber(end)
+        }
+        val fix = selectedFix?.takeIf { it.isNotBlank() }
+        val generation = ++bugsGeneration
+        if (fix == null) {
+            bugsModel.clear()
+            bugAnalysis.text = "Select a fix in the editor before finding possible related code."
+            return
+        }
+        val sourceFile = selectedFixFile
+        val sourceLines = selectedFixLines
+        background("Finding possible related code") {
+        val results = service.findBugTwins(fix, sourceFile, sourceLines)
         val analysis = service.explainBugs(results)
-        SwingUtilities.invokeLater { bugsModel.clear(); results.forEach(bugsModel::addElement); bugAnalysis.text = analysis; refreshRuns() }
+        SwingUtilities.invokeLater {
+            if (project.isDisposed || generation != bugsGeneration) return@invokeLater
+            bugsModel.clear(); results.forEach(bugsModel::addElement)
+            bugAnalysis.text = analysis; refreshRuns()
+        }
+        }
     }
     private fun runAgent(output: JBTextArea) {
         val currentTask = task.text
-        val selectedContext = (0 until contextModel.size()).map { contextModel.getElementAt(it) }
+        val selectedContext = if (lastContextTask == currentTask) (0 until contextModel.size()).map { contextModel.getElementAt(it) } else emptyList()
+        val generation = ++proposalGeneration
+        val contextAtStart = contextGeneration
         background("Running coding agent") {
         val proposal = service.proposeChanges(currentTask, selectedContext)
-        SwingUtilities.invokeLater { proposalModel.clear(); proposal.changes.forEach(proposalModel::addElement); output.text = proposal.summary; refreshRuns() }
+        SwingUtilities.invokeLater {
+            if (project.isDisposed || generation != proposalGeneration || contextAtStart != contextGeneration || task.text != currentTask) return@invokeLater
+            proposalModel.clear(); proposal.changes.forEach(proposalModel::addElement)
+            output.text = proposal.summary; refreshRuns()
+        }
         }
     }
-    private fun applyChange(change: ProposedChange) {
-        val document = FileDocumentManager.getInstance().getDocument(change.file) ?: return
-        if (document.text != change.before) {
-            JOptionPane.showMessageDialog(this, "This file changed after the proposal was generated. Request a fresh proposal before applying it.", "IntelliJev", JOptionPane.WARNING_MESSAGE)
-            return
-        }
+    private fun applyChange(change: ProposedChange): Boolean {
+        val document = FileDocumentManager.getInstance().getDocument(change.file) ?: return false
         if (ReadonlyStatusHandler.getInstance(project).ensureFilesWritable(change.file).hasReadonlyFiles()) {
             JOptionPane.showMessageDialog(this, "The selected file is read-only.", "IntelliJev", JOptionPane.WARNING_MESSAGE)
-            return
+            return false
         }
+        var applied = false
         WriteCommandAction.runWriteCommandAction(project, "Apply IntelliJev proposal", null, Runnable {
-            document.setText(change.after)
-            FileDocumentManager.getInstance().saveDocument(document)
+            if (change.file.isValid && document.text == change.before) {
+                document.setText(change.after)
+                applied = true
+            }
         })
+        if (!applied) {
+            JOptionPane.showMessageDialog(this, "This file changed after the proposal was generated. Request a fresh proposal before applying it.", "IntelliJev", JOptionPane.WARNING_MESSAGE)
+            return false
+        }
+        FileDocumentManager.getInstance().saveDocument(document)
         proposalModel.removeElement(change)
         service.log("Applied reviewed change to ${change.file.name}"); refreshRuns(); open(change.file)
+        return true
     }
     private fun background(label: String, work: () -> Unit) {
         service.log(label); ApplicationManager.getApplication().executeOnPooledThread(work)
     }
     private fun refreshRuns() { runsModel.clear(); service.events().forEach { runsModel.addElement("${it.time}  ${it.message}") } }
-    private fun open(file: VirtualFile, line: Int = 0) { FileEditorManager.getInstance(project).openFile(file, true) }
+    private fun open(file: VirtualFile, line: Int = 0) { OpenFileDescriptor(project, file, line, 0).navigate(true) }
 }
 
 private class ContextRenderer : DefaultListCellRenderer() {

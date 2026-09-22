@@ -11,17 +11,17 @@ actually needed.
 
 ## Build status
 
-Verified on 22 September 2026:
+Verified on 23 September 2026:
 
-- `gradlew test` succeeds — `compileKotlin`, `instrumentCode`, `jar` and both unit
-  tests in `JevClientTest` pass.
+- `gradlew test` succeeds — nine tests cover Jev answer parsing, selected-fix
+  matching, and strict edit-proposal parsing, with no failures or skipped tests.
 - `gradlew buildPlugin` produces `build/distributions/intellijev-0.1.0.zip`.
-- The plugin loads in the sandbox IDE (`Loaded custom plugins: IntelliJev (0.1.0)`).
+- The earlier build loaded in the sandbox IDE (`Loaded custom plugins: IntelliJev (0.1.0)`).
+  The current build also completes the IDE's headless searchable-options pass.
 
 **Not yet verified:** no Jev or chat-completions request from this build has been run
-against a live API, and the fixed plugin has not been launched interactively since the
-last action-registration error described under *Known issues*. Treat every feature below
-as implemented-but-unproven until that run happens.
+against a live API, and the action, navigation, and apply changes below still need an
+interactive sandbox run. Treat those changes as implemented-but-unproven until that run.
 
 ## Run it in IntelliJ IDEA
 
@@ -63,7 +63,7 @@ changes are ordinary IDE document edits and can be undone with the standard Undo
 The model is not autonomous: it cannot run shell commands, install dependencies, create
 arbitrary files, or apply an edit without your click. Proposed replacements are restricted
 to existing files already in the scanned context, capped at 12 KB each, and validated
-against the file content at proposal time — if the file changed underneath you, the apply
+against the source snapshot captured before the model request — if the file changed underneath you, the apply
 is refused.
 
 ## What is implemented
@@ -79,35 +79,32 @@ The tool window has six tabs: **Context**, **Related Bugs**, **Coding Agent**, *
 - A review-first coding agent that sends curated source context to the configured model,
   accepts strict JSON whole-file replacements for existing files only, previews
   before/after, and applies only a selected approval.
-- Candidate navigation, a local in-memory run-event log, and an editable isolated side
-  question.
-- Two unit tests covering `JevClient.score` parsing and answer-type rejection.
+- Candidate navigation, a thread-safe local in-memory run-event log, and an isolated
+  side question saved only when you click **Save isolated note**. The note is kept in
+  this project's local `.idea/workspace.xml` settings, separate from model prompts;
+  saving rejects text over 20,000 characters with an error.
+- Unit tests covering `JevClient.score` parsing and answer-type rejection,
+  selected-fix related-code matching, and edit-proposal validation.
 
 ## Known issues
 
-Recorded so the next session does not have to rediscover them. None are fixed.
+The following source fixes still need an interactive sandbox check: **Open IntelliJev**
+is registered under **Tools**; the editor-popup actions start a scan using the current
+selection; related-code candidates derive from the selected fix and navigate to their
+line; stale asynchronous results no longer replace newer ones; and Apply rechecks the
+file inside the write command. Related-code matches are search leads, not verified bugs.
 
-1. **The `Open IntelliJev` action is not placed in any menu or toolbar.** It has no
-   `<add-to-group>` in `plugin.xml`. The earlier version targeted `ViewToolBar` and failed
-   at startup with `SEVERE … group with id "ViewToolBar" should be instance of
-   DefaultActionGroup but was class ActionStub`; that group was removed rather than
-   retargeted, so the action is now only reachable through Find Action or
-   **View → Tool Windows → IntelliJev**. The current build has not been launched
-   interactively to confirm the error is gone.
-2. **The editor-popup actions do not do what they say.** `Find task context` and
-   `Find related bugs from selected fix` are wired to subclasses of `OpenPanelAction` that
-   just open the tool window — they do not start a scan or consume the selection.
-3. **Bug Twins does not navigate to the line.** `IntelliJevPanel.open(file, line)` ignores
-   its `line` argument, so selecting a candidate opens the file at the top.
-4. **`plugin.xml` declares `<depends>com.intellij.java</depends>` and the build pulls in
+Still pending:
+
+1. **`plugin.xml` declares `<depends>com.intellij.java</depends>` and the build pulls in
    `bundledPlugin("com.intellij.java")`, but no code uses Java PSI.** Source discovery is a
    plain VFS walk with filename-token scoring. The unused dependency restricts which IDEs
    the plugin will load in and can be dropped.
-5. **The build specification is out of step with the code** on two points: it proposes
+2. **The build specification is out of step with the code** on two points: it proposes
    "Java first" and PSI-based extraction (the implementation is Kotlin over VFS), and it
    proposes routing Jev through OpenRouter (the implementation calls TypeSafe directly
    with its own key). §2 of the spec now records both divergences.
-6. **No end-to-end API run has been performed**, so Jev latency, answer shape, and model
+3. **No end-to-end API run has been performed**, so Jev latency, answer shape, and model
    output quality are all still open. The spec's Jev transport gate in §7 is the thing to
    run first.
 
