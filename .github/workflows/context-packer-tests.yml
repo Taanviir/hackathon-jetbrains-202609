@@ -4,11 +4,23 @@ on:
   pull_request:
     paths:
       - "plugins/context-packer/**"
+      - "tools/laya_server.py"
+      - "tools/test_laya_server.py"
       - ".github/workflows/context-packer-tests.yml"
   push:
     branches: [main]
     paths:
       - "plugins/context-packer/**"
+      - "tools/laya_server.py"
+      - "tools/test_laya_server.py"
+      - ".github/workflows/context-packer-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: context-packer-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -32,3 +44,15 @@ jobs:
           path: |
             plugins/context-packer/build/distributions/*.zip
             plugins/context-packer/build/reports/tests/
+
+  local-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+      - name: Test the local HTTP contract without model weights
+        run: python -m unittest discover -s tools -p test_laya_server.py -v
+      - name: Test the frozen retrieval protocol offline
+        run: python -m unittest discover -s plugins/context-packer/eval -p test_laya_benchmark.py -v
