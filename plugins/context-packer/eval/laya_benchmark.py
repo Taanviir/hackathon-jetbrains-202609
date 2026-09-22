@@ -861,6 +861,7 @@ def main() -> None:
             "koog_remote": git(repo, "remote", "get-url", "origin").decode().strip(),
             "protocol": protocol,
             "health": health,
+            "expected_checkpoint": args.expected_checkpoint,
             "host": {"platform": platform.platform(), "cpu_count": os.cpu_count(),
                      "python": platform.python_version(),
                      "processor": platform.processor() or os.environ.get("PROCESSOR_IDENTIFIER", "unknown")},

@@ -2,6 +2,8 @@
 
 import json
 from pathlib import Path
+import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -122,6 +124,45 @@ class LayaBenchmarkTest(unittest.TestCase):
             bench.require_checkpoint({}, expected)
         with self.assertRaisesRegex(RuntimeError, "server reports"):
             bench.require_checkpoint({"checkpoint": "0" * 40}, expected)
+
+    def test_fresh_then_resume_retains_checkpoint_requirement(self):
+        expected = "1c5edc17a7acd8701df6fc341c0d179f1c62c982"
+        tasks = [bench.Task("a", "pa", "First task", ["A.kt"]),
+                 bench.Task("b", "pb", "Second task", ["A.kt"])]
+        health = {"models": {"english": "ready"}, "checkpoint": expected}
+
+        def fake_git(_repo, *args):
+            return b"head\n" if args[0] == "rev-parse" else b"local\n"
+
+        def fake_row(task, *_args):
+            return {"sha": task.sha, "protocol_revision": 2,
+                    "recall": {"bm25": {"10": 1.0}, "blend_w1.0": {"10": 1.0}},
+                    "request_count": 1, "total_ms": 1.0, "error_count": 0}
+
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "result.json"
+            args = ["laya_benchmark.py", "--repo", directory, "--dev", "1",
+                    "--heldout", "1", "--expected-checkpoint", expected,
+                    "--output", str(output), "--markdown", str(Path(directory) / "report.md")]
+            with patch.object(bench, "git", side_effect=fake_git), \
+                    patch.object(bench, "load_tasks", return_value=(tasks, [])), \
+                    patch.object(bench, "call_json", return_value=(health, 1.0)), \
+                    patch.object(bench, "score_one", return_value={"error": None}) as warmup, \
+                    patch.object(bench, "measure_task", side_effect=fake_row) as measure, \
+                    patch.object(bench, "rankings", return_value={"bm25": ["A.kt"]}), \
+                    patch.object(bench, "add_latency_stats"):
+                with patch.object(sys, "argv", args + ["--stop-after", "1"]):
+                    bench.main()
+                self.assertEqual(expected, json.loads(output.read_text())["expected_checkpoint"])
+                with patch.object(sys, "argv", [a for a in args if a not in ("--expected-checkpoint", expected)]
+                                  + ["--stop-after", "2", "--resume"]):
+                    with self.assertRaisesRegex(RuntimeError, "requires its exact"):
+                        bench.main()
+                with patch.object(sys, "argv", args + ["--stop-after", "2", "--resume"]):
+                    bench.main()
+                self.assertEqual(1, warmup.call_count)
+                self.assertEqual(2, measure.call_count)
+                self.assertEqual(expected, json.loads(output.read_text())["expected_checkpoint"])
 
 
 if __name__ == "__main__":
