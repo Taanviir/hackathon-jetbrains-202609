@@ -68,8 +68,10 @@
   .rail { border-left: 3px solid var(--border-strong); padding-left: 15px; }
   .rail.jev { border-color: var(--jev); } .rail.llm { border-color: var(--llm); }
   .rail.warn { border-color: var(--warn); } .rail.steel { border-color: var(--steel); }
-  .ico { display: flex; align-items: center; gap: 10px; }
-  .ico svg { flex: none; width: 26px; height: 26px; }
+  .illus { display: block; width: 100%; height: auto; }
+  .card.mid { justify-content: center; gap: 14px; }
+  .who { display: flex; align-items: center; gap: 10px; }
+  .who b { font-size: 13px; font-weight: 750; letter-spacing: -0.01em; }
 
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
   .stat { display: flex; flex-direction: column; gap: 3px; padding: 12px 15px; border: 1px solid var(--border); border-radius: 6px; }
@@ -159,38 +161,41 @@
   </header>
   <div class="diagram">
     <div class="toolbar">
-      <span>What a routine agent decision costs today</span>
+      <span>What one routine agent decision costs today</span>
       <span class="legend"><span><i class="llm"></i> Generative round trip</span><span><i></i> The decision you needed</span></span>
     </div>
-    <svg class="plot" viewBox="0 0 1360 420" preserveAspectRatio="xMidYMid meet">
-      <rect class="box box-llm" x="60" y="60" width="560" height="290" rx="8"/>
-      <rect class="box box-llm head" x="60" y="60" width="560" height="36" rx="8"/>
-      <text class="key" x="82" y="84" style="fill:var(--llm)">TODAY &middot; ONE LLM CALL</text>
-      <text class="st" x="82" y="132">Load the context. Reason in prose.</text>
-      <text class="st" x="82" y="156">Emit tokens. Parse them back.</text>
-      <text class="sub" x="82" y="190">seconds of latency &middot; thousands of tokens</text>
-      <rect x="82" y="226" width="150" height="86" rx="5" fill="#e4f1e9" stroke="var(--jev)" stroke-width="2"/>
-      <text class="key" x="98" y="250" style="fill:var(--jev)">WHAT YOU</text>
-      <text class="key" x="98" y="266" style="fill:var(--jev)">ACTUALLY NEEDED</text>
-      <text class="st" x="98" y="294" style="fill:var(--jev); font-size:15px">one of three</text>
-      <text class="sub" x="256" y="262">The rest is packaging. You pay for</text>
-      <text class="sub" x="256" y="282">the essay to receive the glance.</text>
+    <svg class="plot" viewBox="0 0 1370 560" preserveAspectRatio="xMidYMid meet">
+      <rect class="box box-llm" x="55" y="45" width="640" height="345" rx="8"/>
+      <rect class="box box-llm head" x="55" y="45" width="640" height="40" rx="8"/>
+      <text class="key" x="80" y="71" style="fill:var(--llm)">TODAY &#183; ONE LLM CALL</text>
+      <text class="st" x="80" y="128" style="font-size:19px">Load the context. Reason in prose.</text>
+      <text class="st" x="80" y="158" style="font-size:19px">Emit tokens. Parse them back.</text>
+      <text class="sub" x="80" y="196" style="font-size:13.5px">seconds of latency &#183; thousands of tokens billed</text>
 
-      <rect x="760" y="196" width="200" height="86" rx="5" fill="#e4f1e9" stroke="var(--jev)" stroke-width="2"/>
-      <text class="key" x="782" y="222" style="fill:var(--jev)">INTELLIJEV &middot; ONE JEV CALL</text>
-      <text class="st" x="782" y="252" style="fill:var(--jev)">one of three</text>
-      <text class="sub" x="782" y="272">70&ndash;500ms, output free</text>
+      <rect x="80" y="228" width="210" height="130" rx="6" fill="#e4f1e9" stroke="var(--jev)" stroke-width="2"/>
+      <text class="key" x="102" y="258" style="fill:var(--jev)">WHAT YOU</text>
+      <text class="key" x="102" y="276" style="fill:var(--jev)">ACTUALLY NEEDED</text>
+      <text class="st" x="102" y="316" style="fill:var(--jev); font-size:19px">one of three</text>
+      <text class="sub" x="318" y="272" style="font-size:13.5px">The rest is packaging.</text>
+      <text class="sub" x="318" y="298" style="font-size:13.5px">You pay for the essay</text>
+      <text class="sub" x="318" y="324" style="font-size:13.5px">to receive the glance.</text>
 
-      <path class="flow" d="M646 205 H 752" marker-end="url(#j)"/>
-      <text class="act" x="699" y="192">same answer</text>
+      <path class="flow" d="M706 218 H 806" marker-end="url(#j)"/>
+      <text class="act" x="756" y="204">same answer</text>
 
-      <text class="st" x="1010" y="150" style="font-size:15px">Why it got worse, not better</text>
-      <text class="sub" x="1010" y="182">Every model generation is smarter,</text>
-      <text class="sub" x="1010" y="202">so we hand agents more to do.</text>
-      <text class="sub" x="1010" y="230">The scope grew faster than the</text>
-      <text class="sub" x="1010" y="250">price per token fell.</text>
-      <text class="sub" x="1010" y="292" style="fill:var(--jev); font-weight:650">The decisions are not the work.</text>
-      <text class="sub" x="1010" y="312" style="fill:var(--jev); font-weight:650">None of them writes a line of code.</text>
+      <rect x="818" y="160" width="300" height="145" rx="8" fill="#e4f1e9" stroke="var(--jev)" stroke-width="2.5"/>
+      <text class="key" x="842" y="192" style="fill:var(--jev)">INTELLIJEV &#183; ONE JEV CALL</text>
+      <text class="st" x="842" y="234" style="fill:var(--jev); font-size:21px">one of three</text>
+      <text class="sub" x="842" y="266" style="font-size:13.5px">70&#8211;500ms</text>
+      <text class="sub" x="842" y="288" style="font-size:13.5px">output free</text>
+      <text class="sub" x="818" y="336" style="font-size:12px; fill:var(--faint)">drawn to scale against the call on the left</text>
+
+      <line x1="55" y1="430" x2="1315" y2="430" stroke="var(--border)" stroke-width="1"/>
+      <text class="st" x="55" y="470" style="font-size:16px">Why it got worse, not better</text>
+      <text class="sub" x="55" y="500" style="font-size:13.5px">Every model generation is smarter, so we hand agents more to do.</text>
+      <text class="sub" x="55" y="524" style="font-size:13.5px">The scope of the work grew faster than the price per token fell.</text>
+      <text class="sub" x="790" y="500" style="font-size:14px; fill:var(--jev); font-weight:650">The decisions are not the work.</text>
+      <text class="sub" x="790" y="524" style="font-size:14px; fill:var(--jev); font-weight:650">Not one of them writes a line of code.</text>
 
       <defs><marker id="j" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
         <path d="M0 0 L9 4.5 L0 9 z" fill="var(--muted)"/></marker></defs>
@@ -211,38 +216,78 @@
   </header>
   <div class="body">
     <div class="cols c3">
-      <div class="card plain rail warn">
-        <div class="ico">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#a85c3a" stroke-width="1.6" stroke-linecap="round">
-            <rect x="2.5" y="3.5" width="14" height="9" rx="1.5"/><path d="M6 16.5h14M6 20h14"/>
-            <path d="M20 7.5v9" stroke-dasharray="2 2"/></svg>
-          <span class="tag t-warn">Tanvir</span>
-        </div>
+
+      <div class="card mid plain rail warn">
+        <svg class="illus" viewBox="0 0 300 168" aria-label="Three agent sessions running at once">
+          <rect x="8" y="30" width="168" height="108" rx="7" fill="#fff" stroke="#b9bbc1" stroke-width="1.5"/>
+          <rect x="8" y="30" width="168" height="21" rx="7" fill="#f7f7f8" stroke="#b9bbc1" stroke-width="1.5"/>
+          <circle cx="22" cy="40" r="3" fill="#c9cbd0"/><circle cx="33" cy="40" r="3" fill="#c9cbd0"/>
+          <rect x="22" y="66" width="120" height="6" rx="3" fill="#e4e5e8"/>
+          <rect x="22" y="82" width="86" height="6" rx="3" fill="#e4e5e8"/>
+          <rect x="22" y="98" width="104" height="6" rx="3" fill="#e4e5e8"/>
+          <rect x="62" y="44" width="168" height="108" rx="7" fill="#fff" stroke="#b9bbc1" stroke-width="1.5"/>
+          <rect x="62" y="44" width="168" height="21" rx="7" fill="#f7f7f8" stroke="#b9bbc1" stroke-width="1.5"/>
+          <circle cx="76" cy="54" r="3" fill="#c9cbd0"/><circle cx="87" cy="54" r="3" fill="#c9cbd0"/>
+          <rect x="76" y="80" width="132" height="6" rx="3" fill="#e4e5e8"/>
+          <rect x="76" y="96" width="94" height="6" rx="3" fill="#e4e5e8"/>
+          <rect x="76" y="112" width="118" height="6" rx="3" fill="#e4e5e8"/>
+          <rect x="116" y="12" width="168" height="108" rx="7" fill="#fff" stroke="#a85c3a" stroke-width="1.8"/>
+          <rect x="116" y="12" width="168" height="21" rx="7" fill="#f6e7e0" stroke="#a85c3a" stroke-width="1.8"/>
+          <circle cx="130" cy="22" r="3" fill="#a85c3a"/><circle cx="141" cy="22" r="3" fill="#a85c3a"/>
+          <rect x="130" y="48" width="126" height="6" rx="3" fill="#e4e5e8"/>
+          <rect x="130" y="64" width="98" height="6" rx="3" fill="#e4e5e8"/>
+          <rect x="130" y="80" width="112" height="6" rx="3" fill="#e4e5e8"/>
+          <circle cx="272" cy="108" r="21" fill="#f6e7e0" stroke="#a85c3a" stroke-width="1.8"/>
+          <text x="272" y="116" text-anchor="middle" font-size="22" font-weight="750" fill="#a85c3a">?</text>
+        </svg>
+        <div class="who"><span class="tag t-warn">Tanvir</span></div>
         <h3>I cannot follow my own agents</h3>
-        <p>Several sessions running at once, each producing more output than anyone can read. Keeping
-          track of what each one changed, while still doing your own work, becomes the bottleneck.</p>
+        <p>Several sessions at once, each producing more than anyone can read. Tracking what each one
+          changed, while still doing your own work, becomes the bottleneck.</p>
       </div>
-      <div class="card plain rail warn">
-        <div class="ico">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#a85c3a" stroke-width="1.6" stroke-linecap="round">
-            <path d="M3 18a9 9 0 1 1 18 0"/><path d="M12 18l5-5.5"/><path d="M2 3l20 18" stroke-width="1.8"/></svg>
-          <span class="tag t-warn">Mahad</span>
-        </div>
+
+      <div class="card mid plain rail warn">
+        <svg class="illus" viewBox="0 0 300 168" aria-label="A task interrupted by a rate limit">
+          <text x="10" y="34" font-size="12" font-weight="750" letter-spacing="1.1" fill="#8c8f97">TASK IN PROGRESS</text>
+          <rect x="10" y="50" width="280" height="40" rx="8" fill="#fff" stroke="#b9bbc1" stroke-width="1.5"/>
+          <path d="M18 50 H 168 V 90 H 18 a8 8 0 0 1 -8 -8 V 58 a8 8 0 0 1 8 -8 Z" fill="#e4f1e9" stroke="#2f7d52" stroke-width="1.5"/>
+          <path d="M176 38 l -14 26 h 11 l -9 26 22 -30 h -11 z" fill="#a85c3a"/>
+          <line x1="170" y1="42" x2="170" y2="98" stroke="#a85c3a" stroke-width="2.5" stroke-dasharray="4 3"/>
+          <rect x="196" y="58" width="60" height="6" rx="3" fill="#ecedef"/>
+          <rect x="196" y="74" width="40" height="6" rx="3" fill="#ecedef"/>
+          <text x="10" y="116" font-size="13" font-weight="700" fill="#2f7d52">58% done</text>
+          <text x="196" y="116" font-size="13" font-weight="700" fill="#a85c3a">then nothing</text>
+          <rect x="10" y="132" width="280" height="28" rx="6" fill="#f6e7e0" stroke="#a85c3a" stroke-width="1.5" stroke-dasharray="5 4"/>
+          <text x="150" y="151" text-anchor="middle" font-size="12.5" fill="#a85c3a">what was finished? start again</text>
+        </svg>
+        <div class="who"><span class="tag t-warn">Mahad</span></div>
         <h3>Rate limits land mid-task</h3>
-        <p>The limit hits halfway through, the thread is lost, and you restart instead of resuming.
+        <p>The limit hits halfway through and the thread is lost, so you restart rather than resume.
           Nothing tells you what was finished and what was not.</p>
       </div>
-      <div class="card plain rail warn">
-        <div class="ico">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#a85c3a" stroke-width="1.6" stroke-linecap="round">
-            <path d="M3 11.5V4.5A1.5 1.5 0 0 1 4.5 3h7l9.5 9.5a1.5 1.5 0 0 1 0 2.1l-6.9 6.9a1.5 1.5 0 0 1-2.1 0L3 11.5Z"/>
-            <circle cx="7.6" cy="7.6" r="1.4"/></svg>
-          <span class="tag t-warn">Abdul Aziz</span>
-        </div>
+
+      <div class="card mid plain rail warn">
+        <svg class="illus" viewBox="0 0 300 168" aria-label="A trivial question billed at frontier prices">
+          <rect x="8" y="58" width="104" height="46" rx="10" fill="#fff" stroke="#b9bbc1" stroke-width="1.5"/>
+          <path d="M28 104 l 0 16 14 -16 z" fill="#fff" stroke="#b9bbc1" stroke-width="1.5"/>
+          <text x="60" y="80" text-anchor="middle" font-size="13" fill="#676a72">which file</text>
+          <text x="60" y="96" text-anchor="middle" font-size="13" fill="#676a72">holds this?</text>
+          <text x="60" y="140" text-anchor="middle" font-size="11.5" font-weight="700" letter-spacing="0.8" fill="#8c8f97">A GLANCE</text>
+          <path class="flow" d="M122 80 H 152" marker-end="url(#pt)"/>
+          <path d="M176 26 h 74 a10 10 0 0 1 7 3 l 36 36 a10 10 0 0 1 0 14 l -44 44 a10 10 0 0 1 -14 0 l -36 -36 a10 10 0 0 1 -3 -7 V 36 a10 10 0 0 1 10 -10 Z"
+                fill="#f6e7e0" stroke="#a85c3a" stroke-width="2"/>
+          <circle cx="196" cy="46" r="7" fill="#fff" stroke="#a85c3a" stroke-width="2"/>
+          <text x="238" y="86" text-anchor="middle" font-size="26" font-weight="750" fill="#a85c3a">$$$</text>
+          <text x="238" y="140" text-anchor="middle" font-size="11.5" font-weight="700" letter-spacing="0.8" fill="#a85c3a">FRONTIER PRICE</text>
+          <defs><marker id="pt" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+            <path d="M0 0 L9 4.5 L0 9 z" fill="#676a72"/></marker></defs>
+        </svg>
+        <div class="who"><span class="tag t-warn">Abdul Aziz</span></div>
         <h3>I pay frontier prices for trivia</h3>
-        <p>A throwaway question asked inside a long session, because opening a new chat would lose the
-          context. The dumbest question in the room costs the most.</p>
+        <p>A throwaway question asked inside a long session, because a new chat would lose the context.
+          The dumbest question in the room costs the most.</p>
       </div>
+
     </div>
   </div>
   <div class="foot"><span><b>What they share</b> &nbsp;none of these are reasoning problems. They are cheap judgements that nothing cheap is making.</span><span>03</span></div>
@@ -270,46 +315,45 @@
         <span>Two-tier control</span>
         <span class="legend"><span><i class="det"></i> Deterministic</span><span><i></i> Jev decision</span><span><i class="llm"></i> LLM generation</span></span>
       </div>
-      <svg class="plot" viewBox="0 0 1360 330" preserveAspectRatio="xMidYMid meet">
-        <rect class="box box-det" x="40" y="105" width="200" height="110" rx="6"/>
-        <text class="key" x="58" y="132">CANDIDATES</text>
-        <text class="st" x="58" y="162">Thousands of</text>
-        <text class="st" x="58" y="184">code elements</text>
-        <text class="sub" x="58" y="205">from PSI, already indexed</text>
+      <svg class="plot" viewBox="0 0 1370 470" preserveAspectRatio="xMidYMid meet">
+        <rect class="box box-det" x="40" y="148" width="215" height="145" rx="6"/>
+        <text class="key" x="60" y="178">CANDIDATES</text>
+        <text class="st" x="60" y="214">Thousands of</text>
+        <text class="st" x="60" y="238">code elements</text>
+        <text class="sub" x="60" y="266">from PSI, already indexed</text>
 
-        <rect class="box box-jev" x="330" y="90" width="260" height="140" rx="6"/>
-        <rect class="box box-jev head" x="330" y="90" width="260" height="32" rx="6"/>
-        <text class="key" x="350" y="111" style="fill:var(--jev)">JEV</text>
-        <text class="st" x="350" y="148">Typed questions</text>
-        <text class="mono" x="350" y="176">would_edit &middot; same_rule</text>
-        <text class="mono" x="350" y="196">belongs_here &middot; is_simple</text>
-        <text class="num" x="350" y="220">~150ms &middot; fractions of a cent</text>
+        <rect class="box box-jev" x="345" y="126" width="275" height="190" rx="6"/>
+        <rect class="box box-jev head" x="345" y="126" width="275" height="36" rx="6"/>
+        <text class="key" x="367" y="150" style="fill:var(--jev)">JEV</text>
+        <text class="st" x="367" y="196">Typed questions</text>
+        <text class="mono" x="367" y="232" style="font-size:13px">would_edit &#183; same_rule</text>
+        <text class="mono" x="367" y="258" style="font-size:13px">belongs_here &#183; is_simple</text>
+        <text class="num" x="367" y="294">~150ms &#183; fractions of a cent</text>
 
-        <path class="box" d="M700 160 L 775 112 L 850 160 L 775 208 Z" fill="var(--paper)" stroke="var(--border-strong)"/>
-        <text class="st" x="775" y="155" text-anchor="middle" font-size="13">above</text>
-        <text class="st" x="775" y="173" text-anchor="middle" font-size="13">threshold?</text>
+        <path class="box" d="M715 220 L 795 163 L 875 220 L 795 277 Z" fill="var(--paper)" stroke="var(--border-strong)"/>
+        <text class="st" x="795" y="214" text-anchor="middle" font-size="15">above</text>
+        <text class="st" x="795" y="236" text-anchor="middle" font-size="15">threshold?</text>
 
-        <rect class="box box-llm" x="945" y="95" width="230" height="130" rx="6"/>
-        <rect class="box box-llm head" x="945" y="95" width="230" height="32" rx="6"/>
-        <text class="key" x="963" y="116" style="fill:var(--llm)">LLM</text>
-        <text class="st" x="963" y="153">Writes the code</text>
-        <text class="sub" x="963" y="178">seconds, real money</text>
-        <text class="sub" x="963" y="200">a handful of calls</text>
+        <rect class="box box-llm" x="960" y="140" width="245" height="160" rx="6"/>
+        <rect class="box box-llm head" x="960" y="140" width="245" height="36" rx="6"/>
+        <text class="key" x="982" y="164" style="fill:var(--llm)">LLM</text>
+        <text class="st" x="982" y="210">Writes the code</text>
+        <text class="sub" x="982" y="240">seconds, real money</text>
+        <text class="sub" x="982" y="266">a handful of calls</text>
 
-        <rect class="box" x="945" y="252" width="230" height="56" rx="6" stroke-dasharray="5 4"/>
-        <text class="sub" x="963" y="278">Dropped, never generated</text>
-        <text class="sub" x="963" y="296">most candidates land here</text>
+        <rect class="box" x="960" y="348" width="245" height="78" rx="6" stroke-dasharray="5 4"/>
+        <text class="sub" x="982" y="380">Dropped, never generated</text>
+        <text class="sub" x="982" y="404">most candidates land here</text>
 
-        <path class="flow" d="M247 160 H 323" marker-end="url(#a)"/>
-        <path class="flow" d="M597 160 H 693" marker-end="url(#a)"/>
-        <path class="flow" d="M857 160 H 938" marker-end="url(#a)"/>
-        <path class="flow flow-d" d="M775 215 V 280 H 938" marker-end="url(#a)"/>
-        <text class="act" x="898" y="148">yes</text>
-        <text class="act" x="820" y="252">no</text>
-        <text class="sub" x="1200" y="150" style="fill:var(--jev); font-weight:650">Jev runs</text>
-        <text class="sub" x="1200" y="170" style="fill:var(--jev); font-weight:650">thousands of times.</text>
-        <text class="sub" x="1200" y="198" style="fill:var(--llm); font-weight:650">The LLM runs when</text>
-        <text class="sub" x="1200" y="218" style="fill:var(--llm); font-weight:650">Jev says it is worth it.</text>
+        <path class="flow" d="M262 220 H 338" marker-end="url(#a)"/>
+        <path class="flow" d="M627 220 H 708" marker-end="url(#a)"/>
+        <path class="flow" d="M882 220 H 953" marker-end="url(#a)"/>
+        <path class="flow flow-d" d="M795 284 V 387 H 953" marker-end="url(#a)"/>
+        <text class="act" x="918" y="208">yes</text>
+        <text class="act" x="840" y="330">no</text>
+
+        <text class="sub" x="40" y="368" style="font-size:14px; fill:var(--jev); font-weight:650">Jev runs thousands of times a session.</text>
+        <text class="sub" x="40" y="396" style="font-size:14px; fill:var(--llm); font-weight:650">The LLM runs only when Jev says it is worth it.</text>
 
         <defs><marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
           <path d="M0 0 L9 4.5 L0 9 z" fill="var(--muted)"/></marker></defs>
@@ -334,46 +378,46 @@
       <span>One Jev client, one PSI layer, six surfaces</span>
       <span class="legend"><span><i></i> Ships first</span><span><i class="det"></i> Built on the same client</span></span>
     </div>
-    <svg class="plot" viewBox="0 0 1360 430" preserveAspectRatio="xMidYMid meet">
-      <circle cx="680" cy="215" r="86" fill="#e4f1e9" stroke="var(--jev)" stroke-width="2.5"/>
-      <text x="680" y="204" text-anchor="middle" class="st" style="fill:var(--jev); font-size:22px">JEV</text>
-      <text x="680" y="228" text-anchor="middle" class="sub" style="fill:var(--jev)">decision layer</text>
-      <text x="680" y="250" text-anchor="middle" class="sub" style="fill:var(--jev); font-size:11px">shared by all six</text>
+    <svg class="plot" viewBox="0 0 1370 560" preserveAspectRatio="xMidYMid meet">
+      <path class="spoke" d="M585 248 L 408 100"/><path class="spoke" d="M585 280 L 408 283"/>
+      <path class="spoke" d="M585 312 L 408 466"/>
+      <path class="spoke" d="M785 248 L 962 100"/><path class="spoke" d="M785 280 L 962 283"/>
+      <path class="spoke" d="M785 312 L 962 466"/>
 
-      <path class="spoke" d="M594 190 L 390 96"/><path class="spoke" d="M594 215 L 390 215"/>
-      <path class="spoke" d="M594 240 L 390 334"/>
-      <path class="spoke" d="M766 190 L 970 96"/><path class="spoke" d="M766 215 L 970 215"/>
-      <path class="spoke" d="M766 240 L 970 334"/>
+      <circle cx="685" cy="280" r="103" fill="#e4f1e9" stroke="var(--jev)" stroke-width="2.5"/>
+      <text x="685" y="266" text-anchor="middle" class="st" style="fill:var(--jev); font-size:30px">JEV</text>
+      <text x="685" y="296" text-anchor="middle" class="sub" style="fill:var(--jev); font-size:14px">decision layer</text>
+      <text x="685" y="322" text-anchor="middle" class="sub" style="fill:var(--jev); font-size:12px">shared by all six</text>
 
-      <rect class="box box-jev" x="40" y="55" width="350" height="84" rx="6"/>
-      <text class="key" x="60" y="80" style="fill:var(--jev)">01 &middot; FILE FINDER &middot; FLAGSHIP</text>
-      <text class="st" x="60" y="106">Which files does this task touch?</text>
-      <text class="sub" x="60" y="127">Score the repository, pack the window.</text>
+      <rect class="box box-jev" x="40" y="48" width="368" height="104" rx="6"/>
+      <text class="key" x="62" y="76" style="fill:var(--jev)">01 &#183; FILE FINDER &#183; FLAGSHIP</text>
+      <text class="st" x="62" y="107">Which files does this task touch?</text>
+      <text class="sub" x="62" y="132">Score the repository, pack the window.</text>
 
-      <rect class="box box-jev" x="40" y="173" width="350" height="84" rx="6"/>
-      <text class="key" x="60" y="198" style="fill:var(--jev)">02 &middot; BUG TWINS &middot; FLAGSHIP</text>
-      <text class="st" x="60" y="224">Where else is this bug?</text>
-      <text class="sub" x="60" y="245">The same rule, under three different names.</text>
+      <rect class="box box-jev" x="40" y="231" width="368" height="104" rx="6"/>
+      <text class="key" x="62" y="259" style="fill:var(--jev)">02 &#183; BUG TWINS &#183; FLAGSHIP</text>
+      <text class="st" x="62" y="290">Where else is this bug?</text>
+      <text class="sub" x="62" y="315">The same rule, under three different names.</text>
 
-      <rect class="box box-det" x="40" y="292" width="350" height="84" rx="6"/>
-      <text class="key" x="60" y="317" style="fill:var(--steel)">03 &middot; TOOL FINDER</text>
-      <text class="st" x="60" y="343">Which tool for this step?</text>
-      <text class="sub" x="60" y="364">Shortlist three, so the model is not shown forty.</text>
+      <rect class="box box-det" x="40" y="414" width="368" height="104" rx="6"/>
+      <text class="key" x="62" y="442" style="fill:var(--steel)">03 &#183; TOOL FINDER</text>
+      <text class="st" x="62" y="473">Which tool for this step?</text>
+      <text class="sub" x="62" y="498">Shortlist three, so the model is not shown forty.</text>
 
-      <rect class="box box-det" x="970" y="55" width="350" height="84" rx="6"/>
-      <text class="key" x="990" y="80" style="fill:var(--steel)">04 &middot; MODEL ROUTER</text>
-      <text class="st" x="990" y="106">Which model for this question?</text>
-      <text class="sub" x="990" y="127">Rate the difficulty, route to the cheapest that fits.</text>
+      <rect class="box box-det" x="962" y="48" width="368" height="104" rx="6"/>
+      <text class="key" x="984" y="76" style="fill:var(--steel)">04 &#183; MODEL ROUTER</text>
+      <text class="st" x="984" y="107">Which model for this question?</text>
+      <text class="sub" x="984" y="132">Rate the difficulty, route to the cheapest that fits.</text>
 
-      <rect class="box box-det" x="970" y="173" width="350" height="84" rx="6"/>
-      <text class="key" x="990" y="198" style="fill:var(--steel)">05 &middot; CONTEXT GUARD</text>
-      <text class="st" x="990" y="224">Does this prompt belong here?</text>
-      <text class="sub" x="990" y="245">If not, it opens beside the thread as a bubble.</text>
+      <rect class="box box-det" x="962" y="231" width="368" height="104" rx="6"/>
+      <text class="key" x="984" y="259" style="fill:var(--steel)">05 &#183; CONTEXT GUARD</text>
+      <text class="st" x="984" y="290">Does this prompt belong here?</text>
+      <text class="sub" x="984" y="315">If not, it opens beside the thread as a bubble.</text>
 
-      <rect class="box box-det" x="970" y="292" width="350" height="84" rx="6"/>
-      <text class="key" x="990" y="317" style="fill:var(--steel)">06 &middot; RUN WATCH</text>
-      <text class="st" x="990" y="343">What did the run actually do?</text>
-      <text class="sub" x="990" y="364">A status per turn, and a summary before the limit bites.</text>
+      <rect class="box box-det" x="962" y="414" width="368" height="104" rx="6"/>
+      <text class="key" x="984" y="442" style="fill:var(--steel)">06 &#183; RUN WATCH</text>
+      <text class="st" x="984" y="473">What did the run actually do?</text>
+      <text class="sub" x="984" y="498">A status per turn, and a summary before the limit bites.</text>
     </svg>
   </div>
   <div class="foot"><span><b>Why they belong together</b> &nbsp;one shape reused six times, not a chicken with boots that also swims</span><span>05</span></div>
@@ -384,7 +428,7 @@
   <div class="brand"><span class="mark"><i></i><i></i> <b>IntelliJev</b></span><span>Feature 01</span></div>
   <header>
     <div class="title">
-      <p class="eyebrow">File finder &middot; the flagship</p>
+      <p class="eyebrow">File finder &#183; the flagship</p>
       <h1>Context exploration, without the exploring</h1>
     </div>
     <p class="note">Grep needs the right word. Embeddings need an index that goes stale. Agents read files one at a time. Jev reads all of them at once.</p>
@@ -394,52 +438,54 @@
       <span>Packing the context window</span>
       <span class="legend"><span><i class="det"></i> IntelliJ PSI</span><span><i></i> Jev</span><span><i class="llm"></i> LLM</span></span>
     </div>
-    <svg class="plot" viewBox="0 0 1360 430" preserveAspectRatio="xMidYMid meet">
-      <rect class="box box-det" x="30" y="130" width="180" height="110" rx="6"/>
-      <text class="key" x="46" y="156">REPOSITORY</text>
-      <text class="st" x="46" y="186">8,000 files</text>
-      <text class="sub" x="46" y="210">already indexed</text>
-      <text class="sub" x="46" y="228">by the IDE</text>
+    <svg class="plot" viewBox="0 0 1370 560" preserveAspectRatio="xMidYMid meet">
+      <rect class="box box-det" x="30" y="148" width="195" height="134" rx="6"/>
+      <text class="key" x="50" y="177">REPOSITORY</text>
+      <text class="st" x="50" y="212">8,000 files</text>
+      <text class="sub" x="50" y="240">already indexed</text>
+      <text class="sub" x="50" y="262">by the IDE</text>
 
-      <rect class="box box-det" x="250" y="130" width="200" height="110" rx="6"/>
-      <text class="key" x="266" y="156">PSI SKETCH</text>
-      <text class="st" x="266" y="186">Signatures only</text>
-      <text class="sub" x="266" y="210">~400 tokens per file,</text>
-      <text class="sub" x="266" y="228">no parser to write</text>
+      <rect class="box box-det" x="265" y="148" width="215" height="134" rx="6"/>
+      <text class="key" x="285" y="177">PSI SKETCH</text>
+      <text class="st" x="285" y="212">Signatures only</text>
+      <text class="sub" x="285" y="240">~400 tokens per file,</text>
+      <text class="sub" x="285" y="262">no parser to write</text>
 
-      <rect class="box box-jev" x="490" y="110" width="280" height="150" rx="6"/>
-      <rect class="box box-jev head" x="490" y="110" width="280" height="32" rx="6"/>
-      <text class="key" x="508" y="131" style="fill:var(--jev)">JEV &middot; BATCHED</text>
-      <text class="st" x="508" y="168">~60 sketches per call</text>
-      <text class="sub" x="508" y="192">four questions each, every</text>
-      <text class="sub" x="508" y="210">call fired in parallel</text>
-      <text class="num" x="508" y="240">~120 calls &middot; seconds &middot; ~$0.14</text>
+      <rect class="box box-jev" x="520" y="126" width="295" height="178" rx="6"/>
+      <rect class="box box-jev head" x="520" y="126" width="295" height="36" rx="6"/>
+      <text class="key" x="542" y="150" style="fill:var(--jev)">JEV &#183; BATCHED</text>
+      <text class="st" x="542" y="192">~60 sketches per call</text>
+      <text class="sub" x="542" y="220">four questions each, every</text>
+      <text class="sub" x="542" y="242">call fired in parallel</text>
+      <text class="num" x="542" y="278">~120 calls &#183; seconds &#183; ~$0.14</text>
 
-      <rect class="box" x="810" y="90" width="230" height="190" rx="6"/>
-      <rect class="box head" x="810" y="90" width="230" height="32" rx="6"/>
-      <text class="key" x="828" y="111">SCORED BY ROLE</text>
-      <text class="mono" x="828" y="148">would_edit   0.94</text>
-      <text class="mono" x="828" y="172">example      0.88</text>
-      <text class="mono" x="828" y="196">constrains   0.71</text>
-      <text class="mono" x="828" y="220">defines      0.63</text>
-      <text class="sub" x="828" y="252">a budget per role, not</text>
-      <text class="sub" x="828" y="268">top-k on one score</text>
+      <rect class="box" x="855" y="108" width="250" height="214" rx="6"/>
+      <rect class="box head" x="855" y="108" width="250" height="36" rx="6"/>
+      <text class="key" x="877" y="132">SCORED BY ROLE</text>
+      <text class="mono" x="877" y="176" style="font-size:13px">would_edit   0.94</text>
+      <text class="mono" x="877" y="204" style="font-size:13px">example      0.88</text>
+      <text class="mono" x="877" y="232" style="font-size:13px">constrains   0.71</text>
+      <text class="mono" x="877" y="260" style="font-size:13px">defines      0.63</text>
+      <text class="sub" x="877" y="292">a budget per role, not</text>
+      <text class="sub" x="877" y="312">top-k on one score</text>
 
-      <rect class="box box-llm" x="1080" y="130" width="250" height="110" rx="6"/>
-      <rect class="box box-llm head" x="1080" y="130" width="250" height="32" rx="6"/>
-      <text class="key" x="1098" y="151" style="fill:var(--llm)">LLM</text>
-      <text class="st" x="1098" y="186">One packed window</text>
-      <text class="sub" x="1098" y="210">one shot, no browsing</text>
+      <rect class="box box-llm" x="1145" y="148" width="200" height="134" rx="6"/>
+      <rect class="box box-llm head" x="1145" y="148" width="200" height="36" rx="6"/>
+      <text class="key" x="1167" y="172" style="fill:var(--llm)">LLM</text>
+      <text class="st" x="1167" y="216">One packed</text>
+      <text class="st" x="1167" y="238">window</text>
+      <text class="sub" x="1167" y="264">one shot, no browsing</text>
 
-      <path class="flow" d="M216 185 H 244" marker-end="url(#b)"/>
-      <path class="flow" d="M456 185 H 484" marker-end="url(#b)"/>
-      <path class="flow" d="M776 185 H 804" marker-end="url(#b)"/>
-      <path class="flow" d="M1046 185 H 1074" marker-end="url(#b)"/>
+      <path class="flow" d="M231 215 H 259" marker-end="url(#b)"/>
+      <path class="flow" d="M486 215 H 514" marker-end="url(#b)"/>
+      <path class="flow" d="M821 215 H 849" marker-end="url(#b)"/>
+      <path class="flow" d="M1111 215 H 1139" marker-end="url(#b)"/>
 
-      <text class="sub" x="30" y="320" style="font-weight:650; fill:var(--ink)">Why a balanced window beats top-k</text>
-      <text class="sub" x="30" y="346">Ranking on one relevance score returns six near-identical implementations of the same thing.</text>
-      <text class="sub" x="30" y="368">Budgeting across roles returns the file to edit, two patterns to copy, the test, and the interface.</text>
-      <text class="sub" x="30" y="396" style="fill:var(--warn)">Projected figures. The batching limit and real latency are the first things we measure.</text>
+      <line x1="30" y1="376" x2="1345" y2="376" stroke="var(--border)" stroke-width="1"/>
+      <text class="st" x="30" y="414" style="font-size:16px">Why a balanced window beats top-k</text>
+      <text class="sub" x="30" y="446" style="font-size:13.5px">Ranking on one relevance score returns six near-identical implementations of the same thing.</text>
+      <text class="sub" x="30" y="472" style="font-size:13.5px">Budgeting across roles returns the file to edit, two patterns to copy, the test, and the interface.</text>
+      <text class="sub" x="30" y="520" style="font-size:13.5px; fill:var(--warn); font-weight:650">Projected figures. The batching limit and real latency are the first things we measure.</text>
 
       <defs><marker id="b" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
         <path d="M0 0 L9 4.5 L0 9 z" fill="var(--muted)"/></marker></defs>
@@ -463,45 +509,46 @@
       <span>One narrow question, asked of every function in the repository</span>
       <span class="legend"><span><i></i> Jev ranks</span><span><i class="det"></i> The developer decides</span></span>
     </div>
-    <svg class="plot" viewBox="0 0 1360 430" preserveAspectRatio="xMidYMid meet">
-      <rect class="box box-det" x="30" y="140" width="270" height="130" rx="6"/>
-      <rect class="box box-det head" x="30" y="140" width="270" height="32" rx="6"/>
-      <text class="key" x="48" y="161" style="fill:var(--steel)">YOU JUST FIXED</text>
-      <text class="mono" x="48" y="198" style="font-size:13px">Checkout.applyCoupon()</text>
-      <text class="sub" x="48" y="226">expired coupons were</text>
-      <text class="sub" x="48" y="244">passing validation</text>
+    <svg class="plot" viewBox="0 0 1370 560" preserveAspectRatio="xMidYMid meet">
+      <rect class="box box-det" x="30" y="170" width="300" height="160" rx="6"/>
+      <rect class="box box-det head" x="30" y="170" width="300" height="36" rx="6"/>
+      <text class="key" x="50" y="194" style="fill:var(--steel)">YOU JUST FIXED</text>
+      <text class="mono" x="50" y="240" style="font-size:14px">Checkout.applyCoupon()</text>
+      <text class="sub" x="50" y="274">expired coupons were</text>
+      <text class="sub" x="50" y="296">passing validation</text>
 
-      <rect class="box box-jev" x="370" y="130" width="270" height="150" rx="6"/>
-      <rect class="box box-jev head" x="370" y="130" width="270" height="32" rx="6"/>
-      <text class="key" x="388" y="151" style="fill:var(--jev)">JEV ASKS, EVERYWHERE</text>
-      <text class="st" x="388" y="186" style="font-size:14px">"Does this function</text>
-      <text class="st" x="388" y="208" style="font-size:14px">enforce the same</text>
-      <text class="st" x="388" y="230" style="font-size:14px">eligibility rule?"</text>
-      <text class="num" x="388" y="262">every function &middot; cents</text>
+      <rect class="box box-jev" x="390" y="152" width="300" height="196" rx="6"/>
+      <rect class="box box-jev head" x="390" y="152" width="300" height="36" rx="6"/>
+      <text class="key" x="410" y="176" style="fill:var(--jev)">JEV ASKS, EVERYWHERE</text>
+      <text class="st" x="410" y="222" style="font-size:15px">"Does this function</text>
+      <text class="st" x="410" y="248" style="font-size:15px">enforce the same</text>
+      <text class="st" x="410" y="274" style="font-size:15px">eligibility rule?"</text>
+      <text class="num" x="410" y="316">every function &#183; cents</text>
 
-      <rect class="box box-jev" x="710" y="70" width="330" height="74" rx="6"/>
-      <text class="mono" x="728" y="100">ExpressCheckout.applyPromo()</text>
-      <text class="sub" x="728" y="124">same rule, same gap</text>
-      <text class="num" x="962" y="100" style="font-size:17px">0.96</text>
+      <rect class="box box-jev" x="750" y="60" width="360" height="100" rx="6"/>
+      <text class="mono" x="772" y="96" style="font-size:13px">ExpressCheckout.applyPromo()</text>
+      <text class="sub" x="772" y="128">same rule, same gap</text>
+      <text class="num" x="1150" y="118" style="font-size:26px">0.96</text>
 
-      <rect class="box box-jev" x="710" y="168" width="330" height="74" rx="6"/>
-      <text class="mono" x="728" y="198">SubscriptionRenewal.validate()</text>
-      <text class="sub" x="728" y="222">expiry checked against the wrong clock</text>
-      <text class="num" x="962" y="198" style="font-size:17px">0.91</text>
+      <rect class="box box-jev" x="750" y="200" width="360" height="100" rx="6"/>
+      <text class="mono" x="772" y="236" style="font-size:13px">SubscriptionRenewal.validate()</text>
+      <text class="sub" x="772" y="268">expiry read off the wrong clock</text>
+      <text class="num" x="1150" y="258" style="font-size:26px">0.91</text>
 
-      <rect class="box" x="710" y="266" width="330" height="74" rx="6" stroke-dasharray="5 4"/>
-      <text class="mono" x="728" y="296" style="fill:var(--muted)">GiftCard.redeem()</text>
-      <text class="sub" x="728" y="320">different rule, correctly different</text>
-      <text class="sub" x="962" y="296" style="font-size:17px; font-weight:700">0.12</text>
+      <rect class="box" x="750" y="340" width="360" height="100" rx="6" stroke-dasharray="5 4"/>
+      <text class="mono" x="772" y="376" style="font-size:13px; fill:var(--muted)">GiftCard.redeem()</text>
+      <text class="sub" x="772" y="408">a different rule, correctly different</text>
+      <text x="1150" y="398" style="font-size:26px; font-weight:750; fill:var(--faint)">0.12</text>
 
-      <path class="flow" d="M307 205 H 363" marker-end="url(#c)"/>
-      <path class="flow" d="M647 180 C 680 180, 680 107, 703 107" marker-end="url(#c)"/>
-      <path class="flow" d="M647 205 H 703" marker-end="url(#c)"/>
-      <path class="flow flow-d" d="M647 230 C 680 230, 680 303, 703 303" marker-end="url(#c)"/>
+      <path class="flow" d="M337 250 H 383" marker-end="url(#c)"/>
+      <path class="flow" d="M697 220 C 725 220, 722 110, 743 110" marker-end="url(#c)"/>
+      <path class="flow" d="M697 250 H 743" marker-end="url(#c)"/>
+      <path class="flow flow-d" d="M697 280 C 725 280, 722 390, 743 390" marker-end="url(#c)"/>
 
-      <text class="sub" x="30" y="330" style="font-weight:650; fill:var(--ink)">Why grep fails</text>
-      <text class="sub" x="30" y="356">Nothing was copied. Different names, different implementations, same rule.</text>
-      <text class="sub" x="30" y="382" style="fill:var(--warn); font-weight:650">The hard part: some differences are deliberate. We show the code and let the developer judge.</text>
+      <line x1="30" y1="452" x2="1345" y2="452" stroke="var(--border)" stroke-width="1"/>
+      <text class="st" x="30" y="490" style="font-size:16px">Why grep fails</text>
+      <text class="sub" x="30" y="520" style="font-size:13.5px">Nothing was copied. Different names, different implementations, one shared rule.</text>
+      <text class="sub" x="700" y="520" style="font-size:13.5px; fill:var(--warn); font-weight:650">The hard part: some differences are deliberate, so we show the code and let the developer judge.</text>
 
       <defs><marker id="c" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
         <path d="M0 0 L9 4.5 L0 9 z" fill="var(--muted)"/></marker></defs>
@@ -525,7 +572,7 @@
       <span>One task, answered both ways</span>
       <span class="legend"><span><i class="hatch"></i> Projected, not yet measured</span><span><i class="det"></i> Baseline agent</span><span><i></i> IntelliJev</span></span>
     </div>
-    <svg class="plot clean" viewBox="0 0 1360 400" preserveAspectRatio="xMidYMid meet">
+    <svg class="plot clean" viewBox="0 0 1370 560" preserveAspectRatio="xMidYMid meet">
       <defs>
         <pattern id="hs" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
           <rect width="6" height="6" fill="#3c6ea5" opacity="0.18"/><line x1="0" y1="0" x2="0" y2="6" stroke="#3c6ea5" stroke-width="3"/>
@@ -535,31 +582,35 @@
         </pattern>
       </defs>
 
-      <!-- panel 1 : tool calls -->
-      <text class="ptitle" x="40" y="42">Tool calls to reach the answer</text>
-      <line class="axis" x1="40" y1="320" x2="420" y2="320"/>
-      <rect x="110" y="110" width="90" height="210" rx="4" fill="url(#hs)" stroke="#3c6ea5" stroke-width="1.5"/>
-      <rect x="270" y="302" width="90" height="18" rx="4" fill="url(#hj)" stroke="#2f7d52" stroke-width="1.5"/>
-      <text class="vlab" x="155" y="98">24</text><text class="vlab" x="315" y="290">2</text>
-      <text class="blab" x="155" y="344">Baseline</text><text class="blab" x="315" y="344">IntelliJev</text>
+      <text class="ptitle" x="40" y="56" style="font-size:15px">Tool calls to reach the answer</text>
+      <line class="axis" x1="40" y1="452" x2="420" y2="452"/>
+      <rect x="110" y="102" width="100" height="350" rx="4" fill="url(#hs)" stroke="#3c6ea5" stroke-width="1.5"/>
+      <rect x="260" y="423" width="100" height="29" rx="4" fill="url(#hj)" stroke="#2f7d52" stroke-width="1.5"/>
+      <text class="vlab" x="160" y="86" style="font-size:24px">24</text>
+      <text class="vlab" x="310" y="407" style="font-size:24px">2</text>
+      <text class="blab" x="160" y="480" style="font-size:13px">Baseline</text>
+      <text class="blab" x="310" y="480" style="font-size:13px">IntelliJev</text>
 
-      <!-- panel 2 : seconds -->
-      <text class="ptitle" x="490" y="42">Seconds to first useful answer</text>
-      <line class="axis" x1="490" y1="320" x2="870" y2="320"/>
-      <rect x="560" y="110" width="90" height="210" rx="4" fill="url(#hs)" stroke="#3c6ea5" stroke-width="1.5"/>
-      <rect x="720" y="294" width="90" height="26" rx="4" fill="url(#hj)" stroke="#2f7d52" stroke-width="1.5"/>
-      <text class="vlab" x="605" y="98">48</text><text class="vlab" x="765" y="282">6</text>
-      <text class="blab" x="605" y="344">Baseline</text><text class="blab" x="765" y="344">IntelliJev</text>
+      <text class="ptitle" x="495" y="56" style="font-size:15px">Seconds to first useful answer</text>
+      <line class="axis" x1="495" y1="452" x2="875" y2="452"/>
+      <rect x="565" y="102" width="100" height="350" rx="4" fill="url(#hs)" stroke="#3c6ea5" stroke-width="1.5"/>
+      <rect x="715" y="408" width="100" height="44" rx="4" fill="url(#hj)" stroke="#2f7d52" stroke-width="1.5"/>
+      <text class="vlab" x="615" y="86" style="font-size:24px">48</text>
+      <text class="vlab" x="765" y="392" style="font-size:24px">6</text>
+      <text class="blab" x="615" y="480" style="font-size:13px">Baseline</text>
+      <text class="blab" x="765" y="480" style="font-size:13px">IntelliJev</text>
 
-      <!-- panel 3 : cost -->
-      <text class="ptitle" x="940" y="42">Cost per task, in dollars</text>
-      <line class="axis" x1="940" y1="320" x2="1320" y2="320"/>
-      <rect x="1010" y="110" width="90" height="210" rx="4" fill="url(#hs)" stroke="#3c6ea5" stroke-width="1.5"/>
-      <rect x="1170" y="295" width="90" height="25" rx="4" fill="url(#hj)" stroke="#2f7d52" stroke-width="1.5"/>
-      <text class="vlab" x="1055" y="98">0.42</text><text class="vlab" x="1215" y="283">0.05</text>
-      <text class="blab" x="1055" y="344">Baseline</text><text class="blab" x="1215" y="344">IntelliJev</text>
+      <text class="ptitle" x="950" y="56" style="font-size:15px">Cost per task, in dollars</text>
+      <line class="axis" x1="950" y1="452" x2="1330" y2="452"/>
+      <rect x="1020" y="102" width="100" height="350" rx="4" fill="url(#hs)" stroke="#3c6ea5" stroke-width="1.5"/>
+      <rect x="1170" y="410" width="100" height="42" rx="4" fill="url(#hj)" stroke="#2f7d52" stroke-width="1.5"/>
+      <text class="vlab" x="1070" y="86" style="font-size:24px">0.42</text>
+      <text class="vlab" x="1220" y="394" style="font-size:24px">0.05</text>
+      <text class="blab" x="1070" y="480" style="font-size:13px">Baseline</text>
+      <text class="blab" x="1220" y="480" style="font-size:13px">IntelliJev</text>
 
-      <text class="sub" x="40" y="382" style="fill:var(--warn); font-weight:650">Hatched bars are projections. On the day, these are replaced by counters running live on stage.</text>
+      <line x1="40" y1="508" x2="1330" y2="508" stroke="var(--border)" stroke-width="1"/>
+      <text class="sub" x="40" y="540" style="font-size:13.5px; fill:var(--warn); font-weight:650">Hatched bars are projections. On the day, these are replaced by counters running live on stage.</text>
     </svg>
   </div>
   <div class="foot"><span><b>The evaluation</b> &nbsp;50 real commits, the message is the task and the files it touched are the answer key. Recall at ten, against grep and against embeddings.</span><span>08</span></div>
