@@ -403,10 +403,12 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 val started = System.nanoTime()
                 val reply = ChatClient(key).complete(Prompt.SYSTEM, prompt)
                 val secs = (System.nanoTime() - started) / 1e9
-                val text = reply.content + "\n\n— %s · %.1f s · %,d in / %,d out tokens%s".format(
-                    ChatClient.DEFAULT_MODEL, secs, reply.promptTokens, reply.completionTokens,
+                val text = reply.content + "\n\n— %s · %.1f s · %s in / %s out tokens%s".format(
+                    ChatClient.DEFAULT_MODEL, secs,
+                    reply.promptTokens?.let { "%,d".format(it) } ?: "unknown",
+                    reply.completionTokens?.let { "%,d".format(it) } ?: "unknown",
                     reply.cost?.let { " · $%.4f".format(it) } ?: "",
-                )
+                ) + if (reply.truncated) "\nThe response reached the model's output limit and may be incomplete." else ""
                 withContext(Dispatchers.EDT) {
                     if (!disposed && serial == answerSerial && packSerial == requestSerial) {
                         answer.text = text; answer.caretPosition = 0
