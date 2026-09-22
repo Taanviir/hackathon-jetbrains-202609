@@ -1,5 +1,10 @@
 package dev.intellijev.ui
 
+import com.intellij.diff.DiffContentFactory
+import com.intellij.diff.DiffManager
+import com.intellij.diff.requests.SimpleDiffRequest
+import com.intellij.diff.util.DiffUserDataKeys
+import com.intellij.util.ui.WrapLayout
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
@@ -127,12 +132,37 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()), Di
         val before = JBTextArea().apply { isEditable = false; font = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12) }
         val after = JBTextArea().apply { isEditable = false; font = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12) }
         val list = JBList(proposalModel).apply { cellRenderer = ProposalRenderer() }
-        list.addListSelectionListener { if (!it.valueIsAdjusting) list.selectedValue?.let { change -> before.text = change.before; after.text = change.after } }
-        val apply = JButton("Apply selected change").apply { addActionListener { list.selectedValue?.let { if (applyChange(it)) proposalText.text = "Applied ${it.file.name}. Use Undo to revert." } } }
-        val controls = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
-            add(JButton("Propose reviewed changes").apply { addActionListener { runAgent(proposalText) } }); add(Box.createHorizontalStrut(8)); add(apply)
+        val openDiff = JButton("Open diff").apply {
+            isEnabled = false
+            toolTipText = "Compare the captured original and proposed text in a read-only diff"
+            addActionListener {
+                if (disposed || project.isDisposed) return@addActionListener
+                val change = list.selectedValue ?: return@addActionListener
+                val contentFactory = DiffContentFactory.getInstance()
+                val request = SimpleDiffRequest(
+                    "Proposed change: ${change.file.name}",
+                    contentFactory.create(project, change.before, change.file.fileType),
+                    contentFactory.create(project, change.after, change.file.fileType),
+                    "Captured original (${change.file.name})",
+                    "Proposed replacement (${change.file.name})",
+                )
+                request.putUserData(DiffUserDataKeys.FORCE_READ_ONLY, true)
+                DiffManager.getInstance().showDiff(project, request)
+            }
         }
-        val diff = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, JPanel(BorderLayout()).apply { add(JLabel("Current file"), BorderLayout.NORTH); add(JBScrollPane(before), BorderLayout.CENTER) }, JPanel(BorderLayout()).apply { add(JLabel("Proposed replacement"), BorderLayout.NORTH); add(JBScrollPane(after), BorderLayout.CENTER) }).apply { resizeWeight = 0.5 }
+        list.addListSelectionListener {
+            if (!it.valueIsAdjusting) {
+                val change = list.selectedValue
+                before.text = change?.before.orEmpty()
+                after.text = change?.after.orEmpty()
+                openDiff.isEnabled = change != null && !disposed && !project.isDisposed
+            }
+        }
+        val apply = JButton("Apply selected change").apply { addActionListener { list.selectedValue?.let { if (applyChange(it)) proposalText.text = "Applied ${it.file.name}. Use Undo to revert." } } }
+        val controls = JPanel(WrapLayout(FlowLayout.LEFT, 0, 0)).apply {
+            add(JButton("Propose reviewed changes").apply { addActionListener { runAgent(proposalText) } }); add(Box.createHorizontalStrut(8)); add(openDiff); add(Box.createHorizontalStrut(8)); add(apply)
+        }
+        val diff = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, JPanel(BorderLayout()).apply { add(JLabel("Captured original"), BorderLayout.NORTH); add(JBScrollPane(before), BorderLayout.CENTER) }, JPanel(BorderLayout()).apply { add(JLabel("Proposed replacement"), BorderLayout.NORTH); add(JBScrollPane(after), BorderLayout.CENTER) }).apply { resizeWeight = 0.5 }
         add(controls, BorderLayout.NORTH)
         add(JSplitPane(JSplitPane.VERTICAL_SPLIT, JSplitPane(JSplitPane.VERTICAL_SPLIT, JBScrollPane(proposalText), JBScrollPane(list)).apply { resizeWeight = 0.35 }, diff).apply { resizeWeight = 0.35 }, BorderLayout.CENTER)
     }
