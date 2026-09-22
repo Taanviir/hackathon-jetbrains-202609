@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IntelliJev</title>
+<style>
+  :root {
+    color-scheme: light;
+    --ink: #23252b; --muted: #676a72; --faint: #8c8f97;
+    --border: #dcdde0; --border-strong: #b9bbc1;
+    --paper: #fff; --surface: #f7f7f8; --canvas: #f0f0f2;
+    --jev: #2f7d52; --llm: #6a5aa3; --warn: #a85c3a; --steel: #3c6ea5;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    display: grid; justify-items: center; gap: 26px; padding: 26px 0;
+    background: var(--canvas); color: var(--ink);
+    font-family: Inter, Roboto, "Segoe UI", Arial, sans-serif;
+  }
+  .slide {
+    display: flex; flex-direction: column;
+    width: min(1440px, calc(100vw - 32px)); aspect-ratio: 16 / 9;
+    padding: 26px 34px 30px; overflow: hidden;
+    background: var(--paper); box-shadow: 0 10px 34px rgb(0 0 0 / 12%);
+  }
+  h1, h2, h3, p, ul { margin: 0; }
+  ul { padding: 0; list-style: none; }
+
+  .brand {
+    display: flex; align-items: center; justify-content: space-between; gap: 24px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--muted);
+  }
+  .brand b { color: var(--ink); font-weight: 700; letter-spacing: -0.01em; font-size: 14px; }
+  .mark { display: inline-flex; align-items: center; gap: 9px; }
+  .mark i { width: 10px; height: 10px; border-radius: 2px; background: var(--jev); }
+  .mark i + i { background: var(--llm); margin-left: -4px; }
+
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; padding: 14px 0; }
+  .title { display: flex; flex-direction: column; gap: 3px; }
+  .eyebrow { font-size: 10.5px; font-weight: 750; letter-spacing: 1.3px; color: var(--faint); text-transform: uppercase; }
+  h1 { font-size: 27px; line-height: 1.12; letter-spacing: -0.025em; }
+  .note { color: var(--muted); font-size: 12px; text-align: right; max-width: 34ch; line-height: 1.45; }
+
+  .cover { justify-content: center; }
+  .cover .brand { border-bottom: 0; }
+  .cover-title { display: flex; flex: 1; flex-direction: column; align-items: flex-start; justify-content: center; gap: 10px; }
+  .cover-title h1 { font-size: 78px; letter-spacing: -0.04em; }
+  .cover-rule { width: 132px; height: 4px; margin: 12px 0 6px; background: var(--jev); }
+  .cover-line { max-width: 64ch; font-size: 16.5px; line-height: 1.55; color: var(--muted); }
+  .cover-foot { display: flex; gap: 34px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+  .cover-foot b { color: var(--ink); font-weight: 650; }
+
+  .body { display: flex; flex: 1; min-height: 0; gap: 20px; }
+  .cols { display: grid; flex: 1; min-height: 0; gap: 18px; }
+  .c2 { grid-template-columns: 1fr 1fr; }
+  .c3 { grid-template-columns: repeat(3, 1fr); }
+
+  .card {
+    display: flex; flex-direction: column; gap: 8px; min-height: 0;
+    padding: 16px 18px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface);
+  }
+  .card.plain { background: var(--paper); }
+  .card h3 { font-size: 15px; letter-spacing: -0.015em; }
+  .card p { font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+  .card .tag { align-self: flex-start; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 750; letter-spacing: 0.9px; text-transform: uppercase; }
+  .t-jev { background: #e4f1e9; color: var(--jev); }
+  .t-llm { background: #eae6f4; color: var(--llm); }
+  .t-warn { background: #f6e7e0; color: var(--warn); }
+  .t-steel { background: #e2ecf6; color: var(--steel); }
+  .rail { border-left: 3px solid var(--border-strong); padding-left: 15px; }
+  .rail.jev { border-color: var(--jev); }
+  .rail.llm { border-color: var(--llm); }
+  .rail.warn { border-color: var(--warn); }
+  .rail.steel { border-color: var(--steel); }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .stat { display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 6px; }
+  .stat b { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+  .stat span { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+  .stat .k { font-size: 10px; font-weight: 750; letter-spacing: 1.1px; text-transform: uppercase; color: var(--faint); }
+
+  ul.list { display: flex; flex-direction: column; gap: 9px; }
+  ul.list li { display: flex; gap: 10px; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+  ul.list li b { color: var(--ink); font-weight: 650; }
+  ul.list li::before { content: ""; flex: none; width: 5px; height: 5px; margin-top: 7px; border-radius: 50%; background: var(--border-strong); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-size: 10px; font-weight: 750; letter-spacing: 1.1px; text-transform: uppercase; color: var(--faint); }
+  td b { font-weight: 650; }
+  .verdict { font-weight: 750; font-size: 11px; letter-spacing: 0.6px; text-transform: uppercase; }
+  .v-yes { color: var(--jev); } .v-no { color: var(--warn); }
+
+  .diagram { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+  .toolbar { display: flex; align-items: center; justify-content: space-between; height: 38px; padding: 0 14px; border-bottom: 1px solid var(--border); background: var(--paper); font-size: 12px; font-weight: 650; }
+  .legend { display: flex; gap: 18px; color: var(--muted); font-weight: 500; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .legend i { width: 9px; height: 9px; border-radius: 2px; background: var(--jev); }
+  .legend i.llm { background: var(--llm); }
+  .legend i.det { background: var(--steel); }
+  svg { display: block; flex: 1; width: 100%; min-height: 0; background-color: var(--canvas);
+        background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 16px 16px; }
+  text { font-family: Inter, Roboto, "Segoe UI", Arial, sans-serif; }
+  .box { fill: var(--paper); stroke: var(--border-strong); stroke-width: 1.5; }
+  .box-jev { stroke: var(--jev); stroke-width: 2; }
+  .box-llm { stroke: var(--llm); stroke-width: 2; }
+  .box-det { stroke: var(--steel); stroke-width: 2; }
+  .head { fill: var(--surface); }
+  .flow { fill: none; stroke: var(--muted); stroke-width: 2; }
+  .flow-d { stroke-dasharray: 5 4; }
+  .st { fill: var(--ink); font-size: 16px; font-weight: 700; }
+  .sub { fill: var(--muted); font-size: 12.5px; }
+  .key { fill: var(--faint); font-size: 10px; font-weight: 750; letter-spacing: 1.1px; }
+  .mono { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; fill: var(--ink); }
+  .act { fill: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: 0.5px; text-anchor: middle;
+         paint-order: stroke fill; stroke: var(--canvas); stroke-width: 5px; stroke-linejoin: round; }
+  .num { fill: var(--jev); font-size: 13px; font-weight: 750; }
+
+  .foot { display: flex; justify-content: space-between; gap: 20px; padding-top: 12px; margin-top: 14px;
+          border-top: 1px solid var(--border); font-size: 11.5px; color: var(--faint); }
+  .foot b { color: var(--muted); font-weight: 650; }
+
+  @media print {
+    body { gap: 0; padding: 0; background: #fff; }
+    .slide { width: 100%; box-shadow: none; break-after: page; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 1 cover -->
+<section class="slide cover">
+  <div class="brand">
+    <span class="mark"><i></i><i></i> <b>IntelliJev</b></span>
+    <span>JetBrains Hackathon &middot; Help the Developer</span>
+  </div>
+  <div class="cover-title">
+    <p class="eyebrow">How do you help a developer in 2026?</p>
+    <h1>IntelliJev</h1>
+    <div class="cover-rule"></div>
+    <p class="cover-line">An IntelliJ plugin for agent efficiency. We put a decision model in the agent's
+      hot path, so the expensive model is only called when it has earned the call.</p>
+  </div>
+  <div class="cover-foot">
+    <span><b>Team</b> &nbsp;Blackbeard Pirates</span>
+    <span><b>Members</b> &nbsp;Tanvir Anas &middot; Abdul Aziz Mohamed Ikram &middot; Mahad</span>
+    <span><b>Date</b> &nbsp;September 2026</span>
+  </div>
+</section>
+
+<!-- 2 jevons -->
+<section class="slide">
+  <div class="brand"><span class="mark"><i></i><i></i> <b>IntelliJev</b></span><span>The framing</span></div>
+  <header>
+    <div class="title">
+      <p class="eyebrow">Why this, why now</p>
+      <h1>Jevons paradox, running inside your IDE</h1>
+    </div>
+    <p class="note">The name is not a pun we reverse-engineered. It is the actual problem.</p>
+  </header>
+  <div class="body">
+    <div class="cols c3">
+      <div class="card rail steel">
+        <h3>The models got better</h3>
+        <p>Every generation is smarter, so we hand them more. The scope of what we ask an agent
+          to do has grown faster than the models have got cheaper.</p>
+      </div>
+      <div class="card rail steel">
+        <h3>So we spend more, on less</h3>
+        <p>A frontier model now burns reasoning tokens deciding which file to open, whether a step
+          finished, and whether a one-line question deserves a one-line answer.</p>
+      </div>
+      <div class="card rail jev">
+        <h3>The decisions are not the work</h3>
+        <p>None of those choices produce a line of code. They are glances, and we are paying
+          essay prices for them.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span><b>The correction</b> &nbsp;a model that cannot write prose, answering the glances, at a fraction of a cent and a fraction of a second</span><span>02</span></div>
+</section>
+
+<!-- 3 real problems -->
+<section class="slide">
+  <div class="brand"><span class="mark"><i></i><i></i> <b>IntelliJev</b></span><span>The problem</span></div>
+  <header>
+    <div class="title">
+      <p class="eyebrow">Real problems, not invented ones</p>
+      <h1>We asked each other what actually slows us down</h1>
+    </div>
+    <p class="note">Three developers on this team, three answers, all of them the same shape.</p>
+  </header>
+  <div class="body">
+    <div class="cols c3">
+      <div class="card plain rail warn">
+        <span class="tag t-warn">Tanvir</span>
+        <h3>I cannot follow my own agents</h3>
+        <p>Multiple sessions running at once, each generating more output than anyone can read.
+          Keeping track of what each one is doing, and holding that in your head while you work,
+          becomes the bottleneck.</p>
+      </div>
+      <div class="card plain rail warn">
+        <span class="tag t-warn">Mahad</span>
+        <h3>Rate limits land mid-task</h3>
+        <p>The limit hits halfway through, the thread is lost, and you restart rather than resume.
+          Nothing tells you what was finished and what was not.</p>
+      </div>
+      <div class="card plain rail warn">
+        <span class="tag t-warn">Abdul Aziz</span>
+        <h3>I pay frontier prices for trivia</h3>
+        <p>A throwaway question asked inside a long session, because starting a new chat loses the
+          context. The dumbest question in the room costs the most.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span><b>What they share</b> &nbsp;none of these are reasoning problems. They are all cheap judgements that nothing cheap is making.</span><span>03</span></div>
+</section>
+
+<!-- 4 jev -->
+<section class="slide">
+  <div class="brand"><span class="mark"><i></i><i></i> <b>IntelliJev</b></span><span>The model</span></div>
+  <header>
+    <div class="title">
+      <p class="eyebrow">Jev &middot; TypeSafe System One</p>
+      <h1>Unstructured state in, typed decisions out</h1>
+    </div>
+    <p class="note">Jev cannot emit a string. That constraint is the whole design: it decides, it never writes.</p>
+  </header>
+  <div class="body" style="flex-direction:column; gap:18px">
+    <div class="stats">
+      <div class="stat"><span class="k">Latency</span><b>70&ndash;500<span style="font-size:15px">ms</span></b><span>end to end, per decision</span></div>
+      <div class="stat"><span class="k">Input</span><b>$0.042</b><span>per million tokens</span></div>
+      <div class="stat"><span class="k">Output</span><b>Free</b><span>too cheap to meter</span></div>
+      <div class="stat"><span class="k">Choice</span><b>255</b><span>options per decision</span></div>
+    </div>
+    <div class="cols c2">
+      <div class="card plain">
+        <h3>What a call looks like</h3>
+        <pre class="mono" style="margin:0; font-size:12px; line-height:1.65; color:var(--ink)">POST /api/alpha/decisions
+
+{ "model": "jev-latest",
+  "state":  "&lt;the code and its context&gt;",
+  "questions": {
+    "would_edit": { "type": "noul",
+      "instructions": "this task requires
+       changing this file" } } }
+
+&rarr; { "would_edit": { "noul": 0.94 } }</pre>
+      </div>
+      <div class="card">
+        <h3>What that buys us</h3>
+        <ul class="list">
+          <li><b>Calibrated.</b> A 0.94 means something, so thresholds and budgets are real rather than guessed.</li>
+          <li><b>Type safe.</b> It cannot hallucinate a filename or invent an option that was not offered.</li>
+          <li><b>Cheap enough to be everywhere.</b> Scoring an entire repository costs cents, so we ask about every candidate instead of guessing at a few.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span><b>Context</b> &nbsp;32k &middot; <b>Endpoint</b> &nbsp;openrouter.ai/api/alpha/decisions &middot; <b>Model</b> &nbsp;jev-latest</span><span>04</span></div>
+</section>
+
+<!-- 5 principle -->
+<section class="slide">
+  <div class="brand"><span class="mark"><i></i><i></i> <b>IntelliJev</b></span><span>The principle</span></div>
+  <header>
+    <div class="title">
+      <p class="eyebrow">Architecture</p>
+      <h1>Jev decides. The LLM writes. Only when it has earned it.</h1>
+    </div>
+    <p class="note">One shape, reused by every feature in this deck.</p>
+  </header>
+  <div class="diagram">
+    <div class="toolbar">
+      <span>Two-tier control</span>
+      <span class="legend"><span><i></i> Jev decision</span><span><i class="llm"></i> LLM generation</span><span><i class="det"></i> Deterministic</span></span>
+    </div>
+    <svg viewBox="0 0 1360 470" preserveAspectRatio="xMidYMid meet">
+      <rect class="box box-det" x="40" y="170" width="215" height="120" rx="6"/>
+      <text class="key" x="58" y="198">CANDIDATES</text>
+      <text class="st" x="58" y="228">Thousands of</text>
+      <text class="st" x="58" y="250">code elements</text>
+      <text class="sub" x="58" y="274">from PSI, already indexed</text>
+
+      <rect class="box box-jev" x="345" y="150" width="255" height="160" rx="6"/>
+      <rect class="box box-jev head" x="345" y="150" width="255" height="34" rx="6"/>
+      <text class="key" x="365" y="172" style="fill:var(--jev)">JEV</text>
+      <text class="st" x="365" y="212">Typed questions</text>
+      <text class="sub" x="365" y="236">would_edit &middot; example</text>
+      <text class="sub" x="365" y="256">constrains &middot; defines</text>
+      <text class="num" x="365" y="288">~150ms &middot; fractions of a cent</text>
+
+      <path class="box" d="M735 230 L 815 178 L 895 230 L 815 282 Z" fill="var(--paper)" stroke="var(--border-strong)"/>
+      <text class="st" x="815" y="224" text-anchor="middle" font-size="14">above</text>
+      <text class="st" x="815" y="244" text-anchor="middle" font-size="14">threshold?</text>
+
+      <rect class="box box-llm" x="1000" y="150" width="240" height="140" rx="6"/>
+      <rect class="box box-llm head" x="1000" y="150" width="240" height="34" rx="6"/>
+      <text class="key" x="1020" y="172" style="fill:var(--llm)">LLM</text>
+      <text class="st" x="1020" y="212">Writes the code</text>
+      <text class="sub" x="1020" y="238">seconds, real money</text>
+      <text class="sub" x="1020" y="262">called a handful of times</text>
+
+      <rect class="box" x="1000" y="340" width="240" height="70" rx="6" stroke-dasharray="5 4"/>
+      <text class="sub" x="1020" y="372">Dropped, never generated</text>
+      <text class="sub" x="1020" y="392">most candidates land here</text>
+
+      <path class="flow" d="M262 230 H 338" marker-end="url(#a)"/>
+      <path class="flow" d="M607 230 H 728" marker-end="url(#a)"/>
+      <path class="flow" d="M902 230 H 993" marker-end="url(#a)"/>
+      <path class="flow flow-d" d="M815 289 V 375 H 993" marker-end="url(#a)"/>
+      <text class="act" x="947" y="218">yes</text>
+      <text class="act" x="862" y="340">no</text>
+
+      <text class="sub" x="40" y="352" style="font-weight:600; fill:var(--jev)">Jev runs thousands of times a session.</text>
+      <text class="sub" x="40" y="374" style="font-weight:600; fill:var(--llm)">The LLM runs when Jev says it is worth it.</text>
+
+      <defs><marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0 0 L9 4.5 L0 9 z" fill="var(--muted)"/></marker></defs>
+    </svg>
+  </div>
+  <div class="foot"><span><b>Test for any feature</b> &nbsp;swap Jev for an LLM. If it still works, it is not using Jev for what Jev is.</span><span>05</span></div>
+</section>
+
+<!-- 6 the spine -->
+<section class="slide">
+  <div class="brand"><span class="mark"><i></i><i></i> <b>IntelliJev</b></span><span>The spine</span></div>
+  <header>
+    <div class="title">
+      <p class="eyebrow">What every idea turned out to be</p>
+      <h1>They are all finders</h1>
+    </div>
+    <p class="note">We brought eight ideas and found they were one idea. Each is a go and look, done before the expensive model wakes up.</p>
+  </header>
+  <div class="body">
+    <div class="cols c3">
+      <div class="card rail jev">
+        <span class="tag t-jev">Find</span>
+        <h3>Which files?</h3>
+        <p>Context exploration. Score the repository, pack the window.</p>
+        <h3>Which other paths?</h3>
+        <p>Bug fix propagation. The same rule, written three times under three names.</p>
+      </div>
+      <div class="card rail llm">
+        <span class="tag t-llm">Steer</span>
+        <h3>Which tool?</h3>
+        <p>Skim the available tools and skills, shortlist, let the model pick from three instead of forty.</p>
+        <h3>Which model?</h3>
+        <p>Rate the question, route it to the cheapest model that can answer it.</p>
+        <h3>Which context?</h3>
+        <p>Does this prompt even belong in this thread.</p>
+      </div>
+      <div class="card rail warn">
+        <span class="tag t-warn">Watch</span>
+        <h3>What is the status?</h3>
+        <p>A dot on every agent turn, the way CI marks a commit.</p>
+        <h3>What got done?</h3>
+        <p>Before a rate limit bites, and after a run ends, across every open session.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span><b>One plugin</b> &nbsp;one Jev client, one PSI layer, eight surfaces on top of them</span><span>06</span></div>
+</section>
+
+<!-- 7 flagship -->
+<section class="slide">
+  <div class="brand"><span class="mark"><i></i><i></i> <b>IntelliJev</b></span><span>Find</span></div>
+  <header>
+    <div class="title">
+      <p class="eyebrow">Feature 01 &middot; the flagship</p>
+      <h1>Context exploration, without the exploring</h1>
+    </div>
+    <p class="note">Grep needs the right word. Embeddings need an index that goes stale. Agents read files one at a time. Jev reads all of them at once.</p>
+  </header>
+  <div class="diagram">
+    <div class="toolbar">
+      <span>Packing the context window</span>
+      <span class="legend"><span><i class="det"></i> IntelliJ PSI</span><span><i></i> Jev</span><span><i class="llm"></i> LLM</span></span>
+    </div>
+    <svg viewBox="0 0 1360 440" preserveAspectRatio="xMidYMid meet">
+      <rect class="box box-det" x="30" y="140" width="180" height="110" rx="6"/>
+      <text class="key" x="46" y="166">REPOSITORY</text>
+      <text class="st" x="46" y="196">8,000 files</text>
+      <text class="sub" x="46" y="220">already indexed by</text>
+      <text class="sub" x="46" y="238">the IDE</text>
+
+      <rect class="box box-det" x="250" y="140" width="200" height="110" rx="6"/>
+      <text class="key" x="266" y="166">PSI SKETCH</text>
+      <text class="st" x="266" y="196">Signatures only</text>
+      <text class="sub" x="266" y="220">~400 tokens per file,</text>
+      <text class="sub" x="266" y="238">no parser to write</text>
+
+      <rect class="box box-jev" x="490" y="120" width="280" height="150" rx="6"/>
+      <rect class="box box-jev head" x="490" y="120" width="280" height="32" rx="6"/>
+      <text class="key" x="508" y="141" style="fill:var(--jev)">JEV &middot; BATCHED</text>
+      <text class="st" x="508" y="178">~60 sketches per call</text>
+      <text class="sub" x="508" y="202">four questions each, all calls</text>
+      <text class="sub" x="508" y="220">fired in parallel</text>
+      <text class="num" x="508" y="250">~120 calls &middot; seconds &middot; ~$0.14</text>
+
+      <rect class="box" x="810" y="100" width="230" height="190" rx="6"/>
+      <rect class="box head" x="810" y="100" width="230" height="32" rx="6"/>
+      <text class="key" x="828" y="121">SCORED BY ROLE</text>
+      <text class="mono" x="828" y="158">would_edit   0.94</text>
+      <text class="mono" x="828" y="182">example      0.88</text>
+      <text class="mono" x="828" y="206">constrains   0.71</text>
+      <text class="mono" x="828" y="230">defines      0.63</text>
+      <text class="sub" x="828" y="262">a budget per role, not</text>
+      <text class="sub" x="828" y="278">top-k on one score</text>
+
+      <rect class="box box-llm" x="1080" y="140" width="250" height="110" rx="6"/>
+      <rect class="box box-llm head" x="1080" y="140" width="250" height="32" rx="6"/>
+      <text class="key" x="1098" y="161" style="fill:var(--llm)">LLM</text>
+      <text class="st" x="1098" y="196">One packed window</text>
+      <text class="sub" x="1098" y="220">one shot, no browsing</text>
+
+      <path class="flow" d="M216 195 H 244" marker-end="url(#b)"/>
+      <path class="flow" d="M456 195 H 484" marker-end="url(#b)"/>
+      <path class="flow" d="M776 195 H 804" marker-end="url(#b)"/>
+      <path class="flow" d="M1046 195 H 1074" marker-end="url(#b)"/>
+
+      <text class="sub" x="30" y="330" style="font-weight:650; fill:var(--ink)">Why a balanced window beats top-k</text>
+      <text class="sub" x="30" y="356">Ranking on one relevance score returns six near-identical implementations of the same thing.</text>
+      <text class="sub" x="30" y="378">Budgeting across roles returns the file to edit, two patterns to copy, the test, and the interface.</text>
+      <text class="sub" x="30" y="400" style="fill:var(--warn)">Projected figures. The batching limit and end-to-end latency are the first things we measure.</text>
+
+      <defs><marker id="b" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+        <path d="M0 0 L9 4.5 L0 9 z" fill="var(--muted)"/></marker></defs>
+    </svg>
+  </div>
+  <div class="foot"><span><b>Why it needs Jev</b> &nbsp;an LLM cannot afford to read 8,000 files to decide which 6 to read</span><span>07</span></div>
+</section>
+
+<!-- 8 propagation -->
+<section class="slide">
+  <div class="brand"><span class="mark"><i></i><i></i> <b>IntelliJev</b></span><span>Find</span></div>
+  <header>
+    <div class="title">
+      <p class="eyebrow">Feature 02</p>
+      <h1>You fixed one path. Which others had the same bug?</h1>
+    </div>
+    <p class="note">The same business rule, written three times by three people under three names. No search finds all of them.</p>
+  </header>
+  <div class="body" style="gap:18px">
+    <div class="card plain" style="flex:1.15">
+      <span class="tag t-warn">The scenario</span>
+      <h3>Expired coupon validation</h3>
+      <p>You fix expired-coupon validation in normal checkout. IntelliJev flags express checkout and
+        subscription renewal, where equivalent validation still lets expired coupons through.</p>
+      <ul class="list" style="margin-top:6px">
+        <li><b>Why grep fails.</b> The paths have different names and different implementations. Nothing was copied, so nothing matches.</li>
+        <li><b>Jev's job.</b> Answer one narrow question against every candidate: does this function enforce the same eligibility rule? Then rank what comes back.</li>
+        <li><b>The demo.</b> Fix one checkout path, discover a forgotten path, reproduce the original bug there live.</li>
+      </ul>
+    </div>
+    <div class="cols" style="flex:1; grid-template-rows: auto auto auto; align-content:start">
+      <div class="card" style="gap:4px">
+        <span class="tag t-jev">Ranked 0.96</span>
+        <h3 style="font-size:14px">ExpressCheckout.applyPromo()</h3>
+        <p style="font-size:12.5px">Same rule, same gap. No shared code with the path you fixed.</p>
+      </div>
+      <div class="card" style="gap:4px">
+        <span class="tag t-jev">Ranked 0.91</span>
+        <h3 style="font-size:14px">SubscriptionRenewal.validate()</h3>
+        <p style="font-size:12.5px">Expiry checked against the wrong clock.</p>
+      </div>
+      <div class="card" style="gap:4px; border-color:var(--warn)">
+        <span class="tag t-warn">The hard part</span>
+        <h3 style="font-size:14px">Intentional, or overlooked?</h3>
+        <p style="font-size:12.5px">Some differences are deliberate. We show the code and let the developer judge, rather than auto-fixing.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span><b>Why it needs Jev</b> &nbsp;one narrow judgement, asked of every function in the repository, for cents</span><span>08</span></div>
+</section>
+
+<!-- 9 steer -->
+<section class="slide">
+  <div class="brand"><span class="mark"><i></i><i></i> <b>IntelliJev</b></span><span>Steer</span></div>
+  <header>
+    <div class="title">
+      <p class="eyebrow">Features 03 to 05</p>
+      <h1>Three decisions made before the model is ever called</h1>
+    </div>
+    <p class="note">All three are invisible when they work, which is the point.</p>
+  </header>
+  <div class="body">
+    <div class="cols c3">
+      <div class="card plain rail llm">
+        <span class="tag t-llm">Tool and skill finder</span>
+        <h3>Pick from three, not forty</h3>
+        <p>Every tool definition in the prompt costs tokens and attention. Jev skims what is available,
+          shortlists the plausible few, and the model chooses from those.</p>
+        <p style="color:var(--ink); font-weight:600">Shorter prompt, faster choice, fewer wrong turns.</p>
+      </div>
+      <div class="card plain rail llm">
+        <span class="tag t-llm">Model router</span>
+        <h3>Not every question deserves the frontier</h3>
+        <p>Ask something trivial mid-session and you pay frontier prices for it. Jev rates the difficulty
+          and routes to the cheapest model that will answer.</p>
+        <p style="color:var(--ink); font-weight:600">You select several models once. The plugin handles the rest.</p>
+      </div>
+      <div class="card plain rail llm">
+        <span class="tag t-llm">Message context</span>
+        <h3>This question does not belong here</h3>
+        <p>Jev checks whether your prompt continues this thread. If not, it opens beside it rather than
+          dragging the whole history along.</p>
+        <p style="color:var(--ink); font-weight:600">Highlight any part of a reply to open a bubble that carries only that fragment.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span><b>Why it needs Jev</b> &nbsp;a routing decision that costs an LLM call has already lost the saving it was making</span><span>09</span></div>
+</section>
+
+<!-- 10 watch -->
+<section class="slide">
+  <div class="brand"><span class="mark"><i></i><i></i> <b>IntelliJev</b></span><span>Watch</span></div>
+  <header>
+    <div class="title">
+      <p class="eyebrow">Features 06 to 08</p>
+      <h1>Knowing what your agents just did to your codebase</h1>
+    </div>
+    <p class="note">The output problem. Agents generate more than anyone can read, and none of it is summarised cheaply.</p>
+  </header>
+  <div class="body">
+    <div class="cols c3">
+      <div class="card rail warn">
+        <span class="tag t-warn">Turn status</span>
+        <h3>A dot on every turn</h3>
+        <p>The way CI marks a commit. Each agent turn carries a status, the diff it produced, and whether
+          its tests held. Scroll back and read the thread at a glance instead of rereading it.</p>
+      </div>
+      <div class="card rail warn">
+        <span class="tag t-warn">Rate limit rescue</span>
+        <h3>Resume, do not restart</h3>
+        <p>Jev marks each step complete or not as the run proceeds. When the limit lands, you come back to
+          what was finished and what remains, rather than to nothing.</p>
+      </div>
+      <div class="card rail warn">
+        <span class="tag t-warn">Sessions and endings</span>
+        <h3>Three agents, one codebase</h3>
+        <p>Parallel sessions are impossible to follow. Jev classifies what each is doing and what it touched,
+          and writes the end-of-run report: what changed, what was wasted.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span><b>Why it needs Jev</b> &nbsp;summarising every step of every session with an LLM costs more than the run it is summarising</span><span>10</span></div>
+</section>
+
+<!-- 11 swap test -->
+<section class="slide">
+  <div class="brand"><span class="mark"><i></i><i></i> <b>IntelliJev</b></span><span>Honesty check</span></div>
+  <header>
+    <div class="title">
+      <p class="eyebrow">The test we hold ourselves to</p>
+      <h1>Take Jev out. Does the feature still work?</h1>
+    </div>
+    <p class="note">If an LLM can do it, just slower, it is not a Jev feature. We rated our own eight.</p>
+  </header>
+  <div class="body" style="flex-direction:column">
+    <table>
+      <thead><tr><th style="width:24%">Feature</th><th style="width:34%">What Jev decides</th><th style="width:26%">Volume of decisions</th><th style="width:16%">Survives the swap?</th></tr></thead>
+      <tbody>
+        <tr><td><b>Context exploration</b></td><td>Is this file relevant, and in what role</td><td>Thousands, per prompt</td><td class="verdict v-no">No &middot; needs Jev</td></tr>
+        <tr><td><b>Bug fix propagation</b></td><td>Does this enforce the same rule</td><td>Thousands, per fix</td><td class="verdict v-no">No &middot; needs Jev</td></tr>
+        <tr><td><b>Tool and skill finder</b></td><td>Could this tool serve this step</td><td>Every step, in the hot path</td><td class="verdict v-no">No &middot; needs Jev</td></tr>
+        <tr><td><b>Model router</b></td><td>How hard is this question</td><td>Every message, in the hot path</td><td class="verdict v-no">No &middot; needs Jev</td></tr>
+        <tr><td><b>Message context</b></td><td>Does this prompt belong here</td><td>Every message, in the hot path</td><td class="verdict v-no">No &middot; needs Jev</td></tr>
+        <tr><td><b>Turn status</b></td><td>What is the state of this turn</td><td>Every turn, every session</td><td class="verdict v-yes">Partly</td></tr>
+        <tr><td><b>Rate limit rescue</b></td><td>Did this step complete</td><td>Per step of a broken run</td><td class="verdict v-yes">Partly</td></tr>
+        <tr><td><b>End of run report</b></td><td>Did this step contribute</td><td>Per step, after the fact</td><td class="verdict v-yes">Partly</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:14px; font-size:13.5px; line-height:1.55; color:var(--muted); max-width:98ch">
+      The first five sit in the hot path, where a 70 to 500 millisecond decision is the difference between a
+      feature and a demo nobody would leave switched on. The last three are honest about being conveniences
+      that Jev makes affordable rather than possible.</p>
+  </div>
+  <div class="foot"><span><b>Judging criterion 3</b> &nbsp;the brief asks us not to wrap a prompt around a common IDE action. A model that cannot write prose makes that impossible.</span><span>11</span></div>
+</section>
+
+<!-- 12 proof -->
+<section class="slide">
+  <div class="brand"><span class="mark"><i></i><i></i> <b>IntelliJev</b></span><span>Proof</span></div>
+  <header>
+    <div class="title">
+      <p class="eyebrow">How we prove it</p>
+      <h1>Before and after, with the meter running</h1>
+    </div>
+    <p class="note">The brief ranks implementation and proof first, and asks for a real scenario. We want numbers on screen, not claims.</p>
+  </header>
+  <div class="body">
+    <div class="cols c2">
+      <div class="card plain">
+        <span class="tag t-steel">The demo</span>
+        <h3>Split screen, same task, same LLM</h3>
+        <ul class="list" style="margin-top:4px">
+          <li><b>Left.</b> A normal agent explores by opening files, with a live counter of tool calls, seconds and dollars.</li>
+          <li><b>Right.</b> IntelliJev packs the window in one pass and the LLM answers in one shot.</li>
+          <li><b>Then the counters.</b> Same answer. One of them cost an order of magnitude less.</li>
+        </ul>
+        <p style="margin-top:4px">Real repository, real task, nothing staged.</p>
+      </div>
+      <div class="card plain">
+        <span class="tag t-jev">The evaluation</span>
+        <h3>Git history is the answer key</h3>
+        <ul class="list" style="margin-top:4px">
+          <li><b>Take 50 real commits.</b> The message is the task. The files that commit touched are the correct answer.</li>
+          <li><b>Measure recall at ten.</b> IntelliJev against grep, against embeddings, on identical tasks.</li>
+          <li><b>Chart it.</b> The data already exists in the repository, so this costs us an afternoon.</li>
+        </ul>
+        <p style="margin-top:4px">Almost nobody brings a baseline to a hackathon. We intend to.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span><b>Stack</b> &nbsp;Kotlin &middot; IntelliJ Platform Plugin SDK &middot; PSI &middot; Koog for the agent loop &middot; Jev via OpenRouter</span><span>12</span></div>
+</section>
+
+<!-- 13 ask -->
+<section class="slide">
+  <div class="brand"><span class="mark"><i></i><i></i> <b>IntelliJev</b></span><span>Next</span></div>
+  <header>
+    <div class="title">
+      <p class="eyebrow">What we need from you</p>
+      <h1>What is settled, what is open, what we are asking</h1>
+    </div>
+    <p class="note">We would rather be told now which features to drop than find out on stage.</p>
+  </header>
+  <div class="body">
+    <div class="cols c3">
+      <div class="card rail jev">
+        <span class="tag t-jev">Settled</span>
+        <h3>The architecture</h3>
+        <p>Jev decides in the hot path, the LLM writes on demand, PSI supplies structure for free.
+          Every feature here is that one shape, which is why eight ideas fit in one plugin.</p>
+      </div>
+      <div class="card rail warn">
+        <span class="tag t-warn">Open</span>
+        <h3>Three unknowns</h3>
+        <ul class="list" style="margin-top:2px">
+          <li>How many questions fit in one call. All of our batching maths depends on it.</li>
+          <li>Real latency under parallel load.</li>
+          <li>Whether signatures alone carry enough signal, or we need a second pass on full text.</li>
+        </ul>
+      </div>
+      <div class="card rail steel">
+        <span class="tag t-steel">Asking</span>
+        <ul class="list" style="margin-top:2px">
+          <li>Is context exploration the right flagship, or is bug fix propagation the better story?</li>
+          <li>Does a measured before-and-after count for more than a wider feature set?</li>
+          <li>How much JetBrains integration do you want to see by the deadline?</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span><b>Blackbeard Pirates</b> &nbsp;Tanvir Anas &middot; Abdul Aziz Mohamed Ikram &middot; Mahad</span><span>13</span></div>
+</section>
+
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  addEventListener('keydown', e => {
+    const i = slides.findIndex(s => s.getBoundingClientRect().top > -60);
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+      slides[Math.min(i + 1, slides.length - 1)]?.scrollIntoView({behavior:'smooth'});
+    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+      slides[Math.max(i - 1, 0)]?.scrollIntoView({behavior:'smooth'});
+    }
+  });
+</script>
+</body>
+</html>
