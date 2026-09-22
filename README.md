@@ -82,8 +82,11 @@ Scene files are in [docs/diagrams](./docs/diagrams). Drag one onto the Excalidra
 drop it in, or use File then Open to look at it on its own. They are editable shapes, not
 images, so pull them apart during the session.
 
+- [ideas-board](./docs/diagrams/ideas-board.excalidraw) is 22 ideas as sticky notes, green
+  where Jev is load-bearing and amber where an LLM could do the same job. Drop this one in
+  first and dot-vote three each.
 - [00-two-tier-principle](./docs/diagrams/00-two-tier-principle.excalidraw) is the shape all
-  three candidates share. Start here.
+  three candidates share. Read it before voting.
 - [a-semantic-inspections](./docs/diagrams/a-semantic-inspections.excalidraw)
 - [b-codebase-triage](./docs/diagrams/b-codebase-triage.excalidraw)
 - [c-llm-rubric](./docs/diagrams/c-llm-rubric.excalidraw)
