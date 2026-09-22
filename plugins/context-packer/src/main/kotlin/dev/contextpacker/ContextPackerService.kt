@@ -57,9 +57,10 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
      */
     private val psiSketches = System.getenv("CONTEXT_PACKER_PSI_SKETCH") == "1"
     @Volatile private var jev: JevClient? = null
+    @Volatile private var jevKey: String? = null
 
     /** Jev input tokens spent in this IDE session, against a cap so a looping agent can't drain an account. */
-    val sessionTokens get() = jev?.calls?.sumOf { it.inputTokens.toLong() } ?: 0L
+    val sessionTokens get() = retiredTokens + (jev?.calls?.sumOf { it.inputTokens.toLong() } ?: 0L)
     private val sessionBudget = System.getenv("CONTEXT_PACKER_TOKEN_BUDGET")?.toLongOrNull() ?: 20_000_000L
 
     private val listeners = java.util.concurrent.CopyOnWriteArrayList<(PackReport) -> Unit>()
@@ -101,7 +102,8 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
             jevModel = "${client.model} via ${client.backend.name.lowercase()}",
         ).also { report ->
             lastReport = report
-            listeners.forEach { it(report) }
+            // The pack is paid for by now; a broken listener must not turn it into a failure.
+            listeners.forEach { l -> runCatching { l(report) }.onFailure { thisLogger().warn("pack listener failed", it) } }
         }
     }
 
@@ -131,7 +133,7 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
             paths.mapNotNull { path ->
                 val file = base.findFileByRelativePath(path) ?: return@mapNotNull null
                 val text = FileDocumentManager.getInstance().getCachedDocument(file)?.text
-                    ?: runCatching { VfsUtilCore.loadText(file) }.getOrNull() ?: return@mapNotNull null
+                    ?: loadText(file) ?: return@mapNotNull null
                 path to text
             }.toMap()
         }
@@ -139,24 +141,37 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
 
     fun fileFor(path: String): VirtualFile? = project.guessProjectDir()?.findFileByRelativePath(path)
 
+    /** Only IO failures mean "skip this file"; cancellation must propagate out of the read action. */
+    private fun loadText(file: VirtualFile): String? = try {
+        VfsUtilCore.loadText(file)
+    } catch (e: java.io.IOException) {
+        null
+    }
+
     /**
      * TypeSafe's own API by default: ~2.5 s a pack. Vercel AI Gateway only with `JEV_BACKEND=gateway`,
      * or when no TypeSafe key is set; it serves the same model but rate-limits hard (30-60 s a pack).
      */
-    private suspend fun jevClient(): JevClient {
-        jev?.let { return it }
-        val client = withContext(Dispatchers.IO) {
-            val wantGateway = System.getenv("JEV_BACKEND")?.equals("gateway", ignoreCase = true) == true
-            val typesafe = Keys.TYPESAFE.get().takeUnless { wantGateway }
-            val gateway = Keys.GATEWAY.get()
-            when {
-                typesafe != null -> JevClient(typesafe, JevBackend.TYPESAFE)
-                gateway != null -> JevClient(gateway, JevBackend.GATEWAY, concurrency = 2)
-                else -> throw MissingKeyException(Keys.TYPESAFE, Keys.GATEWAY)
-            }
+    private suspend fun jevClient(): JevClient = withContext(Dispatchers.IO) {
+        val wantGateway = System.getenv("JEV_BACKEND")?.equals("gateway", ignoreCase = true) == true
+        val typesafe = Keys.TYPESAFE.get().takeUnless { wantGateway }
+        val gateway = Keys.GATEWAY.get()
+        val (key, backend) = when {
+            typesafe != null -> typesafe to JevBackend.TYPESAFE
+            gateway != null -> gateway to JevBackend.GATEWAY
+            else -> throw MissingKeyException(Keys.TYPESAFE, Keys.GATEWAY)
         }
-        return client.also { jev = it }
+        // Reuse the client (and its spend history) until the key changes, e.g. after "Set API Keys".
+        jev?.takeIf { jevKey == key && it.backend == backend }
+            ?: JevClient(key, backend, concurrency = if (backend == JevBackend.GATEWAY) 2 else 48).also {
+                jev?.let { old -> retiredTokens += old.calls.sumOf { c -> c.inputTokens.toLong() } }
+                jev = it
+                jevKey = key
+            }
     }
+
+    /** Tokens spent by clients replaced after a key change, so the session cap still counts them. */
+    @Volatile private var retiredTokens = 0L
 
     /** Many short read actions in parallel, never one long one, so typing is never blocked. */
     private suspend fun collectDocs(): List<FileDoc> = coroutineScope {
@@ -171,7 +186,7 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         val document = FileDocumentManager.getInstance().getCachedDocument(file)
         val stamp = document?.modificationStamp ?: file.modificationStamp
         cache[file.path]?.takeIf { it.stamp == stamp }?.let { return it.doc }
-        val text = document?.text ?: runCatching { VfsUtilCore.loadText(file) }.getOrNull() ?: return null
+        val text = document?.text ?: loadText(file) ?: return null
         val path = base?.let { VfsUtilCore.getRelativePath(file, it) } ?: file.path
         val sketch = if (!psiSketches) RegexSketcher.sketch(path, text) else try {
             PsiManager.getInstance(project).findFile(file)?.let { Sketcher.sketch(it, path, text) }

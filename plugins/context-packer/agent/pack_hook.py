@@ -15,7 +15,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 IDE_MCP = os.environ.get("CONTEXT_PACKER_MCP", "http://127.0.0.1:64342/sse")
-LIMIT = int(os.environ.get("CONTEXT_PACKER_HOOK_LIMIT", "8"))
+# Give up well before Claude Code's own hook timeout, so a slow pack delays the prompt, never blocks it.
+DEADLINE_S = float(os.environ.get("CONTEXT_PACKER_HOOK_DEADLINE", "25"))
 
 
 async def from_ide(prompt: str, cwd: str) -> str:
@@ -23,14 +24,20 @@ async def from_ide(prompt: str, cwd: str) -> str:
     from mcp.client.sse import sse_client
     async with sse_client(IDE_MCP) as (read, write), ClientSession(read, write) as session:
         await session.initialize()
-        result = await session.call_tool("pack_context", {"task": prompt, "limit": LIMIT, "projectPath": cwd})
+        result = await session.call_tool("pack_context", {"task": prompt, "limit": limit(), "projectPath": cwd})
+        if getattr(result, "is_error", None) or getattr(result, "isError", None):
+            return ""  # e.g. budget used up: never feed an error message to the agent as context
         return "\n".join(getattr(b, "text", "") for b in result.content)
 
 
 async def from_eval(prompt: str) -> str:
     sys.path.insert(0, str(HERE.parent / "eval"))
     import pack_mcp  # needs TASK_PARENT, which is set in eval mode
-    return await pack_mcp.pack_context(prompt, LIMIT)
+    return await pack_mcp.pack_context(prompt, limit())
+
+
+def limit() -> int:
+    return int(os.environ.get("CONTEXT_PACKER_HOOK_LIMIT", "8"))
 
 
 def main():
@@ -39,7 +46,8 @@ def main():
     if len(prompt.split()) < 4 or prompt.startswith("/"):
         return
     t0 = time.perf_counter()
-    packed = asyncio.run(from_eval(prompt) if os.environ.get("TASK_PARENT") else from_ide(prompt, payload.get("cwd", "")))
+    work = from_eval(prompt) if os.environ.get("TASK_PARENT") else from_ide(prompt, payload.get("cwd", ""))
+    packed = asyncio.run(asyncio.wait_for(work, DEADLINE_S))
     if not packed.strip():
         return
     seconds = time.perf_counter() - t0

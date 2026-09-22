@@ -86,7 +86,8 @@ class Packer(
         fun full(paths: List<String>) = paths.map { it to "path: $it\n${byPath.getValue(it).text.take(config.fullChars)}" }
 
         // BM25 is instant, so its half of the pool goes to pass 2 while pass 1 is still reading sketches.
-        val pass1Job = async { scoreAll(task, docs.map { it.path to it.sketch }, config.batch) }
+        // Only a total pass-1 failure means Jev isn't answering; later passes degrade instead of failing the pack.
+        val pass1Job = async { scoreAll(task, docs.map { it.path to it.sketch }, config.batch, throwIfAllFail = true) }
         val bm25Ranked = async(Dispatchers.Default) { Bm25.rank(task, docs.associate { it.path to it.text }) }.await()
         val bm25Pool = bm25Ranked.take(config.pool)
         val pass2a = async { scoreAll(task, full(bm25Pool), config.perCall) }
@@ -94,7 +95,8 @@ class Packer(
         val pass1Done = System.nanoTime()
 
         val bySketch = pass1.scores.keys.sortedByDescending { pass1.scores.getValue(it) }
-        val extra = bySketch.take(config.pool).filterNot { it in bm25Pool.toSet() }
+        val inBm25Pool = bm25Pool.toSet()
+        val extra = bySketch.take(config.pool).filterNot { it in inBm25Pool }
         val pool = bm25Pool + extra
         onProgress("Reading ${pool.size} shortlisted files in full")
         val pass2b = if (extra.isEmpty()) Scores(emptyMap(), 0) else scoreAll(task, full(extra), config.perCall)
@@ -156,7 +158,8 @@ class Packer(
         val byPath = docs.associateBy { it.path }
         val bm25Ranked = async(Dispatchers.Default) { Bm25.rank(task, docs.associate { it.path to it.text }) }.await()
         val pool = bm25Ranked.take(config.previewPool)
-        val pass = scoreAll(task, pool.map { it to "path: $it\n${byPath.getValue(it).text.take(config.fullChars)}" }, config.perCall)
+        val pass = scoreAll(task, pool.map { it to "path: $it\n${byPath.getValue(it).text.take(config.fullChars)}" }, config.perCall,
+            throwIfAllFail = true)
         val done = System.nanoTime()
         val files = pool.mapIndexed { i, path ->
             val relevance = pass.scores[path] ?: 0.0
@@ -172,11 +175,16 @@ class Packer(
      * One failed batch costs its files a score of zero, not the whole pack. If every batch fails,
      * Jev isn't answering at all, and quietly returning a keyword-only ranking would be a lie.
      */
-    private suspend fun scoreAll(task: String, items: List<Pair<String, String>>, groupSize: Int): Scores = coroutineScope {
+    private suspend fun scoreAll(
+        task: String,
+        items: List<Pair<String, String>>,
+        groupSize: Int,
+        throwIfAllFail: Boolean = false,
+    ): Scores = coroutineScope {
         val parts = items.chunked(groupSize).map { group ->
             async { runCatching { scorer.score(task, group) } }
         }.awaitAll()
-        if (parts.isNotEmpty() && parts.all { it.isFailure }) throw parts.first().exceptionOrNull()!!
+        if (throwIfAllFail && parts.isNotEmpty() && parts.all { it.isFailure }) throw parts.first().exceptionOrNull()!!
         val scores = HashMap<String, Double>()
         parts.forEach { part -> part.getOrNull()?.let(scores::putAll) }
         items.forEach { (path, _) -> scores.putIfAbsent(path, 0.0) }

@@ -119,9 +119,11 @@ class JevClient(
         return (exponential * (1 - Random.nextDouble() * BACKOFF_JITTER)).toLong()
     }
 
+    /** Honours the server's retry-after, capped so one long value can't stall a pack that holds a permit. */
     private fun retryAfterMs(response: HttpResponse<*>): Long? {
-        response.headers().firstValue("retry-after-ms").orElse(null)?.toDoubleOrNull()?.let { return it.toLong() }
-        return response.headers().firstValue("retry-after").orElse(null)?.toDoubleOrNull()?.let { (it * 1000).toLong() }
+        val ms = response.headers().firstValue("retry-after-ms").orElse(null)?.toDoubleOrNull()
+            ?: response.headers().firstValue("retry-after").orElse(null)?.toDoubleOrNull()?.times(1000)
+        return ms?.toLong()?.coerceIn(0, BACKOFF_MAX_MS)
     }
 
     private fun elapsedMs(started: Long) = (System.nanoTime() - started) / 1_000_000
