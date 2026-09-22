@@ -19,8 +19,9 @@ Settings were chosen on 40 dev tasks, then measured once on 70 test tasks nobody
 | BM25 keyword search | 0.42 | 0.53 | 0.63 |
 | **Context Packer** | **0.54** | **0.69** | **0.80** |
 
-That's +16 points of recall@10, with a 95% bootstrap interval of +10 to +23. The Jev passes take
-about 2.5 s. Details, including the version that *didn't* beat BM25 and why, are in
+That's +16 points of recall@10, with a 95% bootstrap interval of +10 to +23. In the IDE on Koog
+(2,206 files) a pack takes about 4.5 s warm and 6.6 s in a freshly started IDE, for 53-56 Jev calls
+and about $0.03. Details, including the version that *didn't* beat BM25 and why, are in
 [spike/RESULTS.md](spike/RESULTS.md).
 
 ## How it works
@@ -32,9 +33,11 @@ plugin does the looking.
 
 1. **Collect.** Every source file in the project, minus excluded, generated, library, binary and
    files over 100 KB.
-2. **Sketch.** Each file becomes a ~300-token summary built from the IDE's Structure View:
-   declarations two levels deep, with the first line of each doc comment. It works for any
-   language the IDE understands, and it's cached by modification stamp.
+2. **Sketch.** Each file becomes a ~300-token summary: path, package, and declarations two levels
+   deep with the first line of each doc comment. It's the same sketcher the eval measured (a
+   parity test checks the Kotlin port against it), it takes about 1.4 s for 2,206 files, and it's
+   cached by modification stamp. Sketches built from the IDE's Structure View read better but
+   cost ~19 ms a file cold and are unmeasured; `CONTEXT_PACKER_PSI_SKETCH=1` turns them on.
 3. **Pass 1.** Jev reads 60 sketches per call and answers, for each one, "Implementing the change
    described in `task` requires reading or editing the file in `f07`." BM25 ranks the full text
    at the same time.
@@ -53,11 +56,15 @@ Needs an IntelliJ-based IDE, 2025.2 or newer.
 1. Get `build/distributions/context-packer-0.1.0.zip`, or build it with `./gradlew buildPlugin`.
 2. **Settings | Plugins | ⚙ | Install Plugin from Disk…** and pick the zip.
 3. **Tools | Context Packer: Set API Keys…**:
-   - `AI_GATEWAY_API_KEY` from Vercel AI Gateway, used for Jev when set; or
-   - `TYPESAFE_API_KEY` for TypeSafe's own API; and
-   - `OPENROUTER_API_KEY`, only for the **Ask LLM** button.
+   - `TYPESAFE_API_KEY` for Jev, through TypeSafe's own API. This is the fast path.
+   - `AI_GATEWAY_API_KEY` is the fallback when there's no TypeSafe key, or when
+     `JEV_BACKEND=gateway` is set. Vercel serves the same model, but in testing it answered only
+     about 30% of calls under load (429s and 503s), so a pack takes 30-60 s.
+   - `OPENROUTER_API_KEY`, only for the **Ask LLM** button. Jev never goes through OpenRouter.
 
-   Environment variables with the same names work too, and win over stored keys.
+   Environment variables with the same names work too, and win over stored keys. Each IDE session
+   stops after 20M Jev input tokens (about 37 packs, $0.84) so a looping agent can't drain an
+   account; set `CONTEXT_PACKER_TOKEN_BUDGET` to change that.
 
 ## Use it
 
@@ -78,9 +85,10 @@ server on in **Settings | Tools | MCP Server**, then point your agent at it. For
 claude mcp add --transport sse jetbrains http://127.0.0.1:64342/sse
 ```
 
-The tool's description tells the agent to call it before searching. Whatever an agent asks for also
-appears in the tool window, marked as asked by an agent, so you can see the context it was given. If the IDE runs on Windows and
-the agent in WSL, localhost only reaches the IDE with WSL's mirrored networking turned on.
+The tool's description tells the agent to call it before searching. Whatever an agent asks for
+also appears in the tool window, marked as asked by an agent, so you can see the context it was
+given. If the IDE runs on Windows and the agent in WSL, localhost only reaches the IDE with WSL's
+mirrored networking turned on.
 
 ## Demo script
 
@@ -104,8 +112,9 @@ has run.
 ## Reproduce the numbers
 
 Everything runs from this directory with [uv](https://docs.astral.sh/uv/). Put keys in the repo
-root's `.env`. Each run stops at `JEV_TOKEN_BUDGET` input tokens (default 5M, about $0.21 at list
-price), so raise it deliberately for the full 136-task run, which is about 120M tokens.
+root's `.env`. Jev spend is recorded in `.cache/jev_ledger.json` across runs, and calls are refused
+once it reaches `JEV_TOKEN_BUDGET` input tokens (default 24M, about $1). The full 136-task run is
+about 75M tokens (about $3), so raise the budget deliberately for it.
 
 ```
 git clone https://github.com/JetBrains/koog.git .cache/koog
@@ -116,7 +125,7 @@ uv run python fusion.py ../.cache/spike_runs/<that file>.json --dev 40
 cd ../eval && uv run python agent_ab.py --tasks 10 --offset 40
 ```
 
-Plugin tests are `./gradlew test`, 15 of them, headless. For a licence-free sandbox IDE with the
+Plugin tests are `./gradlew test`, 16 of them, headless. For a licence-free sandbox IDE with the
 MCP server on, run `OPEN_PROJECT=/path/to/project ./gradlew runIdeCommunity`.
 
 ## Limits
@@ -124,4 +133,5 @@ MCP server on, run `OPEN_PROJECT=/path/to/project ./gradlew runIdeCommunity`.
 - Claims are measured on Kotlin only, in one repository. Sketching works for other languages but
   isn't evaluated there.
 - Tasks that mostly add new files are out of scope. There's nothing yet to find.
-- The first pack in a fresh IDE sketches every file. After that, only changed files are re-read.
+- The first pack in a fresh IDE sketches every file (about 1.4 s on Koog). After that, only changed
+  files are re-read.
