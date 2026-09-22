@@ -1,13 +1,14 @@
 # Context Packer
 
-An IntelliJ plugin that finds the files a coding task needs in about three seconds, so an agent
-can skip the part where it reads the repository one file at a time.
+An IntelliJ plugin that ranks source files for a coding task and hands the selected context to
+an agent. Choose Jev (API), Laya (local), or Fast keywords (local). Typing previews use local
+keywords without model calls; **Pack context** runs the selected provider.
 
-Type a task, or let an agent call the `pack_context` MCP tool, and it scores every source file in
-the project against that task. You get back the ten or twenty files most likely to matter, with
-tests flagged.
+Type a task, or let an agent call the `pack_context` MCP tool. Jev and Fast keywords consider
+every eligible source file; Laya scores a bounded keyword shortlist. You get the top ten or
+twenty files, with tests flagged and Jev's optional role labels shown separately.
 
-## Does it work?
+## Jev evaluation
 
 It's measured on real history. Each task is a real commit subject from
 [JetBrains/koog](https://github.com/JetBrains/koog) and the right answer is the `.kt` files that
@@ -23,6 +24,16 @@ That's +16 points of recall@10, with a 95% bootstrap interval of +10 to +23. In 
 (2,206 files) a pack takes about 4.4 s, for 54-56 Jev calls and about $0.03. Files are sketched in the
 background when the project opens; packs requested before warm-up finishes can still include setup time. Details, including the version that *didn't* beat BM25 and why, are in
 [spike/RESULTS.md](spike/RESULTS.md).
+
+### Local Laya evaluation
+
+On a separate frozen set of **30 held-out Koog tasks**, full-source keyword search had
+recall@10 **0.553**, versus **0.391** for fixed Laya+BM25 and **0.114** for Laya scores alone
+within the shortlist. Laya did not improve this benchmark. The clean next-25 continuation
+averaged **117.2 seconds** for its two CPU model passes, with 2,329 calls and no request errors.
+Both local methods have $0 API fee, excluding hardware and electricity. These tasks and this
+Windows CPU differ from the Jev evaluation above; this is not a Laya-versus-Jev comparison.
+See [the measured Laya report](eval/LAYA_RESULTS.md) and [local setup](LAYA.md).
 
 ## How it works
 
@@ -85,13 +96,18 @@ Needs an IntelliJ-based IDE, 2025.2 or newer.
      about 30% of calls under load (429s and 503s), so a pack takes 30-60 s.
    - `OPENROUTER_API_KEY`, only for the **Ask LLM** button. Jev never goes through OpenRouter.
 
-   Environment variables with the same names work too, and win over stored keys. Before starting
+   Environment variables with the same names work too, and win over stored keys. A changed key
+   takes effect on the next pack, with earlier reported session usage retained. Before starting
    another pack, the plugin checks whether the session has reached 20M **reported** Jev input tokens;
    set `CONTEXT_PACKER_TOKEN_BUDGET` to change that threshold. An in-progress pack can exceed it,
    and missing usage cannot be counted, so this is not a strict spending cap. Requests include
    retry attempts; any unknown usage makes the pack's API fee unavailable rather than zero.
 
    Fast keywords needs none of these keys. Laya uses a local server instead of an API key.
+4. Optional: `CONTEXT_PACKER_EXTENSIONS=kt` restricts candidates to Kotlin, the language in the
+   published evaluations. The installed plugin defaults to all supported source languages;
+   the `runIdeCommunity` demo task defaults this variable to `kt` (override with an empty value
+   for all languages).
 
 ## Use it
 
@@ -100,6 +116,10 @@ the change and press **Pack context** or Ctrl+Enter. Double-click a pick to open
 to drop one, and use **Add open file** to pin one it missed. Then **Copy prompt** puts the task
 plus every picked file on the clipboard, or **Ask OpenRouter (cloud)** sends it to `z-ai/glm-5.3-flash` through
 OpenRouter. Set `CONTEXT_PACKER_LLM_MODEL` to use a different model.
+
+After a short pause while typing, the list shows a **local keyword preview**. This makes no
+Jev or Laya requests, does not change the saved provider, and does not replace the latest
+explicit pack returned to an agent. Press Pack for the selected provider's full ranking.
 
 ![An agent's pack shown in the tool window](docs/tool-window-agent-pack.png)
 
@@ -112,7 +132,25 @@ server on in **Settings | Tools | MCP Server**, then point your agent at it. For
 claude mcp add --transport sse jetbrains http://127.0.0.1:64342/sse
 ```
 
-The tool's description tells the agent to call it before searching. Whatever an agent asks for
+**Better: let the agent start with the files.** Strong agents tend to trust their own search: headless
+Claude Code ignored `pack_context` in five tries, even when told to use it. So there's also a Claude Code
+hook, `agent/pack_hook.py`. It runs on every request before Claude sees it, asks the IDE's Context Packer,
+and hands Claude the ranked files as context, so nothing has to be chosen. Put this in a project's
+`.claude/settings.local.json`:
+
+```json
+{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "timeout": 60,
+  "command": "cd <repo>/plugins/context-packer/eval && uv run --project . python ../agent/pack_hook.py"}]}]}}
+```
+
+The live hook defaults to **Fast keywords**, making no model calls. Set
+`CONTEXT_PACKER_HOOK_PROVIDER` to `laya`, `jev`, or `configured` to opt into a model or the
+saved IDE preference. The published Claude hook experiment below used the Jev evaluation
+pipeline, so its measured benefit does not establish the result for this keyword default.
+The hook gives up after 25 s and fails open with no context on an error. For CPU Laya,
+set `CONTEXT_PACKER_HOOK_DEADLINE=180` and the command hook timeout to at least 190 seconds;
+the measured uncached pack takes about two minutes. Local workload can vary.
+The tool's description tells the agent when context packing is useful. Whatever an agent asks for
 also appears in the tool window, marked as asked by an agent, so you can see the context it was
 given. If the IDE runs on Windows and the agent in WSL, localhost only reaches the IDE with WSL's
 mirrored networking turned on.
@@ -138,10 +176,10 @@ the top five better (recall@5 0.61 against 0.52 for Jev + BM25, a significant ga
 0.65). Jev does it in about 1 s for about $0.002, where the LLM takes 29 s and $0.007. Jev's edge is speed and cost,
 not judgement. Stage 3 narrows the top-five gap but doesn't close it.
 
-**Inside an agent.** The same GLM agent ran 10 held-out tasks with and without `pack_context`, twice: once with commit
-subjects, once with identifier-free rewrites. Final recall was identical in both. With the packer the agent used 7-22%
-fewer tokens and fewer calls, but it was not faster to the first right file, because a grep-first agent gets there in
-about 4 s on these tasks. Ten tasks can't separate any of it from noise.
+**Inside an agent.** Claude Code (Sonnet) with the prompt hook, against the same Claude Code without it, on 8 held-out
+Koog tasks: **25% fewer turns** (−3.3 per task, 95% interval −5.9 to −0.5), 38% fewer searches and 15% lower cost,
+with recall equal on 7 of 8 tasks. It was not faster. Offered as a tool instead, Claude Code never called it. A weaker
+agent (GLM) did call it and used 7-22% fewer tokens, again without getting faster.
 
 ## Reproduce the numbers
 

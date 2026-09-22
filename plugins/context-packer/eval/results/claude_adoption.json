@@ -1,0 +1,12 @@
+{
+ "what": "Headless Claude Code (Sonnet) on Koog task ab1703cd at its parent commit, pack_context MCP server connected and listed in the init event every time. The Jev ledger did not move across all five runs, so pack_context was never called.",
+ "task": "Update the Koog example that demonstrates a trip planning agent.",
+ "runs": [
+  {"setup": "tool connected, no instruction", "tools": {"Grep": 2, "Read": 2}, "recall": 0.17, "seconds": 19.3, "cost_usd": 0.125},
+  {"setup": "same, init checked", "tools": {"Grep": 1, "Glob": 1, "Read": 2}, "recall": 0.33, "seconds": 18.4, "cost_usd": 0.081},
+  {"setup": "+ system prompt: call pack_context first", "tools": {"Grep": 2, "Read": 3}, "recall": 0.83, "seconds": 31.6, "cost_usd": 0.225},
+  {"setup": "+ ToolSearch allowed", "tools": {"Grep": 2, "Glob": 1}, "recall": 1.0, "seconds": 10.2, "cost_usd": 0.039},
+  {"setup": "+ exact tool name in the instruction", "tools": {"Grep": 1, "Read": 3}, "recall": 1.0, "seconds": 15.7, "cost_usd": 0.122}
+ ],
+ "pack_context_calls": 0
+}

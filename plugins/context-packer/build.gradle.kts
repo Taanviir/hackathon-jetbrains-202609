@@ -59,6 +59,8 @@ intellijPlatformTesting {
             version = "2025.2.6.2"
             task {
                 environment(dotEnv)
+                // The demo ranks the candidate set the eval measured: Kotlin files only.
+                environment("CONTEXT_PACKER_EXTENSIONS", System.getenv("CONTEXT_PACKER_EXTENSIONS") ?: "kt")
                 maxHeapSize = "2g"
                 jvmArgs(
                     "-Didea.trust.all.projects=true",

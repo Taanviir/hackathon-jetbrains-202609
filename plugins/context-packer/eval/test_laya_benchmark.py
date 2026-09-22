@@ -35,9 +35,9 @@ class LayaBenchmarkTest(unittest.TestCase):
             bench.bm25_rank("no matching terms", {"z.kt": "same", "a.kt": "same"}),
         )
 
-    def test_regex_sketch_matches_kotlin_parity_fixture(self):
+    def test_regex_sketch_matches_frozen_laya_parity_fixture(self):
         fixture = (
-            bench.ROOT / "src" / "test" / "resources" / "fixtures" / "regex_parity.json"
+            bench.ROOT / "src" / "test" / "resources" / "fixtures" / "laya_regex_parity.json"
         )
         cases = json.loads(fixture.read_text(encoding="utf-8"))["cases"]
         self.assertGreater(len(cases), 10)

@@ -1,0 +1,438 @@
+{
+ "model": "sonnet",
+ "rows": [
+  {
+   "sha": "ab1703cd",
+   "task": "Update the Koog example that demonstrates a trip planning agent.",
+   "truth": [
+    "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/Agent.kt",
+    "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/Main.kt",
+    "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/Structs.kt",
+    "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/api/OpenMeteoClient.kt",
+    "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/tools/UserTools.kt",
+    "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/tools/WeatherTools.kt"
+   ],
+   "explore": {
+    "arm": "explore",
+    "wall_s": 16.1,
+    "turns": 6,
+    "cost_usd": 0.121918,
+    "input_tokens": 8,
+    "cache_read": 114130,
+    "cache_write": 21409,
+    "output_tokens": 1344,
+    "tools": {
+     "Grep": 1,
+     "Read": 4
+    },
+    "answer": [
+     "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/Agent.kt",
+     "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/Main.kt",
+     "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/Structs.kt"
+    ],
+    "answered": true,
+    "recall": 0.5,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 0
+   },
+   "pack": {
+    "arm": "pack",
+    "wall_s": 22.3,
+    "turns": 9,
+    "cost_usd": 0.1486936,
+    "input_tokens": 16,
+    "cache_read": 259288,
+    "cache_write": 20511,
+    "output_tokens": 1476,
+    "tools": {
+     "Glob": 2,
+     "Read": 2,
+     "Grep": 4
+    },
+    "answer": [
+     "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/Agent.kt"
+    ],
+    "answered": true,
+    "recall": 0.16666666666666666,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 569217
+   }
+  },
+  {
+   "sha": "3773c21e",
+   "task": "Add support for OpenAI's GPT-5.5 and GPT-5.5 Pro models.",
+   "truth": [
+    "prompt/prompt-executor/prompt-executor-clients/prompt-executor-openai-client/src/commonMain/kotlin/ai/koog/prompt/executor/clients/openai/OpenAIModels.kt",
+    "prompt/prompt-executor/prompt-executor-clients/prompt-executor-openai-client/src/jvmTest/kotlin/ai/koog/prompt/executor/clients/openai/OpenAILLMClientTest.kt",
+    "prompt/prompt-executor/prompt-executor-clients/prompt-executor-openai-client/src/jvmTest/kotlin/ai/koog/prompt/executor/clients/openai/OpenAIModelsTest.kt"
+   ],
+   "explore": {
+    "arm": "explore",
+    "wall_s": 25.8,
+    "turns": 7,
+    "cost_usd": 0.24879460000000003,
+    "input_tokens": 14,
+    "cache_read": 312483,
+    "cache_write": 41785,
+    "output_tokens": 1913,
+    "tools": {
+     "Grep": 5,
+     "Read": 1
+    },
+    "answer": [
+     "prompt/prompt-executor/prompt-executor-clients/prompt-executor-openai-client/src/commonMain/kotlin/ai/koog/prompt/executor/clients/openai/OpenAIModels.kt",
+     "koog-ktor/src/commonMain/kotlin/ai/koog/ktor/utils/LLMModelParser.kt"
+    ],
+    "answered": true,
+    "recall": 0.3333333333333333,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 0
+   },
+   "pack": {
+    "arm": "pack",
+    "wall_s": 14.0,
+    "turns": 2,
+    "cost_usd": 0.137188,
+    "input_tokens": 4,
+    "cache_read": 46580,
+    "cache_write": 30956,
+    "output_tokens": 404,
+    "tools": {
+     "Read": 1
+    },
+    "answer": [
+     "prompt/prompt-executor/prompt-executor-clients/prompt-executor-openai-client/src/commonMain/kotlin/ai/koog/prompt/executor/clients/openai/OpenAIModels.kt"
+    ],
+    "answered": true,
+    "recall": 0.3333333333333333,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 582196
+   }
+  },
+  {
+   "sha": "b53a06a2",
+   "task": "Fix the agent error being populated incorrectly during reflective mode.",
+   "truth": [
+    "agents/agents-tools/src/jvmCommonMain/kotlin/ai/koog/agents/core/tools/reflect/ToolFromCallable.kt",
+    "agents/agents-tools/src/jvmTest/kotlin/ai/koog/agents/core/tools/reflect/ToolsFromCallableTest.kt"
+   ],
+   "explore": {
+    "arm": "explore",
+    "wall_s": 220.6,
+    "turns": 38,
+    "cost_usd": 0.9274398,
+    "input_tokens": 76,
+    "cache_read": 2153959,
+    "cache_write": 70339,
+    "output_tokens": 21514,
+    "tools": {
+     "Grep": 26,
+     "Read": 11
+    },
+    "answer": [
+     "agents/agents-tools/src/jvmCommonMain/kotlin/ai/koog/agents/core/tools/reflect/ToolFromCallable.kt",
+     "agents/agents-core/src/commonMain/kotlin/ai/koog/agents/core/environment/GenericAgentEnvironment.kt",
+     "agents/agents-core/src/commonMain/kotlin/ai/koog/agents/core/feature/model/AIAgentError.kt",
+     "agents/agents-core/src/commonMain/kotlin/ai/koog/agents/core/environment/ContextualAgentEnvironment.kt"
+    ],
+    "answered": true,
+    "recall": 0.5,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 0
+   },
+   "pack": {
+    "arm": "pack",
+    "wall_s": 129.8,
+    "turns": 33,
+    "cost_usd": 0.8979989999999999,
+    "input_tokens": 66,
+    "cache_read": 2252645,
+    "cache_write": 81917,
+    "output_tokens": 11967,
+    "tools": {
+     "Grep": 18,
+     "Read": 14
+    },
+    "answer": [
+     "agents/agents-tools/src/jvmCommonMain/kotlin/ai/koog/agents/core/tools/reflect/ToolFromCallable.kt",
+     "agents/agents-core/src/commonMain/kotlin/ai/koog/agents/core/environment/GenericAgentEnvironment.kt",
+     "agents/agents-core/src/commonMain/kotlin/ai/koog/agents/core/feature/model/AIAgentError.kt"
+    ],
+    "answered": true,
+    "recall": 0.5,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 595831
+   }
+  },
+  {
+   "sha": "096c0ddd",
+   "task": "When creating tools from callables, make sure any custom name set on the tool is respected.",
+   "truth": [
+    "agents/agents-tools/src/jvmCommonMain/kotlin/ai/koog/agents/core/tools/reflect/ToolFromCallableExtensions.kt",
+    "agents/agents-tools/src/jvmTest/kotlin/ai/koog/agents/core/tools/reflect/ToolSetAsToolsTest.kt"
+   ],
+   "explore": {
+    "arm": "explore",
+    "wall_s": 65.4,
+    "turns": 21,
+    "cost_usd": 0.33085600000000004,
+    "input_tokens": 34,
+    "cache_read": 669730,
+    "cache_write": 36063,
+    "output_tokens": 5259,
+    "tools": {
+     "Grep": 13,
+     "Read": 7
+    },
+    "answer": [
+     "agents/agents-tools/src/jvmCommonMain/kotlin/ai/koog/agents/core/tools/reflect/ToolFromCallableExtensions.kt"
+    ],
+    "answered": true,
+    "recall": 0.5,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 0
+   },
+   "pack": {
+    "arm": "pack",
+    "wall_s": 60.7,
+    "turns": 12,
+    "cost_usd": 0.22981400000000005,
+    "input_tokens": 22,
+    "cache_read": 396940,
+    "cache_write": 25718,
+    "output_tokens": 4751,
+    "tools": {
+     "Read": 5,
+     "Grep": 6
+    },
+    "answer": [
+     "agents/agents-tools/src/jvmCommonMain/kotlin/ai/koog/agents/core/tools/reflect/ToolFromCallableExtensions.kt",
+     "agents/agents-tools/src/jvmCommonMain/kotlin/ai/koog/agents/core/tools/reflect/ToolFromCallable.kt",
+     "agents/agents-tools/src/jvmCommonMain/kotlin/ai/koog/agents/core/tools/schema/SchemaGenerator.jvmCommon.kt",
+     "agents/agents-tools/src/jvmCommonMain/kotlin/ai/koog/agents/core/tools/reflect/java/JavaToolFromCallableExtensions.kt"
+    ],
+    "answered": true,
+    "recall": 0.5,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 583764
+   }
+  },
+  {
+   "sha": "4992fe7f",
+   "task": "Return tool calls before the assistant message when handling Ollama responses.",
+   "truth": [
+    "prompt/prompt-executor/prompt-executor-clients/prompt-executor-ollama-client/src/commonMain/kotlin/ai/koog/prompt/executor/ollama/client/OllamaClient.kt"
+   ],
+   "explore": {
+    "arm": "explore",
+    "wall_s": 18.5,
+    "turns": 6,
+    "cost_usd": 0.1316682,
+    "input_tokens": 12,
+    "cache_read": 191551,
+    "cache_write": 20096,
+    "output_tokens": 1295,
+    "tools": {
+     "Grep": 5
+    },
+    "answer": [
+     "prompt/prompt-executor/prompt-executor-clients/prompt-executor-ollama-client/src/commonMain/kotlin/ai/koog/prompt/executor/ollama/client/OllamaClient.kt"
+    ],
+    "answered": true,
+    "recall": 1.0,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 0
+   },
+   "pack": {
+    "arm": "pack",
+    "wall_s": 22.2,
+    "turns": 4,
+    "cost_usd": 0.08276800000000001,
+    "input_tokens": 8,
+    "cache_read": 105110,
+    "cache_write": 13465,
+    "output_tokens": 787,
+    "tools": {
+     "Grep": 2,
+     "Read": 1
+    },
+    "answer": [
+     "prompt/prompt-executor/prompt-executor-clients/prompt-executor-ollama-client/src/commonMain/kotlin/ai/koog/prompt/executor/ollama/client/OllamaClient.kt"
+    ],
+    "answered": true,
+    "recall": 1.0,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 595836
+   }
+  },
+  {
+   "sha": "fca7ac26",
+   "task": "Also accept non-streaming Ollama responses that come back with a plain text content type instead of rejecting them.",
+   "truth": [
+    "prompt/prompt-executor/prompt-executor-clients/prompt-executor-ollama-client/src/commonMain/kotlin/ai/koog/prompt/executor/ollama/client/OllamaClient.kt",
+    "prompt/prompt-executor/prompt-executor-clients/prompt-executor-ollama-client/src/commonTest/kotlin/ai/koog/prompt/executor/ollama/client/MockOllamaChatServer.kt"
+   ],
+   "explore": {
+    "arm": "explore",
+    "wall_s": 26.1,
+    "turns": 6,
+    "cost_usd": 0.1104862,
+    "input_tokens": 12,
+    "cache_read": 164091,
+    "cache_write": 15301,
+    "output_tokens": 1644,
+    "tools": {
+     "Grep": 4,
+     "Read": 1
+    },
+    "answer": [
+     "prompt/prompt-executor/prompt-executor-clients/prompt-executor-ollama-client/src/commonMain/kotlin/ai/koog/prompt/executor/ollama/client/OllamaClient.kt"
+    ],
+    "answered": true,
+    "recall": 0.5,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 0
+   },
+   "pack": {
+    "arm": "pack",
+    "wall_s": 31.8,
+    "turns": 6,
+    "cost_usd": 0.1355286,
+    "input_tokens": 12,
+    "cache_read": 175923,
+    "cache_write": 19835,
+    "output_tokens": 2098,
+    "tools": {
+     "Grep": 3,
+     "Read": 2
+    },
+    "answer": [
+     "prompt/prompt-executor/prompt-executor-clients/prompt-executor-ollama-client/src/commonMain/kotlin/ai/koog/prompt/executor/ollama/client/OllamaClient.kt"
+    ],
+    "answered": true,
+    "recall": 0.5,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 588339
+   }
+  },
+  {
+   "sha": "bb801c9c",
+   "task": "Support processing embeddings in batches when using Ollama.",
+   "truth": [
+    "prompt/prompt-executor/prompt-executor-clients/prompt-executor-ollama-client/src/commonMain/kotlin/ai/koog/prompt/executor/ollama/client/OllamaClient.kt",
+    "prompt/prompt-executor/prompt-executor-clients/prompt-executor-ollama-client/src/commonMain/kotlin/ai/koog/prompt/executor/ollama/client/dto/OllamaModels.kt"
+   ],
+   "explore": {
+    "arm": "explore",
+    "wall_s": 50.1,
+    "turns": 16,
+    "cost_usd": 0.2418766,
+    "input_tokens": 22,
+    "cache_read": 404973,
+    "cache_write": 31297,
+    "output_tokens": 3565,
+    "tools": {
+     "Grep": 5,
+     "Glob": 3,
+     "Read": 7
+    },
+    "answer": [
+     "prompt/prompt-executor/prompt-executor-clients/prompt-executor-ollama-client/src/commonMain/kotlin/ai/koog/prompt/executor/ollama/client/OllamaClient.kt"
+    ],
+    "answered": true,
+    "recall": 0.5,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 0
+   },
+   "pack": {
+    "arm": "pack",
+    "wall_s": 29.2,
+    "turns": 8,
+    "cost_usd": 0.15877000000000002,
+    "input_tokens": 10,
+    "cache_read": 157660,
+    "cache_write": 26722,
+    "output_tokens": 2033,
+    "tools": {
+     "Grep": 3,
+     "Read": 4
+    },
+    "answer": [
+     "prompt/prompt-executor/prompt-executor-clients/prompt-executor-ollama-client/src/commonMain/kotlin/ai/koog/prompt/executor/ollama/client/OllamaClient.kt",
+     "embeddings/embeddings-llm/src/commonMain/kotlin/ai/koog/embeddings/local/LLMEmbedder.kt",
+     "prompt/prompt-executor/prompt-executor-clients/src/commonMain/kotlin/ai/koog/prompt/executor/clients/LLMEmbeddingProviderAPI.kt"
+    ],
+    "answered": true,
+    "recall": 0.5,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 567160
+   }
+  },
+  {
+   "sha": "a76305dc",
+   "task": "Set the trace attributes on every Langfuse span instead of only the root one.",
+   "truth": [
+    "agents/agents-features/agents-features-opentelemetry/src/jvmMain/kotlin/ai/koog/agents/features/opentelemetry/integration/langfuse/LangfuseSpanAdapter.kt",
+    "agents/agents-features/agents-features-opentelemetry/src/jvmTest/kotlin/ai/koog/agents/features/opentelemetry/integration/langfuse/LangfuseSpanAdapterTest.kt"
+   ],
+   "explore": {
+    "arm": "explore",
+    "wall_s": 15.8,
+    "turns": 4,
+    "cost_usd": 0.0959282,
+    "input_tokens": 8,
+    "cache_read": 107881,
+    "cache_write": 16669,
+    "output_tokens": 766,
+    "tools": {
+     "Grep": 1,
+     "Read": 2
+    },
+    "answer": [
+     "agents/agents-features/agents-features-opentelemetry/src/jvmMain/kotlin/ai/koog/agents/features/opentelemetry/integration/langfuse/LangfuseSpanAdapter.kt"
+    ],
+    "answered": true,
+    "recall": 0.5,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 0
+   },
+   "pack": {
+    "arm": "pack",
+    "wall_s": 16.2,
+    "turns": 4,
+    "cost_usd": 0.091623,
+    "input_tokens": 6,
+    "cache_read": 80715,
+    "cache_write": 16922,
+    "output_tokens": 778,
+    "tools": {
+     "Read": 2,
+     "Grep": 1
+    },
+    "answer": [
+     "agents/agents-features/agents-features-opentelemetry/src/jvmMain/kotlin/ai/koog/agents/features/opentelemetry/integration/langfuse/LangfuseSpanAdapter.kt"
+    ],
+    "answered": true,
+    "recall": 0.5,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 586584
+   }
+  }
+ ]
+}

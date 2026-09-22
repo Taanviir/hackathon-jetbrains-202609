@@ -47,6 +47,9 @@ SPEND = [
     ("Agent A/Bs, GLM on OpenRouter", "-", "$0.53", "Both arms, both runs, 10 tasks each."),
     ("LLM re-ranker baseline, GLM", "2.3M", "$0.52", "70 tasks, under a $0.80 cap."),
     ("Stage 3, Jev (ledger)", "2.2M", "$0.09", "Two dev shapes, one test run."),
+    ("Exposed eval, Jev (ledger)", "13.5M", "$0.57", "40 tasks, frozen pipeline, one run."),
+    ("Claude Code runs, Claude plan", "-", "$4.68", "Five adoption probes and the 16-run hook A/B."),
+    ("Claude Code A/B, Jev (hook)", "4.7M", "$0.20", "One pack per hooked run."),
 ]
 
 
@@ -94,6 +97,24 @@ AB = ab["rows"]
 AB_VAGUE = json.loads((HERE / "results" / "agent_ab_o40_t10_vague.json").read_text())["rows"]
 VAGUE_TASKS = json.loads((HERE / "results" / "vague_tasks.json").read_text())
 LLM = json.loads((HERE / "results" / "rerank_llm_pool30.json").read_text())["summary"]
+
+EXPOSED = json.loads((HERE / "results" / "second_repo_exposed_t40.json").read_text())["summary"]
+ADOPTION = json.loads((HERE / "results" / "claude_adoption.json").read_text())
+_cab = HERE / "results" / "claude_ab_sonnet_o40_t8.json"
+CLAUDE_AB = json.loads(_cab.read_text())["rows"] if _cab.exists() else None
+
+
+def claude_summary(rows):
+    out = {}
+    for a in ("explore", "pack"):
+        rs = [r[a] for r in rows]
+        out[a] = {"recall": st.mean(r["recall"] for r in rs), "wall": st.median(r["wall_s"] for r in rs),
+                  "turns": st.mean(r["turns"] or 0 for r in rs),
+                  "tokens": st.mean(r["input_tokens"] + r["cache_read"] + r["cache_write"] + r["output_tokens"] for r in rs),
+                  "cost": sum(r["cost_usd"] or 0 for r in rs),
+                  "greps": st.mean(r["tools"].get("Grep", 0) + r["tools"].get("Glob", 0) for r in rs)}
+    return out
+
 
 # Stage 3: comparative choice over the top 10, chosen on dev (add2), measured once on test.
 import stage3  # noqa: E402
@@ -182,6 +203,39 @@ def ci_chart() -> str:
                      f'<text x="{L - 10}" y="{cy + 4}" class="tick" text-anchor="end">recall@{k}</text>')
     parts.append("</svg>")
     return "".join(parts)
+
+
+def claude_ab_section() -> str:
+    if not CLAUDE_AB:
+        return "<p class=\"note\">The hook-based Claude Code A/B is still running.</p>"
+    c = claude_summary(CLAUDE_AB)
+    x, k = c["explore"], c["pack"]
+    rows = [["Final recall", pct(x["recall"]), pct(k["recall"])],
+            ["Wall time, median", f'{x["wall"]:.0f} s', f'{k["wall"]:.0f} s'],
+            ["Turns, mean", f'{x["turns"]:.1f}', f'{k["turns"]:.1f}'],
+            ["Grep + Glob calls, mean", f'{x["greps"]:.1f}', f'{k["greps"]:.1f}'],
+            ["Tokens processed, mean", f'{x["tokens"] / 1000:.0f}k', f'{k["tokens"] / 1000:.0f}k'],
+            [f"Cost, {len(CLAUDE_AB)} tasks", f'${x["cost"]:.2f}', f'${k["cost"]:.2f}']]
+    per = [[e(r["task"][:60]), f'{r["explore"]["turns"]}', f'{r["pack"]["turns"]}',
+            f'{(r["explore"]["input_tokens"] + r["explore"]["cache_read"] + r["explore"]["cache_write"]) / 1000:.0f}k',
+            f'{(r["pack"]["input_tokens"] + r["pack"]["cache_read"] + r["pack"]["cache_write"]) / 1000:.0f}k',
+            pct(r["explore"]["recall"]), pct(r["pack"]["recall"])] for r in CLAUDE_AB]
+    import random
+    rng = random.Random(7)
+    diffs = [r["pack"]["turns"] - r["explore"]["turns"] for r in CLAUDE_AB]
+    means = sorted(st.mean(rng.choice(diffs) for _ in diffs) for _ in range(4000))
+    verdict = (f"<p><strong>With the hook, Claude Code needed {(1 - k['turns'] / x['turns']):.0%} fewer turns</strong> "
+               f"({st.mean(diffs):+.1f} per task, 95% interval [{means[100]:+.1f}, {means[3899]:+.1f}]) and "
+               f"{(1 - k['greps'] / x['greps']):.0%} fewer searches, for about the same answers: recall was equal on "
+               f"{sum(r['pack']['recall'] == r['explore']['recall'] for r in CLAUDE_AB)} of {len(CLAUDE_AB)} tasks. "
+               "It was not faster, and eight tasks can't settle the token and cost savings.</p>")
+    return ("<h3>Claude Code with the hook</h3><p>The same Claude Code (Sonnet), prompt and read-only tools, on "
+            f"{len(CLAUDE_AB)} held-out Koog tasks (vague wording) at their parent commits. The only difference is the hook, "
+            "which fired on every run. Tokens count everything Claude processed, including cached context.</p>"
+            + table([f"{len(CLAUDE_AB)} tasks", "no hook", "with hook"], rows) + verdict
+            + "<details><summary>Per task</summary>"
+            + table(["task", "turns, no hook", "turns, hook", "tokens, no hook", "tokens, hook", "recall, no hook", "recall, hook"], per)
+            + "</details>")
 
 
 def table(head, rows, cls=""):
@@ -360,6 +414,29 @@ top files is the one to edit. Two shapes were tried on dev, the best was fixed, 
 [{S3_TEST["add2-baseline@5"][1]:+.3f}, {S3_TEST["add2-baseline@5"][2]:+.3f}]: small, but it clears zero. It costs one
 Jev call and about 0.4 s. It narrows the LLM's top-five lead rather than closing it.</p>
 
+<h2>A second repository</h2>
+<p>Everything above is Koog. To check it isn't tuned to one codebase, the shipped pipeline ran <strong>frozen</strong>, with
+no setting changed, on {EXPOSED["tasks"]} commits from JetBrains/Exposed (Kotlin ORM, about {EXPOSED["files_median"]:.0f}
+files per snapshot), once.</p>
+{table(["JetBrains/Exposed, 40 tasks", "recall@5", "recall@10", "recall@20"], [
+    ["BM25", pct(EXPOSED["bm25@5"]), pct(EXPOSED["bm25@10"]), pct(EXPOSED["bm25@20"])],
+    [b("Context Packer"), b(pct(EXPOSED["shipped@5"])), b(pct(EXPOSED["shipped@10"])), b(pct(EXPOSED["shipped@20"]))],
+])}
+<p>recall@5 {EXPOSED["shipped-bm25@5"][0]:+.2f} [{EXPOSED["shipped-bm25@5"][1]:+.2f}, {EXPOSED["shipped-bm25@5"][2]:+.2f}]:
+the gain carries over. recall@10 {EXPOSED["shipped-bm25@10"][0]:+.2f} [{EXPOSED["shipped-bm25@10"][1]:+.2f},
+{EXPOSED["shipped-bm25@10"][2]:+.2f}]: same direction, not significant on 40 tasks. {EXPOSED["seconds_median"]:.1f} s per
+task, {EXPOSED["jev_errors"]} failed calls.</p>
+
+<h2>Claude Code, and why a tool isn't enough</h2>
+<p>Given <code>pack_context</code> as an MCP tool, headless Claude Code (Sonnet) <strong>never called it</strong>, in
+{len(ADOPTION["runs"])} runs on the same task, even with an instruction in the system prompt naming the tool. The server was
+connected every time, and the Jev ledger didn't move. Claude trusted its own search instead:</p>
+{table(["setup", "tools Claude used", "recall", "time"],
+       [[e(r["setup"]), e(", ".join(f"{k} ×{v}" for k, v in r["tools"].items())), pct(r["recall"]), f'{r["seconds"]:.0f} s'] for r in ADOPTION["runs"]], "left")}
+<p>So the plugin also ships a Claude Code <strong>UserPromptSubmit hook</strong> (<code>agent/pack_hook.py</code>). It runs on
+every request <em>before</em> Claude sees it, asks the IDE's Context Packer, and hands Claude the ranked files as context.
+The agent never has to decide to use anything; the IDE panel shows what it was given.</p>
+{claude_ab_section()}
 <h2>In the IDE</h2>
 <p>Timings from the plugin's own log on Koog, 2,206 candidate files. The first version built sketches from the IDE's
 Structure View, which runs Kotlin analysis at about 19 ms a file. The shipped version uses the regex sketcher the eval

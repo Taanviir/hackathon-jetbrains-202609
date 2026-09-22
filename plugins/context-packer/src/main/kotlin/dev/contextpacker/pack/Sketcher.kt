@@ -64,10 +64,18 @@ object Sketcher {
 
 /** The spike's sketcher, for files whose language has no tree-based structure view. */
 object RegexSketcher {
-    private val DECL = Regex("^(?:[\\w@]+(?:\\([^)]*\\))?\\s+)*?(class|interface|object|fun|typealias|val|var|def|function|struct|enum|trait|impl)\\b")
-    private val SIGNATURE_END = Regex("\\s[{=]\\s|\\s\\{$|\\{$|:$")
+    // Exactly the spike's patterns (jev_spike.py), so the plugin sketches what the eval measured.
+    private val DECL = Regex("^(?:[\\w@]+(?:\\([^)]*\\))?\\s+)*?(class|interface|object|fun|typealias|val|var)\\b")
+    private val SIGNATURE_END = Regex("\\s[{=]\\s|\\s\\{$|\\{$")
+    // The local benchmark predates Jev's parity correction; keep its inputs reproducible.
+    private val LAYA_DECL = Regex("^(?:[\\w@]+(?:\\([^)]*\\))?\\s+)*?(class|interface|object|fun|typealias|val|var|def|function|struct|enum|trait|impl)\\b")
+    private val LAYA_SIGNATURE_END = Regex("\\s[{=]\\s|\\s\\{$|\\{$|:$")
 
-    fun sketch(path: String, text: String): String {
+    fun sketch(path: String, text: String): String = sketchWith(path, text, DECL, SIGNATURE_END)
+
+    fun layaSketch(path: String, text: String): String = sketchWith(path, text, LAYA_DECL, LAYA_SIGNATURE_END)
+
+    private fun sketchWith(path: String, text: String, declaration: Regex, signatureEnd: Regex): String {
         val out = mutableListOf("path: $path")
         var doc: String? = null
         for (raw in text.lineSequence()) {
@@ -80,8 +88,8 @@ object RegexSketcher {
                 if (s.startsWith("* ") && doc == null) doc = s.removePrefix("* ").trim()
                 continue
             }
-            if (DECL.containsMatchIn(s)) {
-                val sig = SIGNATURE_END.split(s, 2)[0]
+            if (declaration.containsMatchIn(s)) {
+                val sig = signatureEnd.split(s, 2)[0]
                 out += "  ".repeat(indent / 4) + "- " + sig + (doc?.let { "  // $it" } ?: "")
                 doc = null
             }

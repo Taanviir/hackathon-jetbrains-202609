@@ -27,6 +27,10 @@ data class PackConfig(
     val stage3Weight: Double = 2.0,
     /** Start BM25's full-source pass while sketch scoring is still running. Laya uses sequential passes. */
     val overlapPasses: Boolean = true,
+    /** Jev can disclose later-pass degradation; the frozen local Laya protocol requires both passes. */
+    val requireFullSourceScores: Boolean = false,
+    /** Size of the optional model preview; the UI uses free keyword previews instead. */
+    val previewPool: Int = 30,
 )
 
 data class PackedFile(
@@ -37,6 +41,9 @@ data class PackedFile(
     val score: Double,
     val bm25Rank: Int?,
     val isTest: Boolean,
+    /** Jev's label for why the file is here (edit, test, example, dependency), when it's confident. */
+    val role: String? = null,
+    val roleConfidence: Double? = null,
 )
 
 data class PackResult(
@@ -48,6 +55,8 @@ data class PackResult(
     val totalMs: Long,
     val failedBatches: Int,
     val stage3Ms: Long = 0,
+    /** A preliminary result, separate from the explicit full pack. */
+    val preview: Boolean = false,
 )
 
 /** Scores a batch in one call. Return exactly one finite probability in [0, 1] per requested path. */
@@ -63,6 +72,11 @@ fun interface ChoiceScorer {
     suspend fun choose(task: String, items: List<Pair<String, String>>): Map<String, Double>
 }
 
+/** Labels each file with the role it plays in the task, as a probability per role. */
+fun interface RoleScorer {
+    suspend fun roles(task: String, items: List<Pair<String, String>>): Map<String, Map<String, Double>>
+}
+
 /**
  * The pipeline measured in spike/RESULTS.md. Jev alone on sketches loses to keyword search, but as a
  * re-ranker over a pooled shortlist, reading full source and fused with BM25, it lifts recall@10 on
@@ -72,6 +86,7 @@ class Packer(
     private val scorer: RelevanceScorer,
     private val config: PackConfig = PackConfig(),
     private val chooser: ChoiceScorer? = null,
+    private val roler: RoleScorer? = null,
 ) {
 
     init {
@@ -82,6 +97,7 @@ class Packer(
             "bm25Weight must be finite and non-negative"
         }
         require(config.stage3K > 0) { "stage3K must be positive" }
+        require(config.previewPool > 0) { "previewPool must be positive" }
         require(config.stage3Weight.isFinite() && config.stage3Weight >= 0.0) {
             "stage3Weight must be finite and non-negative"
         }
@@ -110,7 +126,8 @@ class Packer(
         val pass1Done = System.nanoTime()
 
         val bySketch = pass1.scores.keys.sortedWith(compareByDescending<String> { pass1.scores.getValue(it) }.thenBy { it })
-        val extra = bySketch.take(config.pool).filterNot { it in bm25Pool.toSet() }
+        val inBm25Pool = bm25Pool.toSet()
+        val extra = bySketch.take(config.pool).filterNot { it in inBm25Pool }
         val pool = bm25Pool + extra
         onProgress("Scoring source excerpts from ${pool.size} shortlisted files")
         val pass2 = if (config.overlapPasses) {
@@ -122,11 +139,13 @@ class Packer(
                 pass2aDone.batches + pass2b.batches,
                 pass2aDone.firstFailure ?: pass2b.firstFailure,
             )
-            if (combined.batches > 0 && combined.failed == combined.batches) throw combined.firstFailure!!
+            if (config.requireFullSourceScores && combined.batches > 0 && combined.failed == combined.batches) {
+                throw combined.firstFailure!!
+            }
             combined
         } else {
             // Keep every Laya scoring call after pass 1, in the original combined-pool order.
-            scoreAll(task, full(pool), config.perCall)
+            scoreAll(task, full(pool), config.perCall, failIfAll = config.requireFullSourceScores)
         }
         val relevance = pass2.scores
         val pass2Done = System.nanoTime()
@@ -138,28 +157,34 @@ class Packer(
         val ranked = pool.sortedWith(compareByDescending<String> { fused.getValue(it) }.thenBy { it })
 
         // Stage 3: one comparative choice over the top K reorders them. If it fails, the order above stands.
+        // Role labels are a separate call in parallel, so they can't shift the measured stage-3 answer.
         val top = ranked.take(config.stage3K)
-        var choiceFailed = false
-        val choice = chooser?.takeIf { top.size >= 2 }?.let { c ->
+        val choiceJob = chooser?.takeIf { top.size >= 2 }?.let { c -> async {
             onProgress("Comparing the top ${top.size}")
-            try {
+            optionalStage {
                 c.choose(task, full(top)).also { result ->
                     require(result.keys == top.toSet()) { "Chooser must return exactly the requested paths" }
                     require(result.values.all { it.isFinite() && it in 0.0..1.0 }) {
                         "Chooser probabilities must be finite and within [0, 1]"
                     }
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: ProcessCanceledException) {
-                throw e
-            } catch (e: ScorerUnavailableException) {
-                throw e
-            } catch (e: Exception) {
-                choiceFailed = true
-                null
             }
-        }
+        } }
+        val rolesJob = roler?.takeIf { top.isNotEmpty() }?.let { r -> async {
+            optionalStage {
+                r.roles(task, full(top)).also { result ->
+                    require(result.keys == top.toSet()) { "Role scorer must return exactly the requested paths" }
+                    require(result.values.all { probs ->
+                        probs.isNotEmpty() && probs.keys.all { it in ROLE_NAMES } &&
+                            probs.values.all { it.isFinite() && it in 0.0..1.0 }
+                    }) { "Role probabilities must be finite, within [0, 1], and use known roles" }
+                }
+            }
+        } }
+        val choiceResult = choiceJob?.await()
+        val roleResult = rolesJob?.await()
+        val choice = choiceResult?.getOrNull()
+        val roleOf = roleResult?.getOrNull().orEmpty()
         val done = System.nanoTime()
 
         val scale = 1 + config.bm25Weight + if (choice == null) 0.0 else config.stage3Weight
@@ -171,6 +196,8 @@ class Packer(
                 score = (fused.getValue(path) + config.stage3Weight * (choice?.get(path) ?: 0.0)) / scale,
                 bm25Rank = pos?.plus(1),
                 isTest = isTest(path),
+                role = roleOf[path]?.maxByOrNull { it.value }?.takeIf { it.value >= ROLE_MIN && it.key != "unrelated" }?.key,
+                roleConfidence = roleOf[path]?.maxOfOrNull { it.value },
             )
         }.sortedWith(compareByDescending<PackedFile> { it.score }.thenBy { it.path }).take(config.keep)
 
@@ -182,8 +209,42 @@ class Packer(
             pass2Ms = (pass2Done - pass1Done) / 1_000_000,
             stage3Ms = (done - pass2Done) / 1_000_000,
             totalMs = (done - started) / 1_000_000,
-            failedBatches = pass1.failed + pass2.failed + if (choiceFailed) 1 else 0,
+            failedBatches = pass1.failed + pass2.failed +
+                (if (choiceResult?.isFailure == true) 1 else 0) + (if (roleResult?.isFailure == true) 1 else 0),
         )
+    }
+
+    /** Optional model preview retained for callers; UI typing uses keyword-only service.preview. */
+    suspend fun preview(task: String, docs: List<FileDoc>): PackResult = coroutineScope {
+        require(task.isNotBlank()) { "Task must not be blank" }
+        require(docs.all { it.path.isNotBlank() } && docs.map { it.path }.toSet().size == docs.size) {
+            "File paths must be nonblank and unique"
+        }
+        val started = System.nanoTime()
+        val byPath = docs.associateBy { it.path }
+        val pool = async(Dispatchers.Default) {
+            Bm25.rank(task, docs.associate { it.path to it.text }, checkCancelled = { ensureActive() })
+        }.await().take(config.previewPool)
+        val pass = scoreAll(task, pool.map { it to "path: $it\n${byPath.getValue(it).text.take(config.fullChars)}" }, config.perCall)
+        val elapsed = (System.nanoTime() - started) / 1_000_000
+        val files = pool.mapIndexed { i, path ->
+            val relevance = pass.scores[path] ?: 0.0
+            PackedFile(path, relevance, (relevance + config.bm25Weight / (1 + i / 10.0)) / (1 + config.bm25Weight), i + 1, isTest(path))
+        }.sortedWith(compareByDescending<PackedFile> { it.score }.thenBy { it.path }).take(config.keep)
+        PackResult(task, files, docs.size, pass1Ms = 0, pass2Ms = elapsed, totalMs = elapsed,
+            failedBatches = pass.failed, preview = true)
+    }
+
+    private suspend fun <T> optionalStage(block: suspend () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: ProcessCanceledException) {
+        throw e
+    } catch (e: ScorerUnavailableException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
     private class Scores(
@@ -233,6 +294,9 @@ class Packer(
     }
 
     companion object {
+        /** A role label shows only when Jev puts at least this much probability on it. */
+        const val ROLE_MIN = 0.5
+        private val ROLE_NAMES = setOf("edit", "test", "example", "dependency", "unrelated")
         private val TEST_DIR = Regex("(^|/)[\\w-]*[tT]est[\\w-]*/")
         private val TEST_FILE = Regex("(Test|Tests|Spec|IT)\\.[A-Za-z]+$")
 

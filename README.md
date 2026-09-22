@@ -24,15 +24,16 @@ The following build and workflow instructions describe the **root IntelliJev plu
 
 Verified on 23 September 2026:
 
-- `gradlew test` succeeds — nine tests cover Jev answer parsing, selected-fix
-  matching, and strict edit-proposal parsing, with no failures or skipped tests.
+- `gradlew test` succeeds — 15 tests cover Jev parsing, selected-fix matching,
+  proposal parsing, empty-result call avoidance, and actual IntelliJ document apply/undo,
+  stale-source, read-only and deleted-file behavior; no failures or skipped tests.
 - `gradlew buildPlugin` produces `build/distributions/intellijev-0.1.0.zip`.
 - The earlier build loaded in the sandbox IDE (`Loaded custom plugins: IntelliJev (0.1.0)`).
   The current build also completes the IDE's headless searchable-options pass.
 
 **Not yet verified:** no Jev or chat-completions request from this build has been run
-against a live API, and the action, navigation, and apply changes below still need an
-interactive sandbox run. Treat those changes as implemented-but-unproven until that run.
+against a live API. Action placement, visual diff layout and navigation still need a human
+interactive check; native desktop UI automation was unavailable on the test host.
 
 ## Run it in IntelliJ IDEA
 
@@ -69,7 +70,8 @@ candidates` in the **Runs** tab — check Runs if Jev results never appear.
 
 Enter a task in the **Context** tab and press **Scan task context**. Then open
 **Coding Agent**, press **Propose reviewed changes**, inspect the side-by-side
-before/after, and press **Apply selected change** only when you approve it. Applied
+before/after (or **Open diff** for IntelliJ's native read-only viewer), and press
+**Apply selected change** only when you approve it. Applied
 changes are ordinary IDE document edits and can be undone with the standard Undo.
 
 The model is not autonomous: it cannot run shell commands, install dependencies, create
@@ -96,16 +98,17 @@ The tool window has six tabs: **Context**, **Related Bugs**, **Coding Agent**, *
   side question saved only when you click **Save isolated note**. The note is kept in
   this project's local `.idea/workspace.xml` settings, separate from model prompts;
   saving rejects text over 20,000 characters with an error.
-- Unit tests covering `JevClient.score` parsing and answer-type rejection,
-  selected-fix related-code matching, and edit-proposal validation.
+- Unit and IntelliJ platform tests cover `JevClient.score` parsing and answer-type rejection,
+  selected-fix matching, edit validation, apply/undo and stale or unwritable source rejection.
 
 ## Known issues
 
-The following source fixes still need an interactive sandbox check: **Open IntelliJev**
+The following source fixes still need a visual interactive check: **Open IntelliJev**
 is registered under **Tools**; the editor-popup actions start a scan using the current
 selection; related-code candidates derive from the selected fix and navigate to their
-line; stale asynchronous results no longer replace newer ones; and Apply rechecks the
-file inside the write command. Related-code matches are search leads, not verified bugs.
+line; and native **Open diff** renders the captured original and proposed replacement.
+Superseded requests are cancelled, and Apply rechecks the file inside the write command
+(covered by platform tests). Related-code matches are search leads, not verified bugs.
 
 Still pending:
 
@@ -123,6 +126,9 @@ Still pending:
 
 ## Evaluation and demo evidence
 
-Still entirely outstanding. The measurement plan, baselines, and the caveat that the
-deck's 24→2 calls, 48→6 seconds, and $0.42→$0.05 figures are projections rather than
-results are in [§9 of the build specification](./INTELLIJEV_BUILD_SPEC.md).
+The root reviewed-edit workflow has no live model quality benchmark. Context Packer's
+separate [Jev evidence](plugins/context-packer/spike/RESULTS.md) and
+[local Laya evidence](plugins/context-packer/eval/LAYA_RESULTS.md) measure source retrieval;
+they do not establish generated-code correctness. The deck's 24→2 calls, 48→6 seconds,
+and $0.42→$0.05 figures remain projections, as recorded in
+[§9 of the build specification](./INTELLIJEV_BUILD_SPEC.md).

@@ -78,6 +78,22 @@ recall@10 **+0.16** [+0.10, +0.23] (95% intervals). The pool's ceiling is 0.90.
 
 Pass 1 took 1.5 s and pass 2 took 1.0 s (medians), at 60 sketches per call.
 
+## Stage 3: a comparative question over the top 10
+
+Passes 1 and 2 judge each file on its own. One more Jev call asks a single `choice` over the fused top 10
+(full source, 6,000 chars): "Which file must be edited to implement the change described in `task`?", and
+adds `2 × p` to each file's fused score. Only the order inside the top 10 changes, so recall@10 and @20 are
+untouched by construction.
+
+Chosen on the 40 dev tasks (top 10 at 6,000 chars beat top 15 at 4,000; `add2` was best, 0.536 → 0.583),
+then run once on the 70 test tasks: recall@5 **0.539 → 0.572**, +0.033 [+0.006, +0.068]. The published
+headline row is therefore recall@5 with stage 3 and recall@10/@20 from the fusion, which stage 3 can't change.
+
+## Out of domain: JetBrains/Exposed
+
+The shipped pipeline, frozen, run once on the 40 most recent usable Exposed commits (`eval/second_repo.py`):
+recall@5 0.43 → 0.54 (+0.10 [+0.01, +0.20]), recall@10 0.56 → 0.62 (+0.07 [−0.02, +0.16], not significant).
+
 ## Decisions for the plugin
 
 - Pipeline: sketch every file, then Jev pass 1 at 60 files per call, BM25 over full text in
@@ -87,6 +103,11 @@ Pass 1 took 1.5 s and pass 2 took 1.0 s (medians), at 60 sketches per call.
   editing the file in `fNNN`." The narrower "requires editing" scored worse (0.59 against 0.66
   at pool 40).
 - Model: `jev-latest`. `jev-preview` currently returns the same `jev-1.13.0` and scores the same.
-- Roles: tests come from the path (`/test/`, `*Test.kt`), which is deterministic and free. A
-  Jev role question stays optional.
-- Concurrency 16. Retries at 429 and 5xx, honouring `retry-after`.
+- Stage 3 as above.
+- Candidates: every measurement here scored `.kt` files of 100 KB or less. The plugin scores every language
+  file by default; `CONTEXT_PACKER_EXTENSIONS=kt` (the sandbox demo's setting) ranks exactly the measured set.
+- Tests are flagged by path: any directory whose name contains `test`, or a file ending in `Test`, `Tests`,
+  `Spec` or `IT`. Role labels (edit, test, example, dependency) are a separate, unmeasured Jev call used only
+  for display; they never change the ranking.
+- Concurrency 16 in the eval, 48 in the plugin (one pack is about 55 calls). It changes latency, not scores.
+  Retries at 429 and 5xx, honouring `retry-after` (capped at 5 s in the plugin).
