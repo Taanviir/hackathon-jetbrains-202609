@@ -1,5 +1,6 @@
 package dev.contextpacker.pack
 
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileTypes.LanguageFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
@@ -52,10 +53,15 @@ object Candidates {
         return VfsUtilCore.isAncestor(resolvedBase, resolved, true)
     }
 
+    /** Keep unsaved editor text under the same numeric cap without creating documents during a scan. */
+    internal fun fitsSizeLimit(file: VirtualFile): Boolean =
+        file.length <= MAX_BYTES &&
+            (FileDocumentManager.getInstance().getCachedDocument(file)?.textLength?.toLong() ?: 0L) <= MAX_BYTES
+
     private fun isSource(file: VirtualFile): Boolean {
         val type = file.fileType
         val ext = file.extension?.lowercase()
-        return !type.isBinary && type is LanguageFileType && file.length <= MAX_BYTES &&
+        return !type.isBinary && type is LanguageFileType && fitsSizeLimit(file) &&
             ext !in SKIP_EXTENSIONS && (ONLY == null || ext in ONLY)
     }
 }

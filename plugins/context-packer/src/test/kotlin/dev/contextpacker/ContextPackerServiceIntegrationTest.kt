@@ -40,6 +40,24 @@ class ContextPackerServiceIntegrationTest : BasePlatformTestCase() {
         assertTrue(offEdt { service.texts(listOf("src/ZFresh.java")) }.getValue("src/ZFresh.java").contains(marker))
     }
 
+    fun testOversizedUnsavedEditorTextIsNotEligibleOrReadable(): Unit {
+        val original = "class Growing { int value = 1; }"
+        val file = myFixture.addFileToProject("src/Growing.java", original).virtualFile
+        myFixture.configureFromExistingVirtualFile(file)
+        assertTrue(runReadAction { Candidates.collect(project).any { it.path == file.path } })
+        WriteCommandAction.runWriteCommandAction(project, Runnable {
+            myFixture.editor.document.setText("// " + "x".repeat(Candidates.MAX_BYTES.toInt() + 1))
+        })
+        assertTrue(file.length <= Candidates.MAX_BYTES)
+        assertEquals(original, runReadAction { VfsUtilCore.loadText(file) })
+        assertTrue(runReadAction { Candidates.collect(project).none { it.path == file.path } })
+
+        val service = project.getService(ContextPackerService::class.java)
+        assertNull(service.fileFor("src/Growing.java"))
+        assertTrue(service.sourceProblem("src/Growing.java")!!.contains("source limit"))
+        assertTrue(offEdt { service.texts(listOf("src/Growing.java")) }.isEmpty())
+    }
+
     fun testTextAndFileLookupRejectTraversalAndAbsolutePaths(): Unit {
         val source = "class SafeSource { int value = 7; }"
         val file = myFixture.addFileToProject("nested/SafeSource.java", source).virtualFile
