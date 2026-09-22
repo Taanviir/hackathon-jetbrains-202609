@@ -89,7 +89,7 @@ class JevClientTest {
             assertEquals(400, e.status)
         }
         assertEquals(1, requests.size)
-        assertTrue(client.calls.single().error!!.startsWith("HTTP 400"))
+        assertTrue(client.calls.single().error!!.contains("(HTTP 400)"))
     }
 
     @Test

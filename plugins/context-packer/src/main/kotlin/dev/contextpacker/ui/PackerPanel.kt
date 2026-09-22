@@ -16,6 +16,7 @@ import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.WrapLayout
 import dev.contextpacker.ContextPackerService
 import dev.contextpacker.Keys
 import dev.contextpacker.MissingKeyException
@@ -45,6 +46,8 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val service = project.service<ContextPackerService>()
 
     private val task = JBTextArea(3, 40).apply {
+        font = JBUI.Fonts.label()
+        border = JBUI.Borders.empty(4, 6)
         lineWrap = true
         wrapStyleWord = true
         emptyText.text = "Describe the change, e.g. \"Add exponential backoff to retries\""
@@ -74,6 +77,8 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private val answer = JBTextArea().apply {
+        font = JBUI.Fonts.label()
+        border = JBUI.Borders.empty(4, 6)
         isEditable = false
         lineWrap = true
         wrapStyleWord = true
@@ -93,7 +98,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
                 status.border = JBUI.Borders.emptyLeft(8)
             }, BorderLayout.SOUTH)
         }
-        val actions = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+        val actions = JPanel(WrapLayout(FlowLayout.LEFT, 4, 2)).apply {
             add(button("Add open file", AllIcons.General.Add) { addOpenFile() })
             add(button("Drop", AllIcons.General.Remove) { dropSelected() })
             add(button("Copy prompt", AllIcons.Actions.Copy) { copyPrompt() })
@@ -128,7 +133,11 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                withContext(Dispatchers.EDT) { status.text = "Failed: ${e.message}" }
+                // Status line gets the readable part; the tooltip keeps the server's own words.
+                withContext(Dispatchers.EDT) {
+                    status.text = "Failed: " + (e.message ?: e::class.simpleName.orEmpty()).substringBefore(" (HTTP")
+                    status.toolTipText = e.message
+                }
             } finally {
                 withContext(Dispatchers.EDT) { packButton.isEnabled = true }
             }

@@ -55,6 +55,16 @@ class PackerTest {
     }
 
     @Test
+    fun `when Jev answers nothing at all, the pack fails instead of passing off BM25 as Jev`() = runBlocking {
+        try {
+            Packer(FakeScorer(failOn = { true }), PackConfig(pool = 10)).pack("add backoff to retry", docs)
+            org.junit.Assert.fail("expected the pack to fail")
+        } catch (e: IllegalStateException) {
+            assertEquals("boom", e.message)
+        }
+    }
+
+    @Test
     fun `test paths are recognised across layouts`() {
         listOf("a/src/test/kotlin/X.kt", "a/src/jvmTest/kotlin/X.kt", "a/integration-tests/X.kt", "a/src/FooTest.kt", "a/FooSpec.kt")
             .forEach { assertTrue(it, Packer.isTest(it)) }

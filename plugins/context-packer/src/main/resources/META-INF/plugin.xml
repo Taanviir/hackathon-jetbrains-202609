@@ -13,7 +13,7 @@
     <depends optional="true" config-file="context-packer-mcp.xml">com.intellij.mcpServer</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow id="Context Packer" anchor="right" secondary="false"
+        <toolWindow id="Context Packer" anchor="right" secondary="false" icon="AllIcons.Actions.Find"
                     factoryClass="dev.contextpacker.ui.ContextPackerToolWindowFactory"/>
     </extensions>
 
