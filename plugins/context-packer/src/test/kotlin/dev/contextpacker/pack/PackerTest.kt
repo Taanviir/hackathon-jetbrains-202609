@@ -65,6 +65,25 @@ class PackerTest {
     }
 
     @Test
+    fun `stage 3 reorders only the top files by the comparative choice`() = runBlocking {
+        val prefersTest = ChoiceScorer { _, items -> items.associate { (p, _) -> p to if (p.endsWith("Test.kt")) 0.95 else 0.05 / items.size } }
+        val without = Packer(FakeScorer(), PackConfig(pool = 10)).pack("add backoff to retry", docs)
+        val with = Packer(FakeScorer(), PackConfig(pool = 10), chooser = prefersTest).pack("add backoff to retry", docs)
+        assertEquals("src/RetryPolicy.kt", without.files.first().path)
+        assertEquals("src/jvmTest/RetryPolicyTest.kt", with.files.first().path)
+        assertEquals(without.files.map { it.path }.toSet(), with.files.map { it.path }.toSet())
+    }
+
+    @Test
+    fun `a failed stage 3 keeps the order and counts as one failed batch`() = runBlocking {
+        val broken = ChoiceScorer { _, _ -> error("choice down") }
+        val without = Packer(FakeScorer(), PackConfig(pool = 10)).pack("add backoff to retry", docs)
+        val with = Packer(FakeScorer(), PackConfig(pool = 10), chooser = broken).pack("add backoff to retry", docs)
+        assertEquals(without.files.map { it.path }, with.files.map { it.path })
+        assertEquals(1, with.failedBatches)
+    }
+
+    @Test
     fun `test paths are recognised across layouts`() {
         listOf("a/src/test/kotlin/X.kt", "a/src/jvmTest/kotlin/X.kt", "a/integration-tests/X.kt", "a/src/FooTest.kt", "a/FooSpec.kt")
             .forEach { assertTrue(it, Packer.isTest(it)) }

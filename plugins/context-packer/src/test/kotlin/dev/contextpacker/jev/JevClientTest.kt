@@ -125,4 +125,14 @@ class JevClientTest {
         assertNull("the model travels in a header, not the body", sent["model"])
         assertEquals("boolean", sent["questions"]!!.jsonObject["f000"]!!.jsonObject["type"]!!.jsonPrimitive.content)
     }
+
+    @Test
+    fun `stage 3 sends one choice over the files and maps probabilities back to paths`() = runBlocking {
+        val client = JevClient("k", endpoint = serve(fixtureName = "systemone_choice.json"))
+        val probs = JevRelevance(client).choose("Add backoff", listOf("src/A.kt" to "a", "src/B.kt" to "b"))
+        assertEquals(mapOf("src/A.kt" to 0.2, "src/B.kt" to 0.8), probs)
+        val q = Json.parseToJsonElement(requests.single().second).jsonObject["questions"]!!.jsonObject["pick"]!!.jsonObject
+        assertEquals("choice", q["type"]!!.jsonPrimitive.content)
+        assertEquals(setOf("f000", "f001"), q["criteria"]!!.jsonObject.keys)
+    }
 }
