@@ -1,0 +1,11 @@
+{
+ "title": "Context Packer eval",
+ "author": "Taanviir",
+ "date": "2026-09-22",
+ "description": "Jev + BM25 file retrieval on held-out Koog commits: recall@10 0.69 vs 0.53 for BM25. Plus an agent A/B.",
+ "tags": [
+  "context-packer",
+  "eval",
+  "jev"
+ ]
+}
