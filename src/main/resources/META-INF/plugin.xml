@@ -16,7 +16,9 @@
   </extensions>
 
   <actions>
-    <action id="dev.intellijev.OpenPanelAction" class="dev.intellijev.actions.OpenPanelAction" text="Open IntelliJev" description="Open the IntelliJev decision workspace"/>
+    <action id="dev.intellijev.OpenPanelAction" class="dev.intellijev.actions.OpenPanelAction" text="Open IntelliJev" description="Open the IntelliJev decision workspace">
+      <add-to-group group-id="ToolsMenu" anchor="last"/>
+    </action>
     <action id="dev.intellijev.FindContextAction" class="dev.intellijev.actions.FindContextAction" text="Find task context" description="Find relevant project context for a task">
       <add-to-group group-id="EditorPopupMenu" anchor="last"/>
     </action>
