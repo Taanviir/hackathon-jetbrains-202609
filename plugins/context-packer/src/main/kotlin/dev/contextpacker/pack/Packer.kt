@@ -9,15 +9,15 @@ import kotlinx.coroutines.coroutineScope
 data class FileDoc(val path: String, val sketch: String, val text: String)
 
 data class PackConfig(
-    /** Sketches per Jev call in pass 1. 100 fits the ~32k-token state limit; 150 doesn't. */
-    val batch: Int = 100,
+    /** Sketches per Jev call in pass 1, as measured. 100 also fits the ~32k-token state limit; 150 doesn't. */
+    val batch: Int = 60,
     /** How many of BM25's and pass 1's top files each go into the re-rank pool. */
     val pool: Int = 60,
     /** Full-source files per Jev call in pass 2. */
     val perCall: Int = 6,
     val fullChars: Int = 6_000,
-    /** Weight of BM25 position as a tie-breaker when Jev scores files alike. */
-    val bm25Weight: Double = 0.15,
+    /** Weight of BM25 position against Jev's score. 1.0 was chosen on the dev split; see spike/RESULTS.md. */
+    val bm25Weight: Double = 1.0,
     val keep: Int = 20,
 )
 
@@ -25,8 +25,8 @@ data class PackedFile(
     val path: String,
     /** Jev's pass-2 P(relevant), on full source. */
     val relevance: Double,
-    /** What the list is sorted by: relevance plus the BM25 tie-break. */
-    val rankScore: Double,
+    /** What the list is sorted by: relevance plus the BM25 tie-break, scaled back to 0..1. */
+    val score: Double,
     val bm25Rank: Int?,
     val isTest: Boolean,
 )
@@ -47,8 +47,9 @@ fun interface RelevanceScorer {
 }
 
 /**
- * The pipeline measured in spike/RESULTS.md. Jev alone on sketches loses to keyword search, but
- * as a re-ranker over a pooled shortlist, reading full source, it beats it by ~30% recall@10.
+ * The pipeline measured in spike/RESULTS.md. Jev alone on sketches loses to keyword search, but as a
+ * re-ranker over a pooled shortlist, reading full source and fused with BM25, it lifts recall@10 on
+ * held-out tasks from 0.53 to 0.69.
  */
 class Packer(private val scorer: RelevanceScorer, private val config: PackConfig = PackConfig()) {
 
@@ -74,11 +75,11 @@ class Packer(private val scorer: RelevanceScorer, private val config: PackConfig
             PackedFile(
                 path = path,
                 relevance = relevance,
-                rankScore = relevance + config.bm25Weight / (1 + (pos ?: 999) / 10.0),
+                score = (relevance + config.bm25Weight / (1 + (pos ?: 999) / 10.0)) / (1 + config.bm25Weight),
                 bm25Rank = pos?.plus(1),
                 isTest = isTest(path),
             )
-        }.sortedByDescending { it.rankScore }.take(config.keep)
+        }.sortedByDescending { it.score }.take(config.keep)
 
         PackResult(
             task = task,

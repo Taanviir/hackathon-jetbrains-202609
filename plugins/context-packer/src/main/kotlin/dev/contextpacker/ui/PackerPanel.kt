@@ -23,6 +23,7 @@ import dev.contextpacker.PackReport
 import dev.contextpacker.Prompt
 import dev.contextpacker.llm.ChatClient
 import dev.contextpacker.pack.PackedFile
+import dev.contextpacker.pack.Packer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -161,7 +162,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
         val file = FileEditorManager.getInstance(project).selectedFiles.firstOrNull() ?: return
         val path = project.guessProjectDir()?.let { VfsUtilCore.getRelativePath(file, it) } ?: return
         if ((0 until picks.size()).none { picks[it].path == path }) {
-            picks.add(0, PackedFile(path, relevance = 1.0, rankScore = 1.0, bm25Rank = null, isTest = false))
+            picks.add(0, PackedFile(path, relevance = 1.0, score = 1.0, bm25Rank = null, isTest = Packer.isTest(path)))
         }
     }
 
@@ -204,11 +205,11 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private class PickRenderer : ColoredListCellRenderer<PackedFile>() {
         override fun customizeCellRenderer(list: JList<out PackedFile>, value: PackedFile, index: Int, selected: Boolean, focus: Boolean) {
-            append("%.2f  ".format(value.relevance), SimpleTextAttributes.GRAYED_ATTRIBUTES)
+            append("%.2f  ".format(value.score), SimpleTextAttributes.GRAYED_ATTRIBUTES)
             if (value.isTest) append("test  ", SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES)
             append(value.path.substringAfterLast('/'), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
             append("  " + value.path.substringBeforeLast('/', ""), SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES)
-            toolTipText = value.path + (value.bm25Rank?.let { " · keyword rank $it" } ?: " · added by hand")
+            toolTipText = value.path + (value.bm25Rank?.let { " · Jev %.2f · keyword rank $it".format(value.relevance) } ?: " · added by hand")
         }
     }
 }

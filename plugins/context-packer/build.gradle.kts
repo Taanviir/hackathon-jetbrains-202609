@@ -1,3 +1,4 @@
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.tasks.RunIdeTask
 
@@ -47,4 +48,34 @@ tasks.withType<RunIdeTask>().configureEach {
 tasks.test {
     environment(dotEnv)
     System.getenv("EVAL")?.let { environment("EVAL", it) }
+}
+
+// A licence-free sandbox for automated checks: Community edition, MCP server on, no first-run dialogs.
+// OPEN_PROJECT=/path/to/project ./gradlew runIdeCommunity
+intellijPlatformTesting {
+    runIde {
+        register("runIdeCommunity") {
+            type = IntelliJPlatformType.IntellijIdeaCommunity
+            version = "2025.2.6.2"
+            task {
+                environment(dotEnv)
+                maxHeapSize = "2g"
+                jvmArgs(
+                    "-Didea.trust.all.projects=true",
+                    "-Djb.consents.confirmation.enabled=false",
+                    "-Djb.privacy.policy.text=<!--999.999-->",
+                    "-Dide.show.tips.on.startup.default.value=false",
+                    "-Dide.newUsersOnboarding=false",
+                )
+                System.getenv("OPEN_PROJECT")?.let { args(it) }
+                val options = sandboxConfigDirectory.dir("options")
+                doFirst {
+                    options.get().asFile.apply { mkdirs() }.resolve("mcpServer.xml").writeText(
+                        """<application><component name="McpServerSettings">""" +
+                            """<option name="enableMcpServer" value="true"/></component></application>""",
+                    )
+                }
+            }
+        }
+    }
 }

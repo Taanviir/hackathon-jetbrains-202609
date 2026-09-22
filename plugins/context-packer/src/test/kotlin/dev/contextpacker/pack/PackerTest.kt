@@ -29,7 +29,7 @@ class PackerTest {
 
         val pass1 = scorer.batches.filter { batch -> batch.all { it.second.startsWith("sketch") } }
         val pass2 = scorer.batches - pass1.toSet()
-        assertEquals(listOf(100, 100, 52), pass1.map { it.size }.sortedDescending())
+        assertEquals(listOf(100, 100, 52), pass1.map { it.size }.sortedDescending())  // batch set explicitly
         assertTrue("pass 2 sends full text", pass2.flatten().all { it.second.startsWith("path: ") })
         assertTrue("pass 2 batches are small", pass2.all { it.size <= 6 })
         assertTrue("pool is BM25 top 10 plus sketch top 10, deduplicated", pass2.flatten().size in 10..20)

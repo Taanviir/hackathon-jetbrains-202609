@@ -43,10 +43,10 @@ class ContextPackerToolset : McpToolset {
         append("Picked %d of %,d files in %.1f s. Paths are relative to %s.\n".format(
             minOf(limit, r.files.size), r.candidates, report.totalMs / 1000.0, basePath ?: "the project root",
         ))
-        append("relevance  path\n")
+        append("score  path\n")
         r.files.take(limit).forEach { f ->
-            append("%.2f       %s%s\n".format(f.relevance, f.path, if (f.isTest) "  (test)" else ""))
+            append("%.2f   %s%s\n".format(f.score, f.path, if (f.isTest) "  (test)" else ""))
         }
-        append("Read the top few first. Scores come from Jev reading each file's full source against the task.")
+        append("Read the top few first. Scores come from Jev reading each file's full source against the task, fused with keyword match.")
     }
 }
