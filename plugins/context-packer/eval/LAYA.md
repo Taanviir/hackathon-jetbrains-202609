@@ -56,6 +56,18 @@ loopback HTTP endpoint and caps held-out tasks at 30, candidates at 60, and
 the pool at 20.
 Its code uses only Python's standard library.
 
+For a pre-frozen extension, pass its manifest with `--task-manifest` and set
+`--heldout 30`. Also pass
+`--expected-checkpoint 1c5edc17a7acd8701df6fc341c0d179f1c62c982`; this requires the portable
+server to report the exact cached weights before any prediction and stores the
+expectation in the resumable checkpoint. The script verifies the Koog HEAD, eligibility exclusions,
+development split, initial held-out split, every extension task's parent and
+truth files, and all retrieval settings before it sends a model request. The
+manifest is also hash-checked against a resumed checkpoint. A fresh 33-task
+run can write to `.cache/laya-benchmark-extended.json` and its matching
+Markdown path. Our exact 25-task continuation manifest is delivered separately
+as `laya-benchmark-extension-manifest.json`.
+
 ## Protocol
 
 The first three eligible first-parent, non-merge commits are development

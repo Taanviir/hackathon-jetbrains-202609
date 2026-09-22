@@ -97,6 +97,32 @@ class LayaBenchmarkTest(unittest.TestCase):
         self.assertEqual(1, raised.exception.error_count)
         self.assertEqual({}, raised.exception.second)
 
+    def test_frozen_extension_manifest_checks_parent_and_truth(self):
+        tasks = [
+            bench.Task("a", "pa", "First task", ["A.kt"]),
+            bench.Task("b", "pb", "Second task", ["B.kt"]),
+            bench.Task("c", "pc", "Third task", ["C.kt"]),
+        ]
+        protocol = {"dev_tasks": 1, "heldout_tasks": 2, "prefilter": 60}
+        manifest = {
+            "source_koog_head": "head", "protocol": {**protocol, "heldout_tasks": 1},
+            "development_shas": ["a"], "initial_heldout_shas": ["b"],
+            "extension_heldout_tasks": [{"sha": "c", "parent": "pc", "task": "Third task", "truth": ["C.kt"]}],
+            "skipped_before_extension": [],
+        }
+        bench.validate_extension_manifest(manifest, tasks, [], protocol, "head")
+        changed = dict(manifest, extension_heldout_tasks=[dict(manifest["extension_heldout_tasks"][0], parent="wrong")])
+        with self.assertRaisesRegex(RuntimeError, "parents"):
+            bench.validate_extension_manifest(changed, tasks, [], protocol, "head")
+
+    def test_expected_checkpoint_rejects_missing_or_mismatched_server(self):
+        expected = "1c5edc17a7acd8701df6fc341c0d179f1c62c982"
+        bench.require_checkpoint({"checkpoint": expected}, expected)
+        with self.assertRaisesRegex(RuntimeError, "server reports none"):
+            bench.require_checkpoint({}, expected)
+        with self.assertRaisesRegex(RuntimeError, "server reports"):
+            bench.require_checkpoint({"checkpoint": "0" * 40}, expected)
+
 
 if __name__ == "__main__":
     unittest.main()
