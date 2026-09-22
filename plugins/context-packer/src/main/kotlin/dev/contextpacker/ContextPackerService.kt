@@ -3,6 +3,7 @@ package dev.contextpacker
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.smartReadAction
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
@@ -55,6 +56,11 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         val sketchMs = (System.nanoTime() - started) / 1_000_000
         val result = Packer(JevRelevance(client)).pack(task, docs, onProgress)
         val calls = client.calls.drop(before)
+        val slowest = calls.maxOfOrNull { it.ms } ?: 0
+        thisLogger().info(
+            "pack: ${docs.size} files · sketch ${sketchMs} ms · pass1+bm25 ${result.pass1Ms} ms · pass2 ${result.pass2Ms} ms · " +
+                "${calls.size} Jev calls, slowest ${slowest} ms, ${calls.count { it.error != null }} failed · cache ${cache.size}",
+        )
         return PackReport(
             result = result,
             sketchMs = sketchMs,

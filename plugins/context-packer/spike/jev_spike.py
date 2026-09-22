@@ -171,7 +171,7 @@ async def score_full(jev: Jev, task: str, files: dict[str, str], pool: list[str]
 
 async def cmd_hybrid(args):
     """Pool = BM25 top K plus Jev-on-sketches top K, then Jev re-ranks the pool on full source."""
-    tasks = koog.load_tasks(limit=args.tasks)
+    tasks = koog.load_tasks(limit=args.offset + args.tasks)[args.offset:]
     jev = Jev(args.model, args.concurrency)
     rows = []
     for t in tasks:
@@ -196,6 +196,9 @@ async def cmd_hybrid(args):
                **{f"jev1@{k}": recall(jr, t.truth, k) for k in (5, 10)},
                **{f"rerank@{k}": recall(rr, t.truth, k) for k in (5, 10)},
                **{f"blend@{k}": recall(blend, t.truth, k) for k in (5, 10)}}
+        row["dump"] = {"truth": t.truth, "bm25": br[:300], "pool": pool,
+                       "s1": {p: s1[p] for p in pool}, "s2": {p: s2.get(p, 0.0) for p in pool},
+                       "s1_rank": {p: jr.index(p) + 1 for p in pool}}
         rows.append(row)
         print(f"{row['sha']}  bm25@10={row['bm25@10']:.2f} jev1@10={row['jev1@10']:.2f} rerank@10={row['rerank@10']:.2f} "
               f"blend@10={row['blend@10']:.2f} ceil={row['ceiling']:.2f} pool={len(pool)}  "
@@ -206,7 +209,7 @@ async def cmd_hybrid(args):
                "pass1_s_p50": st.median(r["pass1_s"] for r in rows), "pass2_s_p50": st.median(r["pass2_s"] for r in rows),
                **call_stats(jev.calls)}
     print(json.dumps({k: v for k, v in summary.items() if k != "error_samples"}), summary["error_samples"])
-    (RUNS / f"hybrid_{args.model}_{QUESTION}_top{args.top}_pc{args.per_call}_c{args.chars}_t{args.tasks}.json").write_text(
+    (RUNS / f"hybrid_{args.model}_{QUESTION}_top{args.top}_pc{args.per_call}_c{args.chars}_o{args.offset}_t{args.tasks}.json").write_text(
         json.dumps({"summary": summary, "rows": rows}, indent=1))
 
 
@@ -292,6 +295,7 @@ def main():
     ap.add_argument("cmd", choices=["limits", "recall", "rerank", "hybrid"])
     ap.add_argument("--model", default="jev-latest")
     ap.add_argument("--tasks", type=int, default=10)
+    ap.add_argument("--offset", type=int, default=0, help="skip the first N tasks, e.g. the ones used for tuning")
     ap.add_argument("--batch", type=int, default=60)
     ap.add_argument("--concurrency", type=int, default=16)
     ap.add_argument("--top", type=int, default=30)

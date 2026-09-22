@@ -50,11 +50,39 @@ affordable.
 About 30% more of the right files land in the top 10 than with BM25, in under 3 seconds
 end to end.
 
+## Held-out evaluation (the number to quote)
+
+The tables above tuned pool size, wording and fusion on the first 20 tasks, so they flatter the
+pipeline. A first check on 30 unseen tasks with those settings did **not** beat BM25 at recall@10
+(0.51 vs 0.56). Two problems, both fixed before the run below:
+
+- Commits that mostly add new files were in the set. Nothing can retrieve a file that doesn't
+  exist yet, so the task filter now drops commits with more added than modified `.kt` files.
+- The BM25 weight was tuned on too few tasks.
+
+Protocol: run the pipeline once over all 136 usable tasks and save every score
+(`jev_spike.py hybrid`), choose the fusion on the first 40 (dev) only with `fusion.py`, then report
+it once on the rest (test). The TypeSafe credits ran out at task 111, so the last 26 have partial
+Jev scores and are excluded. That leaves 40 dev and **70 test** tasks, all complete.
+
+Chosen on dev: `score = jev + 1.0 / (1 + bm25_rank / 10)`, equal weight.
+
+| 70 test tasks | recall@5 | recall@10 | recall@20 |
+| --- | --- | --- | --- |
+| BM25 | 0.42 | 0.53 | 0.63 |
+| Jev re-rank alone | 0.52 | 0.63 | 0.74 |
+| **Jev + BM25** | **0.54** | **0.69** | **0.80** |
+
+Paired bootstrap over tasks, Jev + BM25 minus BM25: recall@5 **+0.12** [+0.07, +0.18],
+recall@10 **+0.16** [+0.10, +0.23] (95% intervals). The pool's ceiling is 0.90.
+
+Pass 1 took 1.5 s and pass 2 took 1.0 s (medians), at 60 sketches per call.
+
 ## Decisions for the plugin
 
-- Pipeline: sketch every file, then Jev pass 1 at 100 files per call, BM25 over full text in
+- Pipeline: sketch every file, then Jev pass 1 at 60 files per call, BM25 over full text in
   parallel, a pool of their top 60 each, and Jev pass 2 on full source (6,000 chars) at 6
-  files per call. The final rank is the pass-2 score plus a small BM25 tie-break.
+  files per call. The final rank fuses the pass-2 score with BM25 rank at equal weight.
 - Question wording: "Implementing the change described in `task` requires reading or
   editing the file in `fNNN`." The narrower "requires editing" scored worse (0.59 against 0.66
   at pool 40).

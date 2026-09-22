@@ -44,7 +44,11 @@ def load_tasks(limit: int = 60, min_files: int = 1, max_files: int = 8) -> list[
             continue
         modified = [ln.split("\t", 1)[1] for ln in body.splitlines()
                     if ln.startswith("M\t") and ln.endswith(".kt")]
+        added = sum(1 for ln in body.splitlines() if ln.startswith("A\t") and ln.endswith(".kt"))
         if not (min_files <= len(modified) <= max_files):
+            continue
+        # A commit that mostly adds new files is about files that don't exist yet: nothing can find those.
+        if added > len(modified):
             continue
         if all("/test/" in p or p.endswith("Test.kt") for p in modified):
             continue
