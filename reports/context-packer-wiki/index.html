@@ -74,6 +74,10 @@ footer { margin-top: 64px; font-size: 14px; color: var(--ink-3); }
 <h1>Context Packer wiki</h1>
 <p class="lede">Everything you need to explain how it works and why each design choice was made. The eval report has the
 full numbers; this page explains them.</p>
+<div class="box"><p><strong>Provider scope.</strong> The architecture and measured results below describe the Jev pipeline.
+The combined plugin also offers Fast keywords and local Laya. Typing previews and the live hook default to local keywords;
+explicit Pack/MCP calls use the requested provider. See the <a href="../context-packer-laya/">local Laya report</a> for its
+separate frozen protocol, CPU timings and limitations. The provider studies are not a head-to-head comparison.</p></div>
 
 <h2 id="tldr">In one minute</h2>
 <p>Given a task in plain English, Context Packer ranks every source file in the project by how likely the task is to need it.
@@ -112,7 +116,8 @@ and a Claude Code hook that injects the ranking before the agent starts).</p>
   <rect class="o" x="610" y="252" width="14" height="14" rx="3"/><text class="legend" x="630" y="264">output</text>
 </svg>
 <p>One pack on Koog (1,705 Kotlin files): about 50 Jev calls, 0.6M input tokens, $0.03, about 4 s end to end. Sketches are
-built in the background when the project opens and cached by file modification stamp, so a pack never waits for them.</p>
+built in the background when the project opens and cached by file modification stamp and sketch mode. A pack still reads
+missing or changed sketches; warm-up reduces that work.</p>
 
 <h2 id="jev">Jev</h2>
 <p>Jev is TypeSafe's first "System One" model. It <strong>cannot generate text</strong>. You send it a <code>state</code> (any
@@ -247,9 +252,9 @@ top 10, so it can't change recall@10 or @20.</p>
   EDT, and cancellation always propagates.</li>
   <li><strong>Caching and warm-up:</strong> sketches are cached by modification stamp and built when the project opens (a
   <code>ProjectActivity</code>, no Jev calls). Unsaved editor text is used when a file is open.</li>
-  <li><strong>Tool window:</strong> task field, search-as-you-type preview (after 700 ms: BM25 top 30 plus one Jev pass, about 5
-  calls, labelled preview), Pack, ranked list with role chips, Add open file / Drop to correct it, Copy prompt, Ask LLM.</li>
-  <li><strong>MCP:</strong> <code>pack_context(task, limit)</code> is registered on the IDE's built-in MCP server through the
+  <li><strong>Tool window:</strong> task field, search-as-you-type preview (after 700 ms: full-source local BM25, zero model
+  calls, labelled preview), explicit provider choice and Pack, Jev role chips, Add open file / Drop, Copy prompt, Ask LLM.</li>
+  <li><strong>MCP:</strong> <code>pack_context(task, limit, provider)</code> is registered on the IDE's built-in MCP server through the
   <code>com.intellij.mcpServer.mcpToolset</code> extension point. Agent requests are replayed in the tool window.</li>
   <li><strong>Keys:</strong> environment variables win, otherwise the IDE password store. <code>TYPESAFE_API_KEY</code> first,
   Vercel gateway as fallback; a changed key takes effect on the next pack.</li>
@@ -262,17 +267,22 @@ top 10, so it can't change recall@10 or @20.</p>
 <p>An MCP tool depends on the agent <em>choosing</em> to call it. In five headless runs Claude Code never did, even with a system
 prompt naming the tool; it trusted its own Grep and Glob. The weaker GLM agent did call it, every time.</p>
 <p>So <code>agent/pack_hook.py</code> is a Claude Code <strong>UserPromptSubmit hook</strong>. It runs on every request before
-Claude sees it, asks the IDE's <code>pack_context</code>, and adds the ranked files to Claude's context. It gives up after 25 s,
-never injects error text, and exits silently on any failure, so it can't block a prompt. A warm hook adds about 4 s; the first MCP
-call after an IDE restart takes about 10 s.</p>
+Claude sees it, asks the IDE's <code>pack_context</code>, and adds the ranked files to Claude's context. The installed live hook
+defaults to <code>keywords</code>, with a 25 s deadline and silent failure. Set <code>CONTEXT_PACKER_HOOK_PROVIDER</code>
+explicitly to <code>jev</code>, <code>laya</code>, or <code>configured</code> to use a model. Laya needs a longer deadline on
+this CPU. The published Claude experiment used Jev: a warm hook added about 4 s, and the first MCP call after an IDE restart
+took about 10 s. Those measurements do not apply to the live keyword default.</p>
 
 <h2 id="cost">Cost and safety</h2>
 <ul>
-  <li><strong>Per pack:</strong> about 0.6M Jev input tokens, $0.03. A preview refresh is about $0.002.</li>
-  <li><strong>Caps:</strong> each IDE session stops at 20M Jev tokens (about 30 packs). Eval scripts share a persistent ledger and
-  stop at <code>JEV_TOKEN_BUDGET</code>.</li>
+  <li><strong>Per Jev pack:</strong> about 0.6M input tokens, $0.03 in the reported sample. Current typing previews use local
+  keywords and make zero model calls. Local Laya has no API fee; hardware and electricity are excluded.</li>
+  <li><strong>Budget threshold:</strong> the IDE checks 20M reported Jev tokens before starting another pack. The in-flight pack
+  can exceed it, and missing usage makes cost uncertain. It is not a hard billing cap. Eval scripts separately share a persistent
+  ledger and check <code>JEV_TOKEN_BUDGET</code>.</li>
   <li><strong>Data:</strong> sketches of every candidate file, and the full source (first 6,000 characters) of about 100 shortlisted
-  files, are sent to TypeSafe's API on each pack. Ask LLM sends the picked files to OpenRouter.</li>
+  files, are sent to TypeSafe's API on each Jev pack. Laya uses a local endpoint; Fast keywords stays in the IDE.
+  Ask LLM separately sends the picked source to OpenRouter.</li>
 </ul>
 
 <h2 id="limits">Limits</h2>

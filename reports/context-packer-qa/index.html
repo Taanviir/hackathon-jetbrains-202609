@@ -52,6 +52,8 @@ footer { margin-top: 64px; font-size: 14px; color: var(--ink-3); }
 <h1>Jury Q&amp;A</h1>
 <p>What to say, what to remember, and honest answers to the likely questions. Click a question to open it. The ones marked
 <span class="tag hard">tough</span> are where a sharp juror will push.</p>
+<p><strong>Scope:</strong> the headline evaluation below uses Jev. Fast keywords and local Laya are also available, with
+<a href="../context-packer-laya/">separate local results</a>. Their tasks and runtime differ; this is not a provider comparison.</p>
 
 <h2>The 30-second pitch</h2>
 <div class="pitch">Coding agents spend most of their effort finding the right files, one search at a time. <strong>Context Packer</strong>
@@ -63,7 +65,7 @@ about 30× the speed, and Claude Code, handed its ranking up front, needs a quar
 
 <h2>Numbers to remember</h2>
 <div class="nums">
-  <div class="num"><b>0.69 vs 0.53</b><span>recall@10, Context Packer vs keyword search, 70 held-out Koog commits</span></div>
+  <div class="num"><b>0.69 vs 0.53</b><span>recall@10, Jev + BM25 vs keyword search, 70 held-out Koog commits</span></div>
   <div class="num"><b>+16 points</b><span>95% interval +10 to +23: not luck</span></div>
   <div class="num"><b>~4 s · $0.03</b><span>one ranking of 1,705 files, ~50 Jev calls</span></div>
   <div class="num"><b>30× faster</b><span>than an LLM re-ranker, same top-10 result (1 s vs 29 s)</span></div>
@@ -122,15 +124,20 @@ unsaved editor text, and builds its summaries in the background when the project
 <code>pack_context</code> on IntelliJ's built-in MCP server, so any MCP agent can call it. It's part of IntelliJev: one decision
 layer, many "finders".</p></div></details>
 <details><summary>What does it cost to run?</summary><div>
-<p>About $0.03 per ranking on a 1,700-file project, all Jev. Each IDE session has a hard cap (20M tokens, about 30 rankings) so an
-agent in a loop can't run up a bill.</p></div></details>
+<p>The measured Jev ranking cost about $0.03 on a 1,700-file project. The plugin checks a 20M reported-token session
+threshold before starting another Jev pack. An in-flight pack can exceed it, and missing usage makes spend uncertain;
+this is not a hard billing cap. Typing previews and Fast keywords make no model calls. Local Laya has no API fee,
+excluding hardware and electricity. Ask LLM is a separate cloud cost.</p></div></details>
 <details><summary>Where does my code go? <span class="tag hard">tough</span></summary><div>
-<p>To TypeSafe's API: a short summary of every candidate file, and the first 6,000 characters of about 100 shortlisted files, per
-ranking. Ask LLM sends the picked files to the LLM provider. Nothing is stored by the plugin beyond an in-memory cache.</p></div></details>
+<p>For Jev: to TypeSafe's API, a short summary of every candidate file and the first 6,000 characters of about 100 shortlisted
+files per ranking. Local Laya sends bounded excerpts to your local server; Fast keywords stays in the IDE.
+Ask LLM sends the picked source to the configured cloud provider. The plugin keeps sketches in memory and saves provider
+preferences; credentials use environment variables or the IDE password store.</p></div></details>
 <details><summary>What if Jev is down?</summary><div>
 <p>If Jev answers nothing at all, the plugin says so rather than quietly showing keyword results. Partial failures (a slow call, a
-failed later stage) only degrade the ranking. Calls retry with backoff, and the hook gives up after 25 s so it never blocks a
-prompt.</p></div></details>
+failed later stage) only degrade the ranking, with incomplete scoring disclosed. Calls retry with backoff.
+The live hook defaults to local keywords, has a 25 s deadline, and exits silently on failure. Explicit Laya hook use
+needs a longer deadline on this CPU; explicit Jev use may incur API charges.</p></div></details>
 <details><summary>What's next?</summary><div>
 <p>More languages and repositories in the eval; making the ranking faster so agents also finish sooner; and the other IntelliJev
 finders on the same decision layer.</p></div></details>
@@ -139,7 +146,7 @@ finders on the same decision layer.</p></div></details>
 <ul class="plan">
   <li><strong>Before going on:</strong> send one throwaway request. The first MCP call after the IDE starts takes about 10 s; after that it's about 4 s.</li>
   <li><strong>The panel doesn't fill:</strong> press Pack in the tool window yourself. Same pipeline, same result.</li>
-  <li><strong>Nothing works (network, API):</strong> switch to the recorded video and narrate over it.</li>
+  <li><strong>The network or API is unavailable:</strong> choose Fast keywords for a local demonstration. A recorded Jev demo can show the measured cloud workflow.</li>
   <li><strong>A juror asks about a weak number:</strong> say it plainly and point to the eval report. We publish the failures on purpose.</li>
 </ul>
 <footer>Every number here comes from the <a href="../context-packer-eval/">eval report</a>. The concepts are explained in the

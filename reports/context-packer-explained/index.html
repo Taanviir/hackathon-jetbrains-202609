@@ -70,13 +70,16 @@ footer { margin-top: 80px; font-size: 14px; color: var(--ink-3); border-top: 1px
 <nav><a href="../../">All reports</a><a href="../context-packer-explained/" aria-current="page">Explained</a><a href="../context-packer-wiki/">Technical wiki</a><a href="../context-packer-qa/">Jury Q&amp;A</a><a href="../context-packer-eval/">Eval report</a></nav>
 
 <p class="eyebrow">Context Packer · part of IntelliJev</p>
-<h1>Your coding agent spends its time looking for files. This finds them in four seconds.</h1>
+<h1>Give your coding agent the right files sooner.</h1>
 <p class="lede">Context Packer is an IntelliJ plugin. You describe a change; it reads every file in the project and hands back
 the handful that change will touch, ranked, with the reason each one matters. People use it from a panel in the IDE,
 and AI agents get it automatically before they start.</p>
+<p><strong>Provider scope:</strong> the measurements and pipeline below use <strong>Jev</strong>. The combined plugin also
+offers Fast keywords and local Laya. Those have a <a href="../context-packer-laya/">separate local benchmark</a>;
+the Jev speed and quality figures do not apply to them. Automatic agent delivery requires installing the hook.</p>
 
 <div class="stats">
-  <div class="stat"><div class="n">4 s</div><div class="l">to rank every file in a 1,700-file Kotlin project</div></div>
+  <div class="stat"><div class="n">4 s</div><div class="l">measured Jev pack on a 1,700-file Kotlin project</div></div>
   <div class="stat"><div class="n">69%</div><div class="l">of the files a real change touched land in its top 10. Keyword search: 53%.</div></div>
   <div class="stat"><div class="n">−25%</div><div class="l">fewer steps for Claude Code to reach the same answer</div></div>
   <div class="stat"><div class="n">$0.03</div><div class="l">per ranking, all of it for the AI that does the judging</div></div>
@@ -137,7 +140,7 @@ tuned it on one set of changes and then tested it once on 70 it had never seen.<
   <div class="claim"><div class="big">+16 pts</div><div><p><strong>Better than keyword search.</strong> Of the files each change touched, 69% show up in
   Context Packer's top 10, against 53% for the classic search approach. The margin is large enough that it isn't luck.</p>
   <div class="bars"><div class="row"><span>Keyword search</span><div class="track"><div class="fill" style="width:53%;background:var(--s2)"></div></div><span>53%</span></div>
-  <div class="row"><span>Context Packer</span><div class="track"><div class="fill" style="width:69%;background:var(--s1)"></div></div><span>69%</span></div></div></div></div>
+  <div class="row"><span>Jev + BM25</span><div class="track"><div class="fill" style="width:69%;background:var(--s1)"></div></div><span>69%</span></div></div></div></div>
   <div class="claim"><div class="big">2 repos</div><div><p><strong>Not tuned to one codebase.</strong> On a second JetBrains project, Exposed, which it was
   never tuned on, it still beat keyword search clearly in its top 5 (54% against 43%).</p></div></div>
   <div class="claim"><div class="big">30×</div><div><p><strong>As good as asking an LLM, far faster.</strong> Having a language model re-rank the same
@@ -151,7 +154,7 @@ tuned it on one set of changes and then tested it once on 70 it had never seen.<
 <div class="honest"><ul>
   <li><strong>It doesn't make agents finish sooner.</strong> Fewer steps and less spend, yes; less waiting, not in our tests. Good agents are already quick at searching for words the task mentions.</li>
   <li><strong>Agents won't use it on their own.</strong> Offered as a tool, Claude Code ignored it every time. So it's delivered automatically, before the agent starts.</li>
-  <li><strong>Measured on Kotlin, in two repositories.</strong> It runs on any language the IDE knows, but only Kotlin is measured.</li>
+  <li><strong>Jev measured on Kotlin, in two repositories.</strong> Candidate collection supports several source languages, but only Kotlin is measured.</li>
   <li><strong>It finds existing files.</strong> A change that's mostly brand-new files has nothing to find yet.</li>
 </ul></div>
 
