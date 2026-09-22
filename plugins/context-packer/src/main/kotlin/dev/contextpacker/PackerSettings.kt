@@ -7,7 +7,7 @@ import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.StoragePathMacros
 
 enum class DecisionProvider(val label: String) {
-    JEV("Jev (API)"), LAYA("Laya (local)");
+    JEV("Jev (API)"), LAYA("Laya (local)"), KEYWORDS("Fast keywords (local)");
     override fun toString() = label
 }
 
@@ -23,6 +23,7 @@ class PackerSettings : PersistentStateComponent<PackerSettings.Preferences> {
     var provider: DecisionProvider
         get() = when (preferences.provider.ifEmpty { System.getenv("CONTEXT_PACKER_PROVIDER").orEmpty() }.lowercase()) {
             "laya" -> DecisionProvider.LAYA
+            "keywords", "bm25" -> DecisionProvider.KEYWORDS
             else -> DecisionProvider.JEV
         }
         set(value) { preferences.provider = value.name.lowercase() }

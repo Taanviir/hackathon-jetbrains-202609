@@ -24,9 +24,9 @@ data class PackConfig(
 
 data class PackedFile(
     val path: String,
-    /** Jev's pass-2 P(relevant), on full source. */
+    /** Model pass-2 P(relevant); unused (0.0) for keyword-only ranking. */
     val relevance: Double,
-    /** What the list is sorted by: relevance plus the BM25 tie-break, scaled back to 0..1. */
+    /** Model-mode fused score in 0..1; unused (0.0) for keyword-only ranking. */
     val score: Double,
     val bm25Rank: Int?,
     val isTest: Boolean,

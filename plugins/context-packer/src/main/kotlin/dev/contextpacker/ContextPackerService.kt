@@ -6,6 +6,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.vfs.VfsUtilCore
@@ -18,6 +19,7 @@ import dev.contextpacker.laya.LayaRelevance
 import dev.contextpacker.pack.Bm25
 import dev.contextpacker.pack.Candidates
 import dev.contextpacker.pack.FileDoc
+import dev.contextpacker.pack.KeywordPacker
 import dev.contextpacker.pack.PackResult
 import dev.contextpacker.pack.PackConfig
 import dev.contextpacker.pack.Packer
@@ -28,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -49,12 +52,26 @@ data class PackReport(
 ) {
     /** API fee estimate only. Local hardware/electricity are not included. */
     val costUsd: Double? get() = when {
-        provider == DecisionProvider.LAYA -> 0.0
+        provider == DecisionProvider.LAYA || provider == DecisionProvider.KEYWORDS -> 0.0
         usageKnown -> inputTokens * 0.042 / 1_000_000
         else -> null
     }
     val totalMs get() = sketchMs + result.totalMs
 }
+
+/** The keyword-only report contract has no model usage, request ledger, or probability estimate. */
+internal fun keywordReport(result: PackResult, source: String, collectMs: Long) = PackReport(
+    result = result,
+    source = source,
+    sketchMs = collectMs,
+    jevCalls = 0,
+    inputTokens = 0,
+    failedCalls = 0,
+    jevModel = "Full-corpus BM25 keywords (local; no model)",
+    provider = DecisionProvider.KEYWORDS,
+    scoredCandidates = result.candidates,
+    usageKnown = true,
+)
 
 @Service(Service.Level.PROJECT)
 class ContextPackerService(private val project: Project, val scope: CoroutineScope) {
@@ -105,6 +122,14 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         }
     }
 
+    private fun publish(report: PackReport): PackReport {
+        synchronized(listenerLock) {
+            lastReport = report
+            listeners.toList().forEach { notifyListener(it, report) }
+        }
+        return report
+    }
+
     suspend fun pack(
         task: String,
         source: String = "tool window",
@@ -116,6 +141,18 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         val selectedProvider = requestedProvider ?: provider
         require(selectedProvider != DecisionProvider.LAYA || task.length <= LayaRelevance.MAX_TASK_CHARS) {
             "Laya has a small input window. Keep the task under ${LayaRelevance.MAX_TASK_CHARS} characters."
+        }
+        if (selectedProvider == DecisionProvider.KEYWORDS) {
+            onProgress("Reading project source files")
+            val started = System.nanoTime()
+            val texts = collectKeywordTexts()
+            val collectMs = (System.nanoTime() - started) / 1_000_000
+            onProgress("Ranking all ${texts.size} files with local keywords")
+            val result = withContext(Dispatchers.Default) {
+                KeywordPacker.pack(task, texts, checkCancelled = { ensureActive() })
+            }
+            thisLogger().info("pack: ${texts.size} files · collect ${collectMs} ms · full-corpus BM25 ${result.totalMs} ms · no model calls")
+            return@withLock publish(keywordReport(result, source, collectMs))
         }
         val client = if (selectedProvider == DecisionProvider.JEV) jevClient() else null
         if (client != null && sessionTokens >= sessionBudget) throw BudgetExceededException(sessionTokens, sessionBudget)
@@ -158,12 +195,7 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
             provider = selectedProvider,
             scoredCandidates = scoringDocs.size,
             usageKnown = calls.all { it.usageKnown },
-        ).also { report ->
-            synchronized(listenerLock) {
-                lastReport = report
-                listeners.toList().forEach { notifyListener(it, report) }
-            }
-        }
+        ).let(::publish)
     }
 
     /** Full text of each path, for building a prompt out of the picks. */
@@ -217,6 +249,35 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         files.chunked(16).map { chunk ->
             async(Dispatchers.Default) { readAction { chunk.mapNotNull { docFor(it, base) } } }
         }.awaitAll().flatten()
+    }
+
+    /** Read full source for BM25 without inserting empty sketches into the model-mode cache. */
+    private suspend fun collectKeywordTexts(): Map<String, String> = coroutineScope {
+        val files = smartReadAction(project) { Candidates.collect(project) }
+        cache.keys.retainAll(files.mapTo(HashSet()) { it.path })
+        val base = project.guessProjectDir() ?: return@coroutineScope emptyMap<String, String>()
+        files.chunked(16).map { chunk ->
+            async(Dispatchers.Default) {
+                readAction {
+                    chunk.mapNotNull { file ->
+                        val path = VfsUtilCore.getRelativePath(file, base) ?: return@mapNotNull null
+                        val document = FileDocumentManager.getInstance().getCachedDocument(file)
+                        val stamp = document?.modificationStamp ?: file.modificationStamp
+                        val text = cache[file.path]?.takeIf { it.stamp == stamp }?.doc?.text
+                            ?: document?.text ?: try {
+                                VfsUtilCore.loadText(file)
+                            } catch (e: ProcessCanceledException) {
+                                throw e
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                null
+                            } ?: return@mapNotNull null
+                        path to text
+                    }
+                }
+            }
+        }.awaitAll().flatten().toMap()
     }
 
     private fun docFor(file: VirtualFile, base: VirtualFile?): FileDoc? {
