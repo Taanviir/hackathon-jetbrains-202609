@@ -50,7 +50,9 @@ class ContextPackerServiceIntegrationTest : BasePlatformTestCase() {
             file.path.replace('\\', '/'),
         )
 
-        assertSame(file, runReadAction { service.fileFor(valid) })
+        val resolved = runReadAction { service.fileFor(valid) }
+        assertEquals(file.path, resolved?.path)
+        assertEquals(source, runReadAction { VfsUtilCore.loadText(resolved!!) })
         rejected.forEach { path ->
             assertNull("fileFor accepted $path", runReadAction { service.fileFor(path) })
         }
