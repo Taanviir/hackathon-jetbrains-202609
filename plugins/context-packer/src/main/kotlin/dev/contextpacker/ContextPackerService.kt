@@ -198,6 +198,13 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         ).let(::publish)
     }
 
+    /** Fills the sketch cache without calling Jev, so the first real pack skips the sketching step. */
+    suspend fun warm() {
+        val started = System.nanoTime()
+        val docs = collectDocs()
+        thisLogger().info("warm-up: sketched ${docs.size} files in ${(System.nanoTime() - started) / 1_000_000} ms")
+    }
+
     /** Full text of each path, for building a prompt out of the picks. */
     suspend fun texts(paths: List<String>): Map<String, String> {
         val base = project.guessProjectDir() ?: return emptyMap()
