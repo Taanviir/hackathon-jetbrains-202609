@@ -168,6 +168,9 @@ server on in **Settings | Tools | MCP Server**, then point your agent at it. For
 claude mcp add --transport sse jetbrains http://127.0.0.1:64342/sse
 ```
 
+The IDE takes the next port up when another JetBrains IDE already holds 64342; the MCP Server
+settings page shows the one in use.
+
 **Better: let the agent start with the files.** Strong agents tend to trust their own search: headless
 Claude Code ignored `pack_context` in five tries, even when told to use it. So there's also a Claude Code
 hook, `agent/pack_hook.py`. It runs on every request before Claude sees it, asks IntelliJev's context engine,
@@ -188,8 +191,10 @@ set `CONTEXT_PACKER_HOOK_DEADLINE=180` and the command hook timeout to at least 
 the measured uncached pack takes about two minutes. Local workload can vary.
 The tool's description tells the agent when context packing is useful. Whatever an agent asks for
 also appears in the tool window, marked as asked by an agent, so you can see the context it was
-given. If the IDE runs on Windows and the agent in WSL, localhost only reaches the IDE with WSL's
-mirrored networking turned on.
+given. The hook tries ports 64342 to 64351 and uses the first IDE that has the project open;
+set `CONTEXT_PACKER_MCP` to pin one endpoint. If the IDE runs on Windows and the agent in WSL,
+the hook also offers the project's `\\wsl.localhost` path, which is the only one the Windows IDE
+knows, and localhost reaches the IDE only with WSL's mirrored networking turned on.
 
 ## Demo script
 
