@@ -19,6 +19,7 @@ import tarfile
 from pathlib import Path
 
 OUT = Path(sys.argv[1] if len(sys.argv) > 1 else "_site")
+TOP_LEVEL = {"pitch"}  # main reports that get a short URL at the site root
 TITLE_RE = re.compile(r"<title>(.*?)</title>", re.I | re.S)
 
 
@@ -92,6 +93,10 @@ def main():
             continue
         reports = []
         for d in sorted(p for p in dest.iterdir() if p.is_dir() and (p / "index.html").is_file()):
+            if branch == "main" and d.name in TOP_LEVEL:  # published at /<name>/, not /main/<name>/
+                shutil.move(d, OUT / d.name)
+                reports.append({"path": f"{d.name}/", **describe(OUT / d.name)})
+                continue
             if branch != "main" and tree(branch, d.name) == tree("main", d.name):
                 shutil.rmtree(d)  # unchanged copy of main's report
                 continue
