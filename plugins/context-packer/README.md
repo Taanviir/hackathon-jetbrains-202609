@@ -201,7 +201,7 @@ About two minutes, on a Koog checkout:
 
 ## Against an LLM, and inside an agent
 
-Full numbers are in the [eval report](https://taanviir.github.io/hackathon-jetbrains-202609/feat-context-packer/context-packer-eval/).
+Full numbers are in the [eval report](https://taanviir.github.io/hackathon-jetbrains-202609/main/context-packer-eval/).
 
 **Against an LLM re-ranker.** GLM-5.3 Flash re-ranked BM25's top 30 on full source, on the same 70 tasks. It picks
 the top five better (recall@5 0.61 against 0.52 for Jev + BM25, a significant gap), and at ten they tie (0.67 against

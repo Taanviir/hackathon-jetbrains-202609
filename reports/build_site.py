@@ -1,7 +1,9 @@
-"""Build the reports site from the `reports/` folder of every branch.
+"""Build the reports site from `main`, plus what unmerged branches add.
 
-Each branch's reports are published at /<branch>/<report>/, and the index lists them all, so a
-teammate's report shows up without a merge. Standard library only.
+`main`'s reports are published at /main/<report>/. A branch that isn't merged yet contributes only the
+reports it adds or changes, at /<branch>/<report>/, so a teammate's work shows up without a merge and
+without duplicating everything already on main. Branches merged into main are skipped entirely.
+Standard library only.
 
     python reports/build_site.py _site
 """
@@ -32,6 +34,18 @@ def branches() -> list[str]:
 
 def slug(branch: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", branch)
+
+
+def merged(branch: str) -> bool:
+    """True when every commit on the branch is already on main, so its reports are main's."""
+    return subprocess.run(["git", "merge-base", "--is-ancestor", f"origin/{branch}", "origin/main"],
+                          capture_output=True).returncode == 0
+
+
+def tree(branch: str, report: str) -> str | None:
+    """Git's hash of reports/<report> on a branch; equal hashes mean identical content."""
+    r = subprocess.run(["git", "rev-parse", f"origin/{branch}:reports/{report}"], capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
 
 
 def extract(branch: str, dest: Path) -> bool:
@@ -68,33 +82,45 @@ def main():
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)
-    groups = []
+    groups, hidden = [], []
     for branch in branches():
+        if branch != "main" and merged(branch):
+            hidden.append(branch)
+            continue
         dest = OUT / slug(branch)
         if not extract(branch, dest):
             continue
         reports = []
         for d in sorted(p for p in dest.iterdir() if p.is_dir() and (p / "index.html").is_file()):
-            reports.append({"path": f"{slug(branch)}/{d.name}/", **describe(d)})
+            if branch != "main" and tree(branch, d.name) == tree("main", d.name):
+                shutil.rmtree(d)  # unchanged copy of main's report
+                continue
+            changed = branch != "main" and tree("main", d.name) is not None
+            reports.append({"path": f"{slug(branch)}/{d.name}/", "changed": changed, **describe(d)})
         reports.sort(key=lambda r: r.get("date", ""), reverse=True)
         if reports:
             groups.append((branch, reports))
-    (OUT / "index.html").write_text(index_page(groups))
+    (OUT / "index.html").write_text(index_page(groups, hidden))
     (OUT / ".nojekyll").write_text("")
-    print(f"built {sum(len(r) for _, r in groups)} reports from {len(groups)} branches into {OUT}")
+    print(f"built {sum(len(r) for _, r in groups)} reports from {len(groups)} branches into {OUT}; "
+          f"skipped {len(hidden)} merged: {', '.join(hidden) or '-'}")
 
 
-def index_page(groups) -> str:
+def index_page(groups, hidden) -> str:
     e = html.escape
     sections = []
     for branch, reports in groups:
         items = "".join(
             f'<li><a href="{e(r["path"])}">{e(r["title"])}</a>'
-            f'<span class="m">{e(" · ".join(x for x in (r.get("author", ""), r.get("date", "")) if x))}</span>'
+            + ('<span class="m">changed on this branch</span>' if r.get("changed") else "")
+            + f'<span class="m">{e(" · ".join(x for x in (r.get("author", ""), r.get("date", "")) if x))}</span>'
             + (f'<p>{e(r["description"])}</p>' if r.get("description") else "") + "</li>"
             for r in reports)
-        sections.append(f'<h2><code>{e(branch)}</code></h2><ul>{items}</ul>')
+        label = "main" if branch == "main" else f"{branch} · not merged yet"
+        sections.append(f'<h2><code>{e(label)}</code></h2><ul>{items}</ul>')
     body = "".join(sections) or "<p>No reports yet. See reports/README.md in the repo for how to add one.</p>"
+    if hidden:
+        body += f'<p class="m" style="margin:32px 0 0">{len(hidden)} merged branches are folded into main.</p>'
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Hackathon reports</title>
 <style>
@@ -111,8 +137,8 @@ li {{ background:var(--surface); border:1px solid var(--rule); border-radius:10p
 li p {{ margin:4px 0 0; font-size:14px; }} .m {{ color:var(--ink-3); font-size:13px; margin-left:10px; }}
 </style></head><body><main>
 <h1>Hackathon reports</h1>
-<p>Eval benchmarks and other HTML outputs from the team, collected from every branch. To add one, put
-<code>reports/&lt;name&gt;/index.html</code> on any branch; see <code>reports/README.md</code>.</p>
+<p>Eval benchmarks and other HTML outputs from the team. Everything on <code>main</code>, plus what any unmerged branch
+adds or changes. To add one, put <code>reports/&lt;name&gt;/index.html</code> on any branch; see <code>reports/README.md</code>.</p>
 {body}
 </main></body></html>
 """
