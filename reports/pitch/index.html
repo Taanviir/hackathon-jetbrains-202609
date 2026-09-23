@@ -169,8 +169,16 @@ body.shownotes #notes { display: block; }
 <body>
 <div id="deck">
 
+<section class="slide title">
+  <h1 class="a" style="--i:0">Intelli<span class="grad">Jev</span></h1>
+  <p class="tagline a" style="--i:1">Find the right context. Review the right change.</p>
+  <p class="who a" style="--i:2">@Taanviir · @aikram42 · @mahahahad</p>
+  <p class="event a" style="--i:3">JetBrains Help the Developer hackathon</p>
+  <div class="note">IntelliJev: one IntelliJ plugin that finds the files a task needs and lets the developer review a coding model's changes before applying them.</div>
+</section>
+
 <section class="slide">
-  <div class="kicker a">IntelliJev · JetBrains Help the Developer · agent efficiency</div>
+  <div class="kicker a">The problem</div>
   <h2 class="a" style="--i:1">An agent's first minutes are a <span class="grad">scavenger hunt</span></h2>
   <div class="chips chip-in" style="margin:6px 0 36px;--d:300ms">
     <span class="s" style="--i:0">grep "retry"</span><span class="r" style="--i:1">read Client.kt</span><span class="s" style="--i:2">grep "backoff"</span>
@@ -179,8 +187,8 @@ body.shownotes #notes { display: block; }
   </div>
   <p class="a" style="--d:900ms">Each hop is a full LLM round-trip. On a 2,000-file project the agent reads files <b>one at a time</b> to find the few that matter, while the IDE already knows every file.</p>
   <p class="a" style="--d:960ms">In our 8-task Koog pilot, Claude Code averaged <b><span data-to="13" data-dec="1">13.0</span> turns</b> per task.</p>
-  <div class="src">Chips illustrate a typical exploration. Turns: eval/results/claude_ab_sonnet_o40_t8.json (no-hook arm). Team: @Taanviir · @aikram42 · @mahahahad</div>
-  <div class="note">IntelliJev is our entry. The problem: coding agents spend their first minutes re-discovering the project through a keyhole, one tool call at a time.</div>
+  <div class="src">Chips illustrate a typical exploration. Turns: eval/results/claude_ab_sonnet_o40_t8.json (no-hook arm).</div>
+  <div class="note">The problem: coding agents spend their first minutes re-discovering the project through a keyhole, one tool call at a time.</div>
 </section>
 
 <section class="slide">
@@ -218,25 +226,26 @@ body.shownotes #notes { display: block; }
 
 <section class="slide">
   <div class="kicker a">Result · retrieval</div>
-  <h2 class="a" style="--i:1">Finds the right files far more often</h2>
+  <h2 class="a" style="--i:1">Finds the right files far more often, on a new repo too</h2>
   <div class="row" style="grid-template-columns:1.35fr 1fr;align-items:end;gap:48px">
     <div>
       <div class="legend a" style="--i:2"><span class="lb">BM25 keyword search</span><span class="lp">IntelliJev (Jev pipeline)</span></div>
-      <div class="chart">
+      <div class="chart" style="height:400px">
         <div class="grp"><div class="bar b" style="height:42%;--i:0"><span class="fill"></span><i>0.42</i></div><div class="bar p" style="height:57%;--i:1"><span class="fill"></span><i>0.57</i></div></div>
         <div class="grp"><div class="bar b" style="height:53%;--i:3"><span class="fill"></span><i>0.53</i></div><div class="bar p" style="height:69%;--i:4"><span class="fill"></span><i>0.69</i></div></div>
         <div class="grp"><div class="bar b" style="height:63%;--i:6"><span class="fill"></span><i>0.63</i></div><div class="bar p" style="height:80%;--i:7"><span class="fill"></span><i>0.80</i></div></div>
       </div>
       <div class="xl"><div>recall@5</div><div>recall@10</div><div>recall@20</div></div>
     </div>
-    <div style="display:grid;gap:20px">
-      <div class="card stat a" style="--d:700ms"><span class="big">+<span data-to="16" data-delay="700">16</span> pts</span><p>recall@10 over BM25<br>95% interval +10 to +23</p></div>
-      <div class="card stat a" style="--d:780ms"><span class="big">+0.03</span><p>recall@5 from the stage-3 comparison<br>0.54 → 0.57, interval +0.006 to +0.07</p></div>
-      <div class="card a" style="--d:860ms"><span class="tag">What didn't work</span><p>Jev on sketches alone: 0.37 recall@10, below BM25's 0.46 (10-task spike).</p></div>
+    <div style="display:grid;gap:14px">
+      <div class="card stat rcard a" style="--d:700ms"><span class="big">+<span data-to="16" data-delay="700">16</span> pts</span><p>recall@10 over BM25, 95% interval +10 to +23</p></div>
+      <div class="card stat rcard a" style="--d:760ms"><span class="big">+0.03</span><p>recall@5 from stage 3 (0.54 → 0.57), interval +0.006 to +0.07</p></div>
+      <div class="card stat rcard a" style="--d:820ms"><span class="tag">New repo · JetBrains/Exposed · 40 tasks</span><span class="big">0.43 → 0.54</span><p>recall@5, frozen settings, +0.10 [+0.01, +0.20]; recall@10 0.56 → 0.62, not significant</p></div>
+      <div class="card stat rcard a" style="--d:880ms"><span class="tag">Local Laya · 30 Koog tasks</span><span class="big">$0</span><p>API fee; keyword search still won locally, recall@10 0.553 vs 0.391</p></div>
     </div>
   </div>
-  <div class="src">70 held-out JetBrains/koog commits: task = commit subject, answer = files it changed, files read before the commit; settings tuned on 40 dev tasks, measured once. Sources: spike/RESULTS.md, eval/results/stage3_test_k10_c6000.json.</div>
-  <div class="note">Real commits from JetBrains' own agent framework. The failed sketch-only version is kept in the write-up; it's why the pipeline re-ranks full source.</div>
+  <div class="src">70 held-out JetBrains/koog commits: task = commit subject, answer = files it changed, files read before the commit; settings tuned on 40 dev tasks, measured once. Exposed: 1,230 Jev calls, 0 errors. Laya: Windows CPU, different tasks and machine, not a Laya-vs-Jev comparison. Sources: spike/RESULTS.md, eval/results/stage3_test_k10_c6000.json, second_repo_exposed_t40.json, eval/LAYA.md.</div>
+  <div class="note">Real commits from JetBrains' own agent framework. Jev on sketches alone lost to BM25 (0.37 vs 0.46 in the spike), which is why it re-ranks full source. Nothing was re-tuned for Exposed. Laya is the offline option and keyword search beat it, so Fast keywords ships too.</div>
 </section>
 
 <section class="slide">
@@ -277,46 +286,27 @@ body.shownotes #notes { display: block; }
 </section>
 
 <section class="slide">
-  <div class="kicker a">Generalises · measured honestly</div>
-  <h2 class="a" style="--i:1">Holds up on a new repo. Local mode costs $0.</h2>
-  <div class="row c2" style="gap:48px;align-items:start">
-    <div class="a" style="--i:2">
-      <span class="tag">JetBrains/Exposed · 40 tasks · never tuned there</span>
-      <div class="legend" style="margin-bottom:48px"><span class="lb">BM25</span><span class="lp">IntelliJev, frozen settings</span></div>
-      <div class="chart two">
-        <div class="grp"><div class="bar b" style="height:43%;--i:2"><span class="fill"></span><i>0.43</i></div><div class="bar p" style="height:54%;--i:3"><span class="fill"></span><i>0.54</i></div></div>
-        <div class="grp"><div class="bar b" style="height:56%;--i:5"><span class="fill"></span><i>0.56</i></div><div class="bar p" style="height:62%;--i:6"><span class="fill"></span><i>0.62</i></div></div>
-      </div>
-      <div class="xl two"><div>recall@5 · +0.10 [+0.01, +0.20]</div><div>recall@10 · +0.07 [−0.02, +0.16], n.s.</div></div>
-    </div>
-    <div class="a" style="--i:4">
-      <span class="tag">Local Laya · 30 held-out Koog tasks · recall@10</span>
-      <div style="margin-top:22px">
-        <div class="hbar"><span>Full-source BM25</span><div class="track"><div class="fill" style="width:55.3%;--i:6"></div></div><b>0.553</b></div>
-        <div class="hbar"><span>Laya + BM25</span><div class="track"><div class="fill p" style="width:39.1%;--i:8"></div></div><b>0.391</b></div>
-        <div class="hbar"><span>Laya alone</span><div class="track"><div class="fill p" style="width:11.4%;--i:10"></div></div><b>0.114</b></div>
-      </div>
-      <div class="row c2 stat" style="margin-top:18px">
-        <div class="card"><span class="big">$0</span><p>API fee, local CPU</p></div>
-        <div class="card"><span class="big"><span data-to="2329" data-delay="900">2,329</span></span><p>local requests, 0 errors (25-task extension)</p></div>
-      </div>
-    </div>
-  </div>
-  <div class="src">Exposed: 1,230 Jev calls, 0 errors, eval/results/second_repo_exposed_t40.json. Laya: Windows CPU, a different task set and machine from the Jev results, so not a Laya-vs-Jev comparison; plugins/context-packer/eval/LAYA.md. Keywords stays a first-class local mode.</div>
-  <div class="note">Nothing was re-tuned for Exposed; the top-10 gain points the same way but isn't significant. Laya is the private, offline option, and on this benchmark keyword search beat it, which is why Fast keywords ships too.</div>
-</section>
-
-<section class="slide">
   <div class="kicker a">Live demo</div>
   <h2 class="a" style="--i:1">Watch the agent skip the hunt</h2>
-  <ol class="demo">
-    <li class="a" style="--i:2">Open <b>IntelliJev → Find context</b> on JetBrains/koog and choose <b>Jev</b>.</li>
-    <li class="a" style="--i:3">Pack <i>"Add exponential backoff to retries in the LLM client"</i>. The retry client comes out on top.</li>
-    <li class="a" style="--i:4">Select files and press <b>Review changes</b>: inspect the proposed diff, apply only what you approve.</li>
-    <li class="a" style="--i:5">In a terminal, <code>claude</code> in the Koog folder: the hook packs context before the first turn.</li>
-  </ol>
-  <div class="src">Rehearsal, single runs, not benchmarks: the Claude Code hook ranked Koog in 4.0 s end to end with RetryingLLMClient.kt on top (0.97); an IDE pack of 1,705 .kt files took 2.1 s for about $0.026 of Jev.</div>
-  <div class="note">Backup: the recorded terminal run of the same prompt. The hook is optional; the IDE flow works on its own.</div>
+  <div class="prompt main a" style="--i:2">"Add exponential backoff to retries in the LLM client"<small>→ RetryingLLMClient.kt · Jev top pick 0.96 (rehearsal)</small></div>
+  <div class="row" style="grid-template-columns:1.25fr 1fr;gap:34px;align-items:start">
+    <div>
+      <span class="tag a" style="--i:3">Also verified · keyword ranking put the right file first</span>
+      <div class="prompt a" style="--i:4">"Support reasoning_content in Delta for OpenAI streaming responses"<small>→ OpenAILLMClient.kt</small></div>
+      <div class="prompt a" style="--i:5">"Map cachedContentTokenCount from Google usage metadata into token usage"<small>→ GoogleLLMClient.kt</small></div>
+      <div class="prompt a" style="--i:6">"Add a Spring Boot property to configure the Ollama base URL"<small>→ OllamaKoogProperties.kt</small></div>
+      <div class="prompt a" style="--i:7">"Add token counting for Anthropic prompts in the tokenizer"<small>→ PromptTokenizer.kt</small></div>
+      <div class="prompt a" style="--i:8">"Add streaming support to the A2A server"<small>→ A2AServer.kt</small></div>
+    </div>
+    <div>
+      <span class="tag a" style="--i:9">Harder · keywords miss these, compare with Jev live</span>
+      <div class="prompt hard a" style="--i:10">"Add a configurable timeout to MCP tool calls made by agents"<small>keywords vs Jev</small></div>
+      <div class="prompt hard a" style="--i:11">"Handle rate limit 429 errors from Bedrock with a retry"<small>keywords vs Jev</small></div>
+      <div class="card a" style="--i:12;margin-top:18px"><span class="tag">Agents</span><p>Claude Code and Codex both get packed context through the same prompt hook. Codex run today: ranked the project in 5.5 s.</p></div>
+    </div>
+  </div>
+  <div class="src">Single rehearsal checks on JetBrains/koog, not benchmarks. Flow: Find context → Pack → Review changes, or run the agent in the Koog folder.</div>
+  <div class="note">Start with the main prompt in the IDE, then show the agent. If there's time, run one of the harder prompts with keywords and then Jev to show the difference. Backup: the recorded terminal run.</div>
 </section>
 
 <section class="slide">
