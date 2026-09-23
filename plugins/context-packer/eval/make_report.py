@@ -24,7 +24,6 @@ OUT = ROOT.parents[1] / "reports" / "context-packer-eval"
 
 # ---------------------------------------------------------------- data from logs (not in run files)
 
-LIMITS = [(60, "ok", "16.8k", "1.6 s"), (100, "ok", "27.9k", "0.8 s"), (150, "400 max_tokens_exceeded", "-", "-")]
 IDE_TIMINGS = [  # idea.log "pack:" lines, Koog, 2,206 files
     ("Fresh IDE, Structure View sketches", 42_701, 2_864, 2_159, 47.7),
     ("Fresh IDE, regex sketches (shipped)", 1_388, 4_224, 1_015, 6.6),
@@ -64,7 +63,6 @@ def summary(name):
 # ---------------------------------------------------------------- numbers from run files
 
 jev_alone = {b: summary(f"recall_jev-latest_b{b}_c16_t10.json") for b in (30, 100)}
-tune40 = summary("hybrid_jev-latest_read_or_edit_top40_pc6_c6000_t20.json")
 tune60 = summary("hybrid_jev-latest_read_or_edit_top60_pc6_c6000_t20.json")
 first_holdout = summary("hybrid_jev-latest_read_or_edit_top60_pc6_c6000_o20_t30.json")
 

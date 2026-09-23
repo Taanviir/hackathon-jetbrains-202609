@@ -118,7 +118,6 @@ Still pending:
 
 The reviewed-edit workflow has no generated-code quality benchmark. The context
 engine's separate [Jev evidence](../context-packer/spike/RESULTS.md) and
-[local Laya evidence](../context-packer/eval/LAYA_RESULTS.md) measure source retrieval;
-they do not establish generated-code correctness. The deck's 24→2 calls, 48→6 seconds,
-and $0.42→$0.05 figures remain projections, as recorded in
-[§9 of the build specification](./BUILD_SPEC.md).
+[local Laya evidence](../context-packer/eval/LAYA.md#results) measure source retrieval;
+they do not establish generated-code correctness. The published pitch deck uses measured
+Jev retrieval and agent-pilot evidence and labels future capabilities as a roadmap.

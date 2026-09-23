@@ -112,8 +112,6 @@ class LayaRelevance(
     companion object {
         const val MAX_EXCERPT_CHARS = 1_000
         const val MAX_TASK_CHARS = 500
-        /** CPU-local scoring is bounded before inference; the shortlist remains explicit in reports. */
-        const val MAX_CANDIDATES = 60
     }
 }
 
