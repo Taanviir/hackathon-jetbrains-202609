@@ -33,9 +33,9 @@ within the shortlist. Laya did not improve this benchmark. The clean next-25 con
 averaged **117.2 seconds** for its two CPU model passes, with 2,329 calls and no request errors.
 Both local methods have $0 API fee, excluding hardware and electricity. These tasks and this
 Windows CPU differ from the Jev evaluation above; this is not a Laya-versus-Jev comparison.
-See [the measured Laya report](eval/LAYA_RESULTS.md) and [local setup](LAYA.md).
+See [the measured Laya report](eval/LAYA.md#results) and [local setup](LAYA.md).
 
-The [stability replay guide](eval/SOAK.md) provides an offline check of every frozen
+The [stability replay guide](eval/LAYA.md#response-cache-diagnostic-replay) provides an offline check of every frozen
 request and a separate Windows replay command. Run `python eval/verify_artifacts.py`
 to verify the committed evidence's stored and decompressed hashes; CI checks these too.
 
@@ -52,8 +52,7 @@ plugin does the looking.
 2. **Sketch.** Each file becomes a ~300-token summary: path, package, and declarations two levels
    deep with the first line of each doc comment. It's the same sketcher the eval measured (a
    parity test checks the Kotlin port against it), it takes about 1.4 s for 2,206 files, and it's
-   cached by modification stamp. Sketches built from the IDE's Structure View read better but
-   cost ~19 ms a file cold and are unmeasured; `CONTEXT_PACKER_PSI_SKETCH=1` turns them on.
+   cached by modification stamp.
 3. **Pass 1.** Jev reads 60 sketches per call and answers, for each one, "Implementing the change
    described in `task` requires reading or editing the file in `f07`." BM25 ranks the full text
    at the same time.

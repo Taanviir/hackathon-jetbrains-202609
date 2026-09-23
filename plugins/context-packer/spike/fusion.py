@@ -15,7 +15,7 @@ def recall(ranked, truth, k):
 
 def variants(d: dict) -> dict[str, list[str]]:
     """Every candidate ranking for one task, built from the saved scores. No new Jev calls."""
-    truth, bm25, pool, s1, s2 = d["truth"], d["bm25"], d["pool"], d["s1"], d["s2"]
+    bm25, pool, s1, s2 = d["bm25"], d["pool"], d["s1"], d["s2"]
     bpos = {p: i for i, p in enumerate(bm25)}
     b = lambda p: bpos.get(p, 999)
     s2_rank = {p: i for i, p in enumerate(sorted(pool, key=lambda p: -s2[p]))}

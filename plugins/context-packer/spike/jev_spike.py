@@ -14,7 +14,6 @@ import re
 import statistics as st
 import time
 from collections import Counter
-from pathlib import Path
 from types import SimpleNamespace
 
 import httpx

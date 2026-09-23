@@ -96,7 +96,7 @@ this character limit is not an exact tokenizer budget. Scores are fused with
 keyword rank. The status tooltip and MCP response identify the provider and
 candidate count. Laya has not inherited Jev's measured retrieval claims.
 Laya retains the regex sketch format used in its frozen evaluation, independently
-of Jev's corrected sketcher and optional PSI sketches. Switching providers
+of Jev's corrected sketcher. Switching providers
 invalidates cached sketches when their format differs.
 
 The displayed **API fee is $0** for local inference. Hardware, electricity and
