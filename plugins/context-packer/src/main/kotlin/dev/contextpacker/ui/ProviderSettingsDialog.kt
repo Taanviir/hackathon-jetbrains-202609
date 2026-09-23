@@ -44,7 +44,7 @@ internal class ProviderSettingsDialog(
     private val endpoint = JBTextField(draft.laya.endpoint, 36).apply {
         toolTipText = "Blank inherits CONTEXT_PACKER_LAYA_URL, otherwise http://127.0.0.1:8770/api/predict."
     }
-    private val model = JBTextField(draft.laya.model, 20).apply {
+    private val layaModel = JBTextField(draft.laya.model, 20).apply {
         toolTipText = "Blank inherits CONTEXT_PACKER_LAYA_MODEL, otherwise english."
     }
     private val maxCandidates = number(draft.laya.maxCandidates, 1, 500)
@@ -75,7 +75,7 @@ internal class ProviderSettingsDialog(
             addTab("Laya (local)", profilePanel(
                 "Current English local adapter: tasks up to 500 characters; excerpt cap up to 1,000 characters including path/sketch text. A tiny cap may leave no source text. No cloud fallback.",
                 listOf(
-                    "Loopback endpoint" to endpoint, "Model" to model,
+                    "Loopback endpoint" to endpoint, "Model" to layaModel,
                     "Keyword shortlist" to maxCandidates, "Rerank pool" to layaPool,
                     "Excerpt cap incl path/sketch" to layaFullChars, "Request timeout (seconds)" to layaTimeout,
                 ),
@@ -97,7 +97,7 @@ internal class ProviderSettingsDialog(
                 timeoutSeconds = jevTimeout.intValue(),
             ),
             laya = draft.laya.copy(
-                endpoint = endpoint.text.trim(), model = model.text.trim(),
+                endpoint = endpoint.text.trim(), model = layaModel.text.trim(),
                 maxCandidates = maxCandidates.intValue(), pool = layaPool.intValue(),
                 fullChars = layaFullChars.intValue(), timeoutSeconds = layaTimeout.intValue(),
             ),
@@ -137,7 +137,7 @@ internal class ProviderSettingsDialog(
 
     private fun setLaya(value: LayaProfile) {
         endpoint.text = value.endpoint
-        model.text = value.model
+        layaModel.text = value.model
         maxCandidates.value = value.maxCandidates
         layaPool.value = value.pool
         layaFullChars.value = value.fullChars
