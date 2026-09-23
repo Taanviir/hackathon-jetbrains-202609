@@ -113,8 +113,8 @@ Needs an IntelliJ-based IDE, 2025.2 or newer.
    Fast keywords needs none of these keys. Laya uses a local server instead of an API key.
 4. Optional: `CONTEXT_PACKER_EXTENSIONS=kt` restricts candidates to Kotlin, the language in the
    published evaluations. The installed plugin defaults to all supported source languages;
-   the `runIdeCommunity` demo task defaults this variable to `kt` (override with an empty value
-   for all languages).
+   the `runIde` sandbox in `plugins/intellijev/` defaults this variable to `kt` (override with an
+   empty value for all languages).
 
 ## Use it
 
@@ -168,6 +168,9 @@ server on in **Settings | Tools | MCP Server**, then point your agent at it. For
 claude mcp add --transport sse jetbrains http://127.0.0.1:64342/sse
 ```
 
+The IDE takes the next port up when another JetBrains IDE already holds 64342; the MCP Server
+settings page shows the one in use.
+
 **Better: let the agent start with the files.** Strong agents tend to trust their own search: headless
 Claude Code ignored `pack_context` in five tries, even when told to use it. So there's also a Claude Code
 hook, `agent/pack_hook.py`. It runs on every request before Claude sees it, asks IntelliJev's context engine,
@@ -188,8 +191,10 @@ set `CONTEXT_PACKER_HOOK_DEADLINE=180` and the command hook timeout to at least 
 the measured uncached pack takes about two minutes. Local workload can vary.
 The tool's description tells the agent when context packing is useful. Whatever an agent asks for
 also appears in the tool window, marked as asked by an agent, so you can see the context it was
-given. If the IDE runs on Windows and the agent in WSL, localhost only reaches the IDE with WSL's
-mirrored networking turned on.
+given. The hook tries ports 64342 to 64351 and uses the first IDE that has the project open;
+set `CONTEXT_PACKER_MCP` to pin one endpoint. If the IDE runs on Windows and the agent in WSL,
+the hook also offers the project's `\\wsl.localhost` path, which is the only one the Windows IDE
+knows, and localhost reaches the IDE only with WSL's mirrored networking turned on.
 
 ## Demo script
 
@@ -236,8 +241,9 @@ uv run python stage3.py --split dev --k 10     # choose stage 3 on dev, then --s
 uv run python make_report.py                   # rebuilds reports/context-packer-eval/
 ```
 
-Plugin tests are `./gradlew test`, headless, and CI runs them on relevant PRs. For a licence-free sandbox IDE with the
-MCP server on, run `OPEN_PROJECT=/path/to/project ./gradlew runIdeCommunity`.
+Plugin tests run from `plugins/intellijev/` with `./gradlew test`, headless, and CI runs them on relevant PRs.
+For a licence-free sandbox IDE with the MCP server on and keys from the repo-root `.env`, run
+`OPEN_PROJECT=/path/to/project ./gradlew runIde` there.
 
 ## Limits
 

@@ -38,8 +38,36 @@ intellijPlatform {
     }
 }
 
-tasks {
-    withType<RunIdeTask> {
-        jvmArgs("-Xmx2g")
+// Keys live in the repo-root .env (gitignored). Hand them to the sandbox IDE and to tests.
+val dotEnv: Map<String, String> = rootDir.resolve("../../.env").takeIf { it.isFile }?.readLines().orEmpty()
+    .map { it.trim() }
+    .filter { it.isNotEmpty() && !it.startsWith("#") && "=" in it }
+    .associate { it.substringBefore("=").trim() to it.substringAfter("=").trim().removeSurrounding("\"") }
+
+tasks.test {
+    environment(dotEnv)
+}
+
+// Licence-free sandbox with the MCP server on and no first-run dialogs.
+// OPEN_PROJECT=/path/to/project ./gradlew runIde
+tasks.named<RunIdeTask>("runIde") {
+    environment(dotEnv)
+    // Rank the candidate set the evaluation measured: Kotlin files only.
+    environment("CONTEXT_PACKER_EXTENSIONS", System.getenv("CONTEXT_PACKER_EXTENSIONS") ?: "kt")
+    maxHeapSize = "2g"
+    jvmArgs(
+        "-Didea.trust.all.projects=true",
+        "-Djb.consents.confirmation.enabled=false",
+        "-Djb.privacy.policy.text=<!--999.999-->",
+        "-Dide.show.tips.on.startup.default.value=false",
+        "-Dide.newUsersOnboarding=false",
+    )
+    System.getenv("OPEN_PROJECT")?.let { args(it) }
+    val options = sandboxConfigDirectory.dir("options")
+    doFirst {
+        options.get().asFile.apply { mkdirs() }.resolve("mcpServer.xml").writeText(
+            """<application><component name="McpServerSettings">""" +
+                """<option name="enableMcpServer" value="true"/></component></application>""",
+        )
     }
 }

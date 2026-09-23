@@ -10,12 +10,15 @@ import asyncio
 import json
 import math
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-IDE_MCP = os.environ.get("CONTEXT_PACKER_MCP", "http://127.0.0.1:64342/sse")
+# JetBrains IDEs serve MCP on 64342 and move up a port when another IDE already holds it.
+IDE_PORTS = range(64342, 64352)
+NOT_OPEN = "doesn't correspond to any open project"
 
 
 def deadline() -> float:
@@ -33,17 +36,49 @@ def provider() -> str:
     return selected
 
 
+def endpoints() -> list[str]:
+    configured = os.environ.get("CONTEXT_PACKER_MCP")
+    return [configured] if configured else [f"http://127.0.0.1:{port}/sse" for port in IDE_PORTS]
+
+
+def project_paths(cwd: str) -> list[str]:
+    """A Windows IDE knows a WSL project only by its \\\\wsl.localhost path."""
+    paths = [cwd]
+    if os.environ.get("WSL_DISTRO_NAME") and cwd.startswith("/"):
+        try:
+            paths.append(subprocess.check_output(["wslpath", "-w", cwd], text=True, timeout=2).strip())
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return paths
+
+
 async def from_ide(prompt: str, cwd: str) -> str:
+    for url in endpoints():
+        try:
+            packed = await pack_at(url, prompt, cwd)
+        except Exception:  # nothing listening on this port, or not an MCP server
+            continue
+        if packed is not None:
+            return packed
+    return ""
+
+
+async def pack_at(url: str, prompt: str, cwd: str) -> str | None:
+    """The pack, "" when the IDE refused it, or None when this IDE doesn't have the project open."""
     from mcp import ClientSession
     from mcp.client.sse import sse_client
-    async with sse_client(IDE_MCP) as (read, write), ClientSession(read, write) as session:
+    async with sse_client(url) as (read, write), ClientSession(read, write) as session:
         await session.initialize()
-        result = await session.call_tool("pack_context", {
-            "task": prompt, "limit": limit(), "provider": provider(), "projectPath": cwd,
-        })
-        if getattr(result, "is_error", None) or getattr(result, "isError", None):
-            return ""  # e.g. budget used up: never feed an error message to the agent as context
-        return "\n".join(getattr(b, "text", "") for b in result.content)
+        for path in project_paths(cwd):
+            result = await session.call_tool("pack_context", {
+                "task": prompt, "limit": limit(), "provider": provider(), "projectPath": path,
+            })
+            text = "\n".join(getattr(b, "text", "") for b in result.content)
+            if not (getattr(result, "is_error", None) or getattr(result, "isError", None)):
+                return text
+            if NOT_OPEN not in text:
+                return ""  # e.g. budget used up: never feed an error message to the agent as context
+    return None
 
 
 async def from_eval(prompt: str) -> str:
