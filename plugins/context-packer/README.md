@@ -1,7 +1,8 @@
-# Context Packer
+# IntelliJev context engine
 
-An IntelliJ plugin that ranks source files for a coding task and hands the selected context to
-an agent. Choose Jev (API), Laya (local), or Fast keywords (local). Typing previews use local
+This is the context-ranking component of the [IntelliJev plugin](../intellijev/). It ranks
+source files for a coding task and hands the selected context to an agent. Choose Jev
+(API), Laya (local), or Fast keywords (local). Typing previews use local
 keywords without model calls; **Pack context** runs the selected provider.
 
 Type a task, or let an agent call the `pack_context` MCP tool. Jev and Fast keywords consider
@@ -18,7 +19,7 @@ Settings were chosen on 40 dev tasks, then measured once on 70 test tasks nobody
 | 70 held-out tasks | recall@5 | recall@10 | recall@20 |
 | --- | --- | --- | --- |
 | BM25 keyword search | 0.42 | 0.53 | 0.63 |
-| **Context Packer** | **0.57** | **0.69** | **0.80** |
+| **Jev + BM25 context engine** | **0.57** | **0.69** | **0.80** |
 
 That's +16 points of recall@10, with a 95% bootstrap interval of +10 to +23. In the IDE on Koog
 (2,206 files) a pack takes about 4.4 s, for 54-56 Jev calls and about $0.03. Files are sketched in the
@@ -94,7 +95,7 @@ Needs an IntelliJ-based IDE, 2025.2 or newer.
 
 1. Get `build/distributions/context-packer-0.1.0.zip`, or build it with `./gradlew buildPlugin`.
 2. **Settings | Plugins | ⚙ | Install Plugin from Disk…** and pick the zip.
-3. **Tools | Context Packer: Set API Keys…**:
+3. **Tools | IntelliJev: Set API Keys…**:
    - `TYPESAFE_API_KEY` for Jev, through TypeSafe's own API. This is the fast path.
    - `AI_GATEWAY_API_KEY` is the fallback when there's no TypeSafe key, or when
      `JEV_BACKEND=gateway` is set. Vercel serves the same model, but in testing it answered only
@@ -116,7 +117,7 @@ Needs an IntelliJ-based IDE, 2025.2 or newer.
 
 ## Use it
 
-**Switch providers.** Use the provider dropdown beside **Settings…** in the Context Packer tool
+**Switch providers.** Use the provider dropdown beside **Settings…** in the IntelliJev **Find context** workspace
 window. Settings saves independent project profiles for Jev and Laya; switching restores that
 provider's controls and preserves your task. A change cancels the tool window's current pack and
 clears stale results. An MCP `provider` override uses the requested profile for that call without
@@ -143,7 +144,7 @@ the separate outer `File:` header is additional. Very small budgets can leave no
 Jev's batching, full-corpus coverage and comparative stages do not inherit Laya's limits.
 The published benchmarks apply to their recorded defaults; custom profiles have not been re-evaluated.
 
-**In the IDE.** Open the **Context Packer** tool window (magnifier icon, right stripe), describe
+**In the IDE.** Open the **IntelliJev** tool window and select **Find context**, then describe
 the change and press **Pack context** or Ctrl+Enter. Double-click a pick to open it, press Delete
 to drop one, and use **Add open file** to pin one it missed. Then **Copy prompt** puts the task
 plus every picked file on the clipboard, or **Ask OpenRouter (cloud)** sends it to `z-ai/glm-5.3-flash` through
@@ -166,7 +167,7 @@ claude mcp add --transport sse jetbrains http://127.0.0.1:64342/sse
 
 **Better: let the agent start with the files.** Strong agents tend to trust their own search: headless
 Claude Code ignored `pack_context` in five tries, even when told to use it. So there's also a Claude Code
-hook, `agent/pack_hook.py`. It runs on every request before Claude sees it, asks the IDE's Context Packer,
+hook, `agent/pack_hook.py`. It runs on every request before Claude sees it, asks IntelliJev's context engine,
 and hands Claude the ranked files as context, so nothing has to be chosen. Put this in a project's
 `.claude/settings.local.json`:
 

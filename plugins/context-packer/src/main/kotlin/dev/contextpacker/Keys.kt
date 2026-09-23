@@ -17,18 +17,26 @@ enum class Keys(val envVar: String) {
     OPENROUTER("OPENROUTER_API_KEY");
 
     private val attributes get() = CredentialAttributes(generateServiceName("Context Packer", envVar))
+    private val unifiedAttributes get() = when (this) {
+        TYPESAFE -> CredentialAttributes("IntelliJev.TypeSafe.ApiKey")
+        OPENROUTER -> CredentialAttributes("IntelliJev.OpenRouter.ApiKey")
+        GATEWAY -> null
+    }
 
     /** Reads the password store, which can block. Call off the EDT. */
     fun get(): String? = System.getenv(envVar)?.trim()?.ifEmpty { null }
+        ?: unifiedAttributes?.let { PasswordSafe.instance.getPassword(it)?.trim()?.ifEmpty { null } }
         ?: PasswordSafe.instance.getPassword(attributes)?.trim()?.ifEmpty { null }
 
     fun store(value: String?) {
-        PasswordSafe.instance.set(attributes, value?.trim()?.ifEmpty { null }?.let { Credentials(envVar, it) })
+        val credential = value?.trim()?.ifEmpty { null }?.let { Credentials(envVar, it) }
+        PasswordSafe.instance.set(attributes, credential)
+        unifiedAttributes?.let { PasswordSafe.instance.set(it, credential) }
     }
 }
 
 class MissingKeyException(vararg keys: Keys) : IllegalStateException(
-    keys.joinToString(" or ") { it.envVar } + " is not set. Use Tools | Context Packer: Set API Keys, or export it.",
+    keys.joinToString(" or ") { it.envVar } + " is not set. Use Tools | IntelliJev: Set API Keys, or export it.",
 )
 
 class BudgetExceededException(spent: Long, budget: Long) : IllegalStateException(
