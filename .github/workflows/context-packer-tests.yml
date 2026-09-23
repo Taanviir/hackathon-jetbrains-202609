@@ -1,0 +1,68 @@
+name: Context Packer tests
+
+on:
+  pull_request:
+    paths:
+      - "plugins/context-packer/**"
+      - "tools/laya_server.py"
+      - "tools/test_laya_server.py"
+      - ".github/workflows/context-packer-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "plugins/context-packer/**"
+      - "tools/laya_server.py"
+      - "tools/test_laya_server.py"
+      - ".github/workflows/context-packer-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: context-packer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/context-packer
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Test and build the plugin
+        run: ./gradlew test buildPlugin --console=plain
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: context-packer
+          path: |
+            plugins/context-packer/build/distributions/*.zip
+            plugins/context-packer/build/reports/tests/
+
+  local-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+      - name: Test the local HTTP contract without model weights
+        run: python -m unittest discover -s tools -p test_laya_server.py -v
+      - name: Test the frozen retrieval protocol offline
+        run: python -m unittest discover -s plugins/context-packer/eval -p test_laya_benchmark.py -v
+      - name: Test the agent hook without an IDE or model
+        run: python -m unittest discover -s plugins/context-packer/agent -p test_pack_hook.py -v
+      - name: Test frozen soak replay validation without a model
+        run: python -m unittest discover -s plugins/context-packer/eval -p test_soak_replay.py -v
+      - name: Verify all published Laya evidence hashes
+        run: python plugins/context-packer/eval/verify_artifacts.py
+      - name: Reproduce the published paired recall interval
+        run: |
+          python plugins/context-packer/eval/paired_recall.py --input plugins/context-packer/eval/results/laya/laya-benchmark-extended.json.gz --output "$RUNNER_TEMP/paired-recall.json"
+          python -c "import gzip,json,os; from pathlib import Path; actual=Path(os.environ['RUNNER_TEMP'])/'paired-recall.json'; expected='plugins/context-packer/eval/results/laya/laya-benchmark-uncertainty.json.gz'; assert json.loads(actual.read_text()) == json.load(gzip.open(expected, 'rt')), 'Paired recall evidence changed'"

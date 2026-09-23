@@ -1,0 +1,68 @@
+[
+ {
+  "sha": "ab1703cd",
+  "original": "Update Koog trip planning agent example",
+  "vague": "Update the Koog example that demonstrates a trip planning agent.",
+  "identifier_leaks": []
+ },
+ {
+  "sha": "3773c21e",
+  "original": "Add OpenAI GPT-5.5 and GPT-5.5 Pro models",
+  "vague": "Add support for OpenAI's GPT-5.5 and GPT-5.5 Pro models.",
+  "identifier_leaks": [
+   "OpenAI"
+  ]
+ },
+ {
+  "sha": "b53a06a2",
+  "original": "AIAgentError populated incorrectly for reflective\u2026",
+  "vague": "Fix the agent error being populated incorrectly during reflective mode.",
+  "identifier_leaks": []
+ },
+ {
+  "sha": "096c0ddd",
+  "original": "Consider tool's customName in tools from callable",
+  "vague": "When creating tools from callables, make sure any custom name set on the tool is respected.",
+  "identifier_leaks": []
+ },
+ {
+  "sha": "4992fe7f",
+  "original": "Return tool calls ahead of assistant message in OllamaClient",
+  "vague": "Return tool calls before the assistant message when handling Ollama responses.",
+  "identifier_leaks": []
+ },
+ {
+  "sha": "fca7ac26",
+  "original": "Accept text/plain Content-Type on Ollama non-streaming responses",
+  "vague": "Also accept non-streaming Ollama responses that come back with a plain text content type instead of rejecting them.",
+  "identifier_leaks": []
+ },
+ {
+  "sha": "bb801c9c",
+  "original": "Process Ollama batch embeddings",
+  "vague": "Support processing embeddings in batches when using Ollama.",
+  "identifier_leaks": []
+ },
+ {
+  "sha": "a76305dc",
+  "original": "Add trace attributes to all Langfuse spans, not j\u2026",
+  "vague": "Set the trace attributes on every Langfuse span instead of only the root one.",
+  "identifier_leaks": []
+ },
+ {
+  "sha": "35937b1b",
+  "original": "Stop additionalProperties leaking as additional_properties to OpenAI",
+  "vague": "Make sure camelCase schema keywords aren't converted to snake_case when sending tool schemas to OpenAI.",
+  "identifier_leaks": [
+   "camelCase",
+   "snake_case",
+   "OpenAI"
+  ]
+ },
+ {
+  "sha": "2430c255",
+  "original": "Refactor LLAMA model definitions for clarity",
+  "vague": "Refactor how the Llama models are defined to make the code clearer and easier to read.",
+  "identifier_leaks": []
+ }
+]
