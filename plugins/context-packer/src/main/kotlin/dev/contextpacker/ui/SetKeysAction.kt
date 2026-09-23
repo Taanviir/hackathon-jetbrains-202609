@@ -14,7 +14,7 @@ class SetKeysAction : AnAction() {
     override fun actionPerformed(e: AnActionEvent) {
         for (key in Keys.entries) {
             val value = Messages.showPasswordDialog(
-                e.project, "${key.envVar} (leave empty to keep the current value)", "Context Packer", null,
+                e.project, "${key.envVar} (leave empty to keep the current value)", "IntelliJev", null,
             ) ?: return
             if (value.isNotBlank()) ApplicationManager.getApplication().executeOnPooledThread { key.store(value) }
         }

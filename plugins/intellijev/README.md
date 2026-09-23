@@ -1,25 +1,23 @@
 # IntelliJev
 
-A review-first IntelliJ plugin: scan task context, get proposed edits from a coding model, and apply only the changes you approve. Design and acceptance criteria are in [BUILD_SPEC.md](./BUILD_SPEC.md); the pitch deck is [on the reports site](https://taanviir.github.io/hackathon-jetbrains-202609/main/intellijev-pitch/).
+One IntelliJ plugin for context and reviewed edits. **Find context** ranks files with Jev,
+local Laya, or local keywords and exposes `pack_context` to agents through IntelliJ's MCP
+server. **Review changes** scans context, gets a coding-model proposal, and applies only
+the edits you approve. The context engine source and evaluation live in
+[`../context-packer/`](../context-packer/); the installable plugin is built here.
+Design and acceptance criteria are in [BUILD_SPEC.md](./BUILD_SPEC.md); the pitch deck is
+[on the reports site](https://taanviir.github.io/hackathon-jetbrains-202609/pitch/).
 
-## Build status
+## Build and verification
 
-Verified on 23 September 2026:
-
-- `gradlew test` succeeds in CI — 18 tests cover Jev parsing, selected-fix matching,
-  completed chat-response and proposal parsing, empty-result call avoidance, and actual IntelliJ document apply/undo,
-  stale-source, read-only and deleted-file behavior; no failures or skipped tests.
-- `gradlew buildPlugin` produces `build/distributions/intellijev-0.1.0.zip`.
-- The earlier build loaded in the sandbox IDE (`Loaded custom plugins: IntelliJev (0.1.0)`).
-  The current build also completes the IDE's headless searchable-options pass.
-
-**Not yet verified:** no Jev or chat-completions request from this build has been run
-against a live API. Action placement, visual diff layout and navigation still need a human
-interactive check; native desktop UI automation was unavailable on the test host.
+Run `./gradlew test buildPlugin` here to compile both workspaces, run their tests, and
+produce one `intellijev-0.1.0.zip`. The previous standalone workspaces each passed their
+own CI suites; the unified build must pass CI before distribution. No live Jev or
+chat-completions request has been run from the combined build.
 
 ## Run it in IntelliJ IDEA
 
-1. Open `plugins/intellijev/` in IntelliJ IDEA 2025.1 or newer as a Gradle project.
+1. Open `plugins/intellijev/` in IntelliJ IDEA 2025.2 or newer as a Gradle project.
 2. Make sure a JVM is available to Gradle. Either open the project in IDEA and let its
    Gradle integration drive the build, or set `JAVA_HOME` to a JDK 21 install. On a
    machine with no `java` on `PATH` and no `JAVA_HOME`, the wrapper cannot start — Gradle
@@ -28,6 +26,7 @@ interactive check; native desktop UI automation was unavailable on the test host
    automatically).
 4. Run the `runIde` Gradle task (or the generated **Run Plugin** configuration).
 5. In the sandbox IDE, open a project and select **View → Tool Windows → IntelliJev**.
+   The one tool window has **Find context** and **Review changes** workspaces.
 
 ## Configure the keys
 

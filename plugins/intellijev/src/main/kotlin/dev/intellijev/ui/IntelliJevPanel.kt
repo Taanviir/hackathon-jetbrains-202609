@@ -18,6 +18,7 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import dev.intellijev.core.*
+import dev.contextpacker.pack.PackedFile
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.util.concurrent.Future
@@ -194,6 +195,34 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()), Di
         proposalGeneration++
         lastContextTask = null
         proposalModel.clear()
+    }
+
+    /** Explicit handoff from the ranked context workspace into the reviewed-edit workflow. */
+    fun acceptPackedContext(taskText: String, files: List<PackedFile>): Boolean {
+        if (disposed || project.isDisposed || taskText.isBlank()) return false
+        val root = project.baseDir ?: return false
+        val selected = files.take(8).mapIndexedNotNull { index, packed ->
+            val file = root.findFileByRelativePath(packed.path.replace('\\', '/'))
+                ?.takeIf { it.isValid && !it.isDirectory && it.length <= 12_000 }
+                ?: return@mapIndexedNotNull null
+            val role = when (packed.role) {
+                "test" -> ContextRole.EXAMPLE
+                "dependency" -> ContextRole.CONSTRAINT
+                else -> ContextRole.EDIT_TARGET
+            }
+            ContextCandidate(file, role, 100 - index, "Selected by IntelliJev context ranking")
+        }
+        if (selected.isEmpty()) return false
+        cancelWork(Work.CONTEXT, Work.PROPOSAL)
+        task.text = taskText
+        contextModel.clear()
+        selected.forEach(contextModel::addElement)
+        contextAnalysis.text = "${selected.size} selected files are ready for a reviewed proposal."
+        lastContextTask = taskText
+        tabs.selectedIndex = 2
+        service.log("Loaded ${selected.size} ranked files for reviewed edits")
+        refreshRuns()
+        return true
     }
 
     fun findContextFromSelection(selection: String?) {

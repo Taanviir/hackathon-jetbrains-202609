@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - "plugins/intellijev/**"
+      - "plugins/context-packer/src/**"
       - ".github/workflows/intellijev-tests.yml"
   push:
     branches: [main]
     paths:
       - "plugins/intellijev/**"
+      - "plugins/context-packer/src/**"
       - ".github/workflows/intellijev-tests.yml"
 
 permissions:

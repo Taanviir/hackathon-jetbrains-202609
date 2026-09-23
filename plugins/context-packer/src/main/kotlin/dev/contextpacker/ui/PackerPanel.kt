@@ -54,7 +54,10 @@ import javax.swing.event.ListDataListener
 private const val PREVIEW_DEBOUNCE_MS = 700L
 
 /** Type a task, pack, check the picks, then copy them as a prompt or ask an LLM directly. */
-class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Disposable {
+class PackerPanel(
+    private val project: Project,
+    private val reviewPackedContext: ((String, List<PackedFile>) -> Unit)? = null,
+) : JPanel(BorderLayout()), Disposable {
     private val service = project.service<ContextPackerService>()
     private val settings = project.service<PackerSettings>()
     private var displayedProvider = service.provider
@@ -201,6 +204,16 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             add(button("Add open file", AllIcons.General.Add) { addOpenFile() })
             add(button("Drop", AllIcons.General.Remove) { dropSelected() })
             add(button("Copy prompt", AllIcons.Actions.Copy) { copyPrompt() })
+            if (reviewPackedContext != null) add(button("Review changes", AllIcons.Actions.Execute) {
+                val report = lastReport
+                if (report == null || report.result.preview || report.result.task != task.text.trim()) {
+                    status.text = "Pack this task before opening reviewed edits"
+                } else {
+                    val selected = (0 until picks.size()).map(picks::getElementAt)
+                    if (selected.isEmpty()) status.text = "Select at least one file for reviewed edits"
+                    else reviewPackedContext.invoke(report.result.task, selected)
+                }
+            })
             add(button("Ask OpenRouter (cloud)", AllIcons.Actions.Execute) { askLlm() }.apply {
                 toolTipText = "Sends the task and selected file contents to OpenRouter. API charges may apply."
             })

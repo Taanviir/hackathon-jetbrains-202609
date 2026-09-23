@@ -54,7 +54,7 @@ internal class ProviderSettingsDialog(
     private val error = JLabel(" ").apply { foreground = JBColor.RED }
 
     init {
-        title = "Context Packer provider settings"
+        title = "IntelliJev provider settings"
         setJev(draft.jev)
         setLaya(draft.laya)
         init()
@@ -64,7 +64,7 @@ internal class ProviderSettingsDialog(
         border = JBUI.Borders.empty(8)
         add(JTabbedPane().apply {
             addTab("Jev (API)", profilePanel(
-                "Cloud scoring across all eligible source. Tasks up to 8,000 characters. API keys: Tools → Context Packer: Set API Keys…",
+                "Cloud scoring across all eligible source. Tasks up to 8,000 characters. API keys: Tools → IntelliJev: Set API Keys…",
                 listOf(
                     "Backend" to backend, "Sketches per call" to batch, "Rerank pool" to jevPool,
                     "Full-source files per call" to perCall, "Full-source chars per file" to jevFullChars,

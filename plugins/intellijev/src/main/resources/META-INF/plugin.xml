@@ -3,19 +3,25 @@
   <name>IntelliJev</name>
   <vendor email="team@intellijev.dev" url="https://github.com">IntelliJev</vendor>
   <description><![CDATA[
-    Transparent local prototype for task context and related-bug discovery.
+    Find task context with Jev, Laya or local keywords; hand it to agents through MCP,
+    and review proposed code changes before applying them.
   ]]></description>
 
   <depends>com.intellij.modules.platform</depends>
-  <depends>com.intellij.java</depends>
+  <depends>org.jetbrains.kotlin</depends>
+  <depends optional="true" config-file="intellijev-mcp.xml">com.intellij.mcpServer</depends>
 
   <extensions defaultExtensionNs="com.intellij">
     <toolWindow id="IntelliJev" anchor="right" factoryClass="dev.intellijev.ui.IntelliJevToolWindowFactory"/>
+    <postStartupActivity implementation="dev.contextpacker.WarmUp"/>
     <projectService serviceImplementation="dev.intellijev.core.IntelliJevProjectService"/>
     <applicationService serviceImplementation="dev.intellijev.core.IntelliJevSettings"/>
   </extensions>
 
   <actions>
+    <action id="IntelliJev.SetKeys" class="dev.contextpacker.ui.SetKeysAction" text="IntelliJev: Set API Keys…" description="Store the TypeSafe and OpenRouter keys">
+      <add-to-group group-id="ToolsMenu" anchor="last"/>
+    </action>
     <action id="dev.intellijev.OpenPanelAction" class="dev.intellijev.actions.OpenPanelAction" text="Open IntelliJev" description="Open the IntelliJev decision workspace">
       <add-to-group group-id="ToolsMenu" anchor="last"/>
     </action>
