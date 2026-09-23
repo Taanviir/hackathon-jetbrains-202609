@@ -7,7 +7,7 @@ workflow, optional Jev ranking and risk calls, and optional cloud coding models.
 
 - Build specification and acceptance criteria: [INTELLIJEV_BUILD_SPEC.md](./INTELLIJEV_BUILD_SPEC.md)
 - Ideation history, team, links, candidate ideas, diagrams index: [docs/IDEATION.md](./docs/IDEATION.md)
-- Brief: [Help the Developer.pdf](./Help%20the%20Developer.pdf)
+- Brief: the JetBrains "Help the Developer" hackathon challenge: build an AI-driven app or IntelliJ plugin that makes developers' lives easier.
 
 ## What we built
 

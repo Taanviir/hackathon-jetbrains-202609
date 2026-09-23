@@ -12,8 +12,7 @@
 > §2 of the build specification), and "Getting set up" predates the Gradle scaffold.
 
 Hackathon entry for the JetBrains "Help the Developer" challenge. Build an app or
-IntelliJ plugin, driven by AI, that makes developers' lives easier. The brief is in
-[Help the Developer.pdf](../Help%20the%20Developer.pdf).
+IntelliJ plugin, driven by AI, that makes developers' lives easier.
 
 We are still choosing the idea. This README is the shared context for that choice.
 
@@ -27,8 +26,7 @@ We are still choosing the idea. This README is the shared context for that choic
 
 ## Links
 
-- Ideation board (Excalidraw, live): [live Excalidraw room link removed]
-  The room key is in that URL. Anyone holding the link can edit the board, so keep it in this repo.
+- Ideation board: exported to [diagrams/ideas-board.excalidraw](./diagrams/ideas-board.excalidraw) (the live room link was removed when the repo went public).
 - Jev on OpenRouter: https://openrouter.ai/typesafe/jev-1.13
 - Jev Lab, for trying rules without writing code: https://openrouter.ai/labs/jev
 - IntelliJ Platform Plugin Template: https://lp.jetbrains.com/intellij-platform-plugin-template/

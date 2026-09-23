@@ -1195,7 +1195,7 @@
      },
      {
       "role": "tool",
-      "content": "error: FileNotFoundError: [Errno 2] No such file or directory: '/home/tanas/projects/hackathons/hackathon-jetbrains-202609/plugins/context-packer/.cache/worktrees/b53a06a26c/agents/agents-core/src/jvmCommonMain/kotlin/ai/koog/agents/core/tools/reflect'",
+      "content": "error: FileNotFoundError: [Errno 2] No such file or directory: 'plugins/context-packer/.cache/worktrees/b53a06a26c/agents/agents-core/src/jvmCommonMain/kotlin/ai/koog/agents/core/tools/reflect'",
       "tools": []
      },
      {
@@ -2735,7 +2735,7 @@
      },
      {
       "role": "tool",
-      "content": "error: FileNotFoundError: [Errno 2] No such file or directory: '/home/tanas/projects/hackathons/hackathon-jetbrains-202609/plugins/context-packer/.cache/worktrees/fca7ac2638/prompt/prompt-executors/prompt-executor-ollama-client/src/commonMain/kotlin/ai/koog/prompt/executor/ollama/client'",
+      "content": "error: FileNotFoundError: [Errno 2] No such file or directory: 'plugins/context-packer/.cache/worktrees/fca7ac2638/prompt/prompt-executors/prompt-executor-ollama-client/src/commonMain/kotlin/ai/koog/prompt/executor/ollama/client'",
       "tools": []
      },
      {
@@ -4475,7 +4475,7 @@
      },
      {
       "role": "tool",
-      "content": "error: FileNotFoundError: [Errno 2] No such file or directory: '/home/tanas/projects/hackathons/hackathon-jetbrains-202609/plugins/context-packer/.cache/worktrees/35937b1bed/prompt/prompt-executor/prompt-executor-clients/prompt-executor-openai-client/src/commonMain/kotlin/ai/koog/prompt/executor/clients/openai/base'",
+      "content": "error: FileNotFoundError: [Errno 2] No such file or directory: 'plugins/context-packer/.cache/worktrees/35937b1bed/prompt/prompt-executor/prompt-executor-clients/prompt-executor-openai-client/src/commonMain/kotlin/ai/koog/prompt/executor/clients/openai/base'",
       "tools": []
      },
      {
