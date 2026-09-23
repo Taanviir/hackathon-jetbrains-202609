@@ -2,17 +2,12 @@ import org.jetbrains.intellij.platform.gradle.tasks.RunIdeTask
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 plugins {
-    kotlin("jvm") version "2.1.20"
-    id("org.jetbrains.intellij.platform") version "2.16.0"
+    id("org.jetbrains.kotlin.jvm")
+    id("org.jetbrains.intellij.platform")
 }
 
 group = "dev.intellijev"
 version = "0.1.0"
-
-repositories {
-    mavenCentral()
-    intellijPlatform { defaultRepositories() }
-}
 
 dependencies {
     implementation("com.google.code.gson:gson:2.13.2")
@@ -34,6 +29,7 @@ kotlin { jvmToolchain(21) }
 // Keep its source in place so the evaluation tools and teammate work remain undisturbed.
 kotlin.sourceSets.named("main") { kotlin.srcDir("../context-packer/src/main/kotlin") }
 kotlin.sourceSets.named("test") { kotlin.srcDir("../context-packer/src/test/kotlin") }
+// Its tests read JSON fixtures from the classpath (JevClientTest, the sketcher parity tests).
 sourceSets.named("test") { resources.srcDir("../context-packer/src/test/resources") }
 
 intellijPlatform {
