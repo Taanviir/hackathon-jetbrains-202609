@@ -5,7 +5,7 @@ repository. The Gradle build, the unit tests and plugin packaging are verified; 
 runtime integration with Jev and with a chat-completions model has not been. Divergences
 between this document and the code are recorded in §2 and §12.
 Date: 22 September 2026 (implementation status added the same day).
-Source: the team's nine-page IntelliJev deck, `C:/Users/Mahad/Downloads/team106_hack11_doc_1790094336.pdf`.
+Source: the team's nine-page IntelliJev deck, presented as [the pitch deck](../../reports/intellijev-pitch/index.html).
 
 ## 1. Product and scope
 

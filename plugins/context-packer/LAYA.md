@@ -7,7 +7,7 @@ selection is saved in project workspace settings.
 
 The provider uses the [Laya playground](https://github.com/wdobry/laya-playground)
 HTTP contract backed by [Laya](https://github.com/NandhaKishorM/laya). This repository
-includes an English-only server at [`tools/laya_server.py`](../../tools/laya_server.py).
+includes an English-only server at [`tools/laya_server.py`](tools/laya_server.py).
 It binds to `127.0.0.1`, serializes inference, and keeps source bodies out of its
 request logs. It does not require the playground UI or download other checkpoints.
 
