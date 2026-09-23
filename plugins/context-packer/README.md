@@ -113,8 +113,8 @@ Needs an IntelliJ-based IDE, 2025.2 or newer.
    Fast keywords needs none of these keys. Laya uses a local server instead of an API key.
 4. Optional: `CONTEXT_PACKER_EXTENSIONS=kt` restricts candidates to Kotlin, the language in the
    published evaluations. The installed plugin defaults to all supported source languages;
-   the `runIdeCommunity` demo task defaults this variable to `kt` (override with an empty value
-   for all languages).
+   the `runIde` sandbox in `plugins/intellijev/` defaults this variable to `kt` (override with an
+   empty value for all languages).
 
 ## Use it
 
@@ -236,8 +236,9 @@ uv run python stage3.py --split dev --k 10     # choose stage 3 on dev, then --s
 uv run python make_report.py                   # rebuilds reports/context-packer-eval/
 ```
 
-Plugin tests are `./gradlew test`, headless, and CI runs them on relevant PRs. For a licence-free sandbox IDE with the
-MCP server on, run `OPEN_PROJECT=/path/to/project ./gradlew runIdeCommunity`.
+Plugin tests run from `plugins/intellijev/` with `./gradlew test`, headless, and CI runs them on relevant PRs.
+For a licence-free sandbox IDE with the MCP server on and keys from the repo-root `.env`, run
+`OPEN_PROJECT=/path/to/project ./gradlew runIde` there.
 
 ## Limits
 

@@ -25,7 +25,9 @@ engine; no generated-code quality benchmark is claimed for the reviewed-edit flo
    will provision a JDK 21 for the *compile* toolchain but it needs a JVM to launch itself.
 3. Allow Gradle to download JDK 21 if it asks (the build is configured to provision it
    automatically).
-4. Run the `runIde` Gradle task (or the generated **Run Plugin** configuration).
+4. Run the `runIde` Gradle task (or the generated **Run Plugin** configuration). It passes
+   keys from the repo-root `.env`, turns the MCP server on, and restricts candidates to Kotlin
+   like the evaluation. `OPEN_PROJECT=/path/to/project ./gradlew runIde` opens a project directly.
 5. In the sandbox IDE, open a project and select **View → Tool Windows → IntelliJev**.
    The one tool window has **Find context** and **Review changes** workspaces.
 
