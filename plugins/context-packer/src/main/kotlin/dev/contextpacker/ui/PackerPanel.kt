@@ -56,7 +56,7 @@ private const val PREVIEW_DEBOUNCE_MS = 700L
 /** Type a task, pack, check the picks, then copy them as a prompt or ask an LLM directly. */
 class PackerPanel(
     private val project: Project,
-    private val reviewPackedContext: ((String, List<PackedFile>) -> Unit)? = null,
+    private val reviewPackedContext: ((String, List<PackedFile>) -> Boolean)? = null,
 ) : JPanel(BorderLayout()), Disposable {
     private val service = project.service<ContextPackerService>()
     private val settings = project.service<PackerSettings>()
@@ -211,7 +211,9 @@ class PackerPanel(
                 } else {
                     val selected = (0 until picks.size()).map(picks::getElementAt)
                     if (selected.isEmpty()) status.text = "Select at least one file for reviewed edits"
-                    else reviewPackedContext.invoke(report.result.task, selected)
+                    else if (!reviewPackedContext.invoke(report.result.task, selected)) {
+                        status.text = "No selected files are ready for reviewed edits (existing source under 12 KB required)"
+                    }
                 }
             })
             add(button("Ask OpenRouter (cloud)", AllIcons.Actions.Execute) { askLlm() }.apply {

@@ -116,10 +116,10 @@ body.shownotes #notes { display: block; }
 
 <section class="slide">
   <div class="kicker">JetBrains · Help the Developer · Agent efficiency</div>
-  <h1>Context<br><span class="grad">Packer</span></h1>
-  <p style="font-size:38px;margin-top:40px;max-width:1100px">Coding agents spend their time <b>looking</b>.<br>We hand them the right files before they start.</p>
-  <div class="foot">An IntelliJ plugin powered by TypeSafe's Jev · Taanviir · aikram42 · mahahahad</div>
-  <div class="note">Hook: every agent you've watched does the same thing first. It goes looking. We make that step disappear.</div>
+  <h1>Intelli<span class="grad">Jev</span></h1>
+  <p style="font-size:38px;margin-top:40px;max-width:1100px">Find the right context.<br>Review the right change.</p>
+  <div class="foot">One IntelliJ IDEA plugin · Jev, local Laya or keywords for context · Taanviir · aikram42 · mahahahad</div>
+  <div class="note">One plugin, two connected workspaces: find the files a task needs, then review a coding model's proposed changes before applying them.</div>
 </section>
 
 <section class="slide">
@@ -141,7 +141,7 @@ body.shownotes #notes { display: block; }
   <div class="row c3">
     <div class="card"><span class="tag">Jev</span><h3>Judges, never writes</h3><p>TypeSafe's System One model answers typed questions with calibrated probabilities. No text generation, so it's fast.</p></div>
     <div class="card"><span class="tag">Batching</span><h3>60 files per call</h3><p>One call asks "does this task need file <code>f07</code>?" about 60 files at once, and many calls run in parallel.</p></div>
-    <div class="card"><span class="tag">Cost</span><h3>$0.042 / M tokens</h3><p>Scoring every file in a large project costs cents, so we can afford to ask about all of them.</p></div>
+    <div class="card"><span class="tag">Measured pack</span><h3>About $0.03</h3><p>One warm Jev pack across 2,206 Koog files in the IDE. API fee only.</p></div>
   </div>
   <p style="margin-top:44px">Let Jev do the <b>looking</b>. Leave the <b>writing</b> to the LLM.</p>
   <div class="note">An LLM is the wrong tool for asking the same question 2,000 times. Jev is built for exactly that.</div>
@@ -149,7 +149,7 @@ body.shownotes #notes { display: block; }
 
 <section class="slide">
   <div class="kicker">How it works</div>
-  <h2>One parallel sweep over the whole project</h2>
+  <h2>Find the files worth reading before the agent starts</h2>
   <div class="pipe">
     <div class="step"><div class="n">01</div><h3>Sketch</h3><p>Every file becomes a ~300-token outline: path, declarations, doc lines.</p><span class="m">2,206 files · 1.4 s</span></div>
     <div class="step"><div class="n">02</div><h3>Pass 1</h3><p>Jev scores all sketches. BM25 keyword search ranks full text alongside.</p><span class="m">60 files / call</span></div>
@@ -163,14 +163,14 @@ body.shownotes #notes { display: block; }
 
 <section class="slide">
   <div class="kicker">Where it lives</div>
-  <h2>Inside the IDE, and inside your agent</h2>
+  <h2>One plugin, from context to reviewed change</h2>
   <div class="row c3">
-    <div class="card"><span class="tag">Tool window</span><h3>Type a task</h3><p>See ranked files with roles and scores. Pin or drop files, then copy the prompt or ask an LLM.</p></div>
-    <div class="card"><span class="tag">MCP tool</span><h3><code>pack_context</code></h3><p>Registered on IntelliJ's built-in MCP server, so any MCP agent can call it.</p></div>
-    <div class="card"><span class="tag">Claude Code hook</span><h3>Zero effort</h3><p>Runs on every prompt and injects the packed files before Claude sees the request.</p></div>
+    <div class="card"><span class="tag">Find context</span><h3>Choose your engine</h3><p>Pick Jev, local Laya or fast keywords. Each provider keeps its own settings.</p></div>
+    <div class="card"><span class="tag">Agent access</span><h3><code>pack_context</code></h3><p>Ranked context is available in the tool window, IntelliJ's MCP server and a Claude Code hook.</p></div>
+    <div class="card"><span class="tag">Review changes</span><h3>Stay in control</h3><p>Hand the selected files to a coding model, inspect the diff and approve the edit.</p></div>
   </div>
-  <p style="margin-top:44px">Offered only as a tool, Claude Code <b>never called it</b>. So we put the context where the agent can't miss it.</p>
-  <div class="note">This is the "wow" bit. The developer doesn't change how they work. They type a prompt as usual, and the agent already knows where to look.</div>
+  <p style="margin-top:44px">The developer starts with a task. IntelliJev carries the context into the review workflow.</p>
+  <div class="note">The Jev benchmark measures file retrieval. The reviewed-edit flow is a separate capability inside the same installable plugin; no generated-code quality claim comes from that retrieval score.</div>
 </section>
 
 <section class="slide">
@@ -178,12 +178,12 @@ body.shownotes #notes { display: block; }
   <h2>Finds the right files far more often</h2>
   <div class="legend"><span class="lb">BM25 keyword search</span><span class="lp">IntelliJev Jev pipeline</span></div>
   <div class="chart">
-    <div class="grp"><div class="bar b" style="height:42%"><i>0.42</i></div><div class="bar p" style="height:57%"><i>0.57</i></div></div>
+    <div class="grp"><div class="bar b" style="height:41%"><i>0.41</i></div><div class="bar p" style="height:57%"><i>0.57</i></div></div>
     <div class="grp"><div class="bar b" style="height:53%"><i>0.53</i></div><div class="bar p" style="height:69%"><i>0.69</i></div></div>
     <div class="grp"><div class="bar b" style="height:63%"><i>0.63</i></div><div class="bar p" style="height:80%"><i>0.80</i></div></div>
   </div>
   <div class="xl"><div>recall@5</div><div>recall@10</div><div>recall@20</div></div>
-  <div class="foot">70 held-out JetBrains/koog commits. The task is the commit message, the answer is the files it changed, and files are read <b>before</b> the commit. recall@10: +16 points, 95% interval +10 to +23.</div>
+  <div class="foot">70 held-out JetBrains/koog commits. The task is the commit message, the answer is the files it changed, and files are read <b>before</b> the commit. recall@10: +16 points, 95% interval +10 to +23. <a href="https://taanviir.github.io/hackathon-jetbrains-202609/main/context-packer-eval/">Evaluation</a>.</div>
   <div class="note">Real commits from JetBrains' own agent framework. Settings were tuned on 40 dev tasks, then measured once on 70 nobody had looked at.</div>
 </section>
 
@@ -193,54 +193,64 @@ body.shownotes #notes { display: block; }
   <div class="row c4 stat">
     <div class="card"><div class="big">−25%</div><p>turns per task<br>(interval −5.9 to −0.5 turns)</p></div>
     <div class="card"><div class="big">−38%</div><p>search calls</p></div>
-    <div class="card"><div class="big">−15%</div><p>cost per task</p></div>
-    <div class="card"><div class="big">7/8</div><p>tasks with the same files found</p></div>
+    <div class="card"><div class="big">−15%</div><p>observed agent spend</p></div>
+    <div class="card"><div class="big">8</div><p>held-out Koog tasks in this pilot</p></div>
   </div>
   <div class="row c2" style="margin-top:44px">
-    <div class="card"><span class="tag">Per pack</span><h3>~4.4 s · ~$0.03</h3><p>For 2,206 files in the IDE, about 55 Jev calls.</p></div>
-    <div class="card"><span class="tag">vs an LLM re-ranker</span><h3>~1 s vs 29 s</h3><p>A tie on recall@10 at a fraction of the cost.</p></div>
+    <div class="card"><span class="tag">Warm IDE pack</span><h3>4.4 s · about $0.03</h3><p>2,206 Koog files, about 55 Jev calls; API fee only.</p></div>
+    <div class="card"><span class="tag">Agent pilot</span><h3>13.0 → 9.8 turns</h3><p>7.9 → 4.9 search calls; Claude Code spend $2.21 → $1.88.</p></div>
   </div>
-  <div class="foot">Claude Code (Sonnet) with vs without the hook, 8 held-out Koog tasks.</div>
+  <div class="foot">Claude Code (Sonnet) with vs without the Jev hook, 8 held-out Koog tasks. Jev API fees are separate. <a href="https://taanviir.github.io/hackathon-jetbrains-202609/main/context-packer-eval/">Evaluation</a>.</div>
   <div class="note">Fewer turns means fewer round-trips and less context burned on exploration. That's agent efficiency.</div>
 </section>
 
 <section class="slide">
-  <div class="kicker">What we measured honestly</div>
-  <h2>Where it doesn't win, yet</h2>
-  <ul class="honest">
-    <li><b>Jev alone loses.</b> Scoring sketches alone gets recall@10 of 0.39 against 0.46 for keywords. Full-source re-ranking plus fusion is what wins.</li>
-    <li><b>An LLM picks the top 5 better</b> (0.61 vs 0.52) but takes 29 s, not 1 s. At 10 files they tie.</li>
-    <li><b>Wall-clock time didn't drop</b> inside Claude Code. It saves turns and cost, not minutes.</li>
-    <li><b>New codebase, frozen settings</b> (JetBrains/Exposed): recall@5 +0.10, significant. recall@10 +0.07, not significant.</li>
-    <li><b>A local model (Laya)</b> did not beat keyword search on our benchmark, so keywords remain the free offline option.</li>
-  </ul>
-  <div class="note">We'd rather show you the misses than hide them. Every number here is in the public eval report.</div>
+  <div class="kicker">Choose how context is found</div>
+  <h2>Three modes. One developer workflow.</h2>
+  <div class="row c3">
+    <div class="card"><span class="tag">Jev · cloud</span><h3>Deep ranking</h3><p>Batch full-project sketches, re-rank full source and combine with keyword evidence.</p></div>
+    <div class="card"><span class="tag">Laya · local</span><h3>Your model, your machine</h3><p>Use a local server with its own model, endpoint and context-budget settings.</p></div>
+    <div class="card"><span class="tag">Keywords · local</span><h3>Zero API calls</h3><p>Search the full eligible source corpus with BM25. No model or key required.</p></div>
+  </div>
+  <p style="margin-top:44px">Switch providers in the same IntelliJev window. Jev and Laya keep independent settings.</p>
+  <div class="foot">The 0.69 recall@10 and 4.4 s figures are Jev measurements. Laya and keywords were evaluated separately.</div>
+  <div class="note">This is one product choice inside one plugin, not three plugins or a single lowest-common-denominator configuration.</div>
 </section>
 
 <section class="slide">
   <div class="kicker">Live demo</div>
   <h2>Watch the agent skip the hunt</h2>
   <ol class="demo">
-    <li>Koog is open in IntelliJ with <b>IntelliJev</b> in the side panel.</li>
-    <li>Type a real task, for example <code>Add exponential backoff to retries</code>. The ranked files appear in about 4 s, each labelled edit, test or example.</li>
-    <li>In Claude Code, send the same prompt. The hook packs the context and the IDE panel shows what the agent received.</li>
-    <li>Claude opens the right files straight away, with no scavenger hunt.</li>
+    <li>Open <b>IntelliJev</b> in IntelliJ IDEA. Choose <b>Find context</b> and select a provider.</li>
+    <li>Enter a Koog task, then pack context. Show the ranked files and select the ones the change needs.</li>
+    <li>Press <b>Review changes</b>. The same task and selected context move to the review workspace.</li>
+    <li>Request a proposal, inspect the diff and apply a selected change only after approval.</li>
   </ol>
-  <div class="note">If the live run misbehaves, switch to the recorded backup video.</div>
+  <div class="note">For a reliable live demo, use a configured provider and coding model or show a recorded run of the same workflow. The agent hook is an additional integration, not a required step in this IDE flow.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Next · product direction</div>
+  <h2>The IDE should know when to <span class="grad">think harder</span></h2>
+  <p style="font-size:40px;margin-top:34px"><b>Route the task.</b> Use the right model for the work, instead of sending every request to a frontier model.</p>
+  <p style="font-size:40px;margin-top:20px"><b>Recall what matters.</b> Bring forward relevant history without carrying the entire conversation.</p>
+  <p style="font-size:40px;margin-top:20px"><b>Find the right skill.</b> Surface the tool or workflow the task calls for.</p>
+  <div class="foot">IntelliJev today: context and reviewed edits. These are the next capabilities we envision.</div>
+  <div class="note">The same small, structured decision that helps find files could later help choose models, history and skills. These are product directions, not benchmarked features in the current plugin.</div>
 </section>
 
 <section class="slide">
   <div class="kicker">Built by the team</div>
   <h2>Less looking. More doing.</h2>
   <div class="row c3">
-    <div class="card"><span class="tag">IntelliJev</span><h3>Jev-ranked context</h3><p>Tool window, MCP tool and Claude Code hook, with a measured eval.</p></div>
-    <div class="card"><span class="tag">IntelliJev</span><h3>Review-first edits</h3><p>Proposed changes shown as diffs and applied only when you approve them.</p></div>
-    <div class="card"><span class="tag">Laya + keywords</span><h3>Local providers</h3><p>Offline ranking with no API key, benchmarked separately.</p></div>
+    <div class="card"><span class="tag">Find context</span><h3>The right files</h3><p>Jev-powered ranking, with local Laya and fast keyword options.</p></div>
+    <div class="card"><span class="tag">Agent access</span><h3>The right starting point</h3><p>Use the IDE window, MCP tool or Claude Code hook.</p></div>
+    <div class="card"><span class="tag">Review changes</span><h3>The final say</h3><p>See proposed diffs and approve edits before they touch source.</p></div>
   </div>
   <p style="margin-top:44px;font-size:28px">Code, evals and every report are open:<br>
     <b>github.com/Taanviir/hackathon-jetbrains-202609</b><br><b>taanviir.github.io/hackathon-jetbrains-202609</b></p>
   <div class="foot">Thank you. Questions?</div>
-  <div class="note">Close: agents are only as fast as their context. We make context instant.</div>
+  <div class="note">Close: IntelliJev is one installable plugin. Jev decides where to look, a coding model proposes changes, and the developer approves the edit.</div>
 </section>
 
 </div>

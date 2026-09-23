@@ -9,6 +9,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
@@ -201,9 +202,10 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()), Di
     fun acceptPackedContext(taskText: String, files: List<PackedFile>): Boolean {
         if (disposed || project.isDisposed || taskText.isBlank()) return false
         val root = project.baseDir ?: return false
-        val selected = files.take(8).mapIndexedNotNull { index, packed ->
+        val selected = files.mapIndexedNotNull { index, packed ->
+            if (packed.path.split('/', '\\').any { it == ".." }) return@mapIndexedNotNull null
             val file = root.findFileByRelativePath(packed.path.replace('\\', '/'))
-                ?.takeIf { it.isValid && !it.isDirectory && it.length <= 12_000 }
+                ?.takeIf { it.isValid && !it.isDirectory && it.length <= 12_000 && VfsUtilCore.isAncestor(root, it, false) }
                 ?: return@mapIndexedNotNull null
             val role = when (packed.role) {
                 "test" -> ContextRole.EXAMPLE
@@ -211,7 +213,7 @@ class IntelliJevPanel(private val project: Project) : JPanel(BorderLayout()), Di
                 else -> ContextRole.EDIT_TARGET
             }
             ContextCandidate(file, role, 100 - index, "Selected by IntelliJev context ranking")
-        }
+        }.take(8)
         if (selected.isEmpty()) return false
         cancelWork(Work.CONTEXT, Work.PROPOSAL)
         task.text = taskText

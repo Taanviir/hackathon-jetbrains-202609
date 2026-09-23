@@ -11,9 +11,10 @@ Design and acceptance criteria are in [BUILD_SPEC.md](./BUILD_SPEC.md); the pitc
 ## Build and verification
 
 Run `./gradlew test buildPlugin` here to compile both workspaces, run their tests, and
-produce one `intellijev-0.1.0.zip`. The previous standalone workspaces each passed their
-own CI suites; the unified build must pass CI before distribution. No live Jev or
-chat-completions request has been run from the combined build.
+produce one `build/distributions/intellijev-0.1.0.zip`. The unified branch's CI
+passed 106 tests with no failures and one opt-in test skipped. The published Jev
+retrieval and Claude Code pilot numbers come from the separately measured context
+engine; no generated-code quality benchmark is claimed for the reviewed-edit flow.
 
 ## Run it in IntelliJ IDEA
 
@@ -28,7 +29,13 @@ chat-completions request has been run from the combined build.
 5. In the sandbox IDE, open a project and select **View → Tool Windows → IntelliJev**.
    The one tool window has **Find context** and **Review changes** workspaces.
 
-## Configure the keys
+## Configure providers and keys
+
+In **Find context**, select **Jev**, **Laya**, or **Fast keywords**. Jev and Laya
+have separate saved profiles, so switching provider restores its own endpoint,
+model and limits. Jev uses a TypeSafe API key, Laya connects to a local server, and
+Fast keywords makes no model calls. See [provider settings](../context-packer/#use-it)
+and [Laya setup](../context-packer/LAYA.md).
 
 Jev and the coding model use **separate optional keys**, stored in different IntelliJ
 Password Safe slots. Local candidate scans need neither key; enable each cloud feature
@@ -49,8 +56,9 @@ candidates` in the **Runs** tab — check Runs if Jev results never appear.
 
 ## Using it
 
-Enter a task in the **Context** tab and press **Scan task context**. Then open
-**Coding Agent**, press **Propose reviewed changes**, inspect the side-by-side
+Start in **Find context**: choose Jev, Laya, or Fast keywords, enter a task, and
+press **Pack context**. Select the files to carry forward and press **Review changes**.
+In that workspace, open **Coding Agent**, press **Propose reviewed changes**, inspect the side-by-side
 before/after (or **Open diff** for IntelliJ's native read-only viewer), and press
 **Apply selected change** only when you approve it. Applied
 changes are ordinary IDE document edits and can be undone with the standard Undo.
@@ -64,8 +72,9 @@ is refused.
 
 ## What is implemented
 
-The tool window has six tabs: **Context**, **Related Bugs**, **Coding Agent**, **Runs**,
-**Side Question**, and **Settings**.
+The IntelliJev tool window has **Find context** and **Review changes** workspaces.
+The latter contains six tabs: **Context**, **Related Bugs**, **Coding Agent**,
+**Runs**, **Side Question**, and **Settings**.
 
 - Cross-language local source discovery (Kotlin, Java, TypeScript, Python, Go, Rust, C#,
   C/C++, web, config, and Markdown) with generated output, dependencies and
@@ -107,9 +116,8 @@ Still pending:
 
 ## Evaluation and demo evidence
 
-The root reviewed-edit workflow has no live model quality benchmark. Context Packer's
-separate [Jev evidence](../context-packer/spike/RESULTS.md) and
+The reviewed-edit workflow has no generated-code quality benchmark. The context
+engine's separate [Jev evidence](../context-packer/spike/RESULTS.md) and
 [local Laya evidence](../context-packer/eval/LAYA.md#results) measure source retrieval;
-they do not establish generated-code correctness. The deck's 24→2 calls, 48→6 seconds,
-and $0.42→$0.05 figures remain projections, as recorded in
-[§9 of the build specification](./BUILD_SPEC.md).
+they do not establish generated-code correctness. The published pitch deck uses measured
+Jev retrieval and agent-pilot evidence and labels future capabilities as a roadmap.
