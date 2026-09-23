@@ -138,7 +138,8 @@ override it. Restore defaults applies only to its provider, including restoring 
 Credentials remain in the existing **Set API Keys…** action/IDE password store or environment.
 The current Laya adapter retains its English-model input envelope even when the model ID changes;
 a model name alone does not establish support for a larger window. Character budgets are not
-token counts, and very small excerpt budgets can contain only path/sketch metadata.
+token counts. Laya's excerpt budget covers the inner body, including embedded path/sketch text;
+the separate outer `File:` header is additional. Very small budgets can leave no source text.
 Jev's batching, full-corpus coverage and comparative stages do not inherit Laya's limits.
 The published benchmarks apply to their recorded defaults; custom profiles have not been re-evaluated.
 
