@@ -100,6 +100,8 @@ def main():
         reports.sort(key=lambda r: r.get("date", ""), reverse=True)
         if reports:
             groups.append((branch, reports))
+    if (OUT / "main" / "pitch").is_dir():  # the pitch deck also gets a short URL, /pitch/
+        shutil.copytree(OUT / "main" / "pitch", OUT / "pitch")
     (OUT / "index.html").write_text(index_page(groups, hidden))
     (OUT / ".nojekyll").write_text("")
     print(f"built {sum(len(r) for _, r in groups)} reports from {len(groups)} branches into {OUT}; "

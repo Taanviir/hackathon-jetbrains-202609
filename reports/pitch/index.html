@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Context Packer pitch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --stage: #0b0c10; --slide: #111318; --panel: #181b22; --rule: #2a2e38;
+  --ink: #f4f5f7; --ink-2: #b9bdc7; --ink-3: #7f8592;
+  --accent: #ff4f8b; --accent-2: #7c5cff; --good: #3ecf8e; --base: #5b6170;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--stage); color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+body { overflow: hidden; }
+
+/* 1600x900 canvas scaled to fit the window */
+#deck { position: absolute; left: 50%; top: 50%; width: 1600px; height: 900px; transform-origin: center; }
+.slide { position: absolute; inset: 0; background: var(--slide); border-radius: 18px; overflow: hidden;
+  padding: 88px 104px; display: flex; flex-direction: column; opacity: 0; pointer-events: none;
+  transition: opacity .35s ease, transform .35s ease; transform: translateY(12px); }
+.slide.on { opacity: 1; pointer-events: auto; transform: none; }
+.slide::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(900px 500px at 100% 0%, rgba(124,92,255,.14), transparent 60%),
+              radial-gradient(700px 400px at 0% 100%, rgba(255,79,139,.10), transparent 60%); }
+.slide > * { position: relative; }
+
+.kicker { font: 600 20px/1 var(--mono); color: var(--accent); letter-spacing: .08em; text-transform: uppercase; margin: 0 0 28px; }
+h1 { font-size: 96px; line-height: 1.02; margin: 0; font-weight: 800; letter-spacing: -.035em; }
+h2 { font-size: 60px; line-height: 1.08; margin: 0 0 40px; font-weight: 750; letter-spacing: -.025em; max-width: 1300px; }
+p, li { font-size: 30px; line-height: 1.45; color: var(--ink-2); }
+p { margin: 0 0 20px; max-width: 1250px; }
+ul { margin: 0; padding-left: 1.1em; } li { margin: 0 0 14px; }
+b, strong { color: var(--ink); font-weight: 650; }
+code { font-family: var(--mono); font-size: .86em; background: var(--panel); border: 1px solid var(--rule);
+  padding: 2px 10px; border-radius: 8px; color: var(--ink); }
+.grad { background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text;
+  background-clip: text; color: transparent; }
+.foot { margin-top: auto; font-size: 20px; color: var(--ink-3); }
+.foot a { color: var(--ink-2); }
+.row { display: grid; gap: 28px; }
+.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 16px; padding: 32px 34px; }
+.card h3 { margin: 0 0 12px; font-size: 32px; font-weight: 700; }
+.card p { font-size: 25px; margin: 0; }
+.card .tag { font: 600 17px var(--mono); color: var(--accent); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; display: block; }
+.big { font-size: 80px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
+.stat .big { background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stat p { font-size: 24px; margin-top: 14px; }
+
+/* the agent's scavenger hunt */
+.hunt { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0 44px; }
+.hunt span { font: 600 22px var(--mono); padding: 14px 20px; border-radius: 12px; background: var(--panel); border: 1px solid var(--rule); color: var(--ink-2); }
+.hunt .s { border-color: #4a3a1c; color: #f5b94c; }
+.hunt .r { border-color: #223a52; color: #69b3ff; }
+.hunt .e { border-color: #1d4a36; color: var(--good); }
+
+/* pipeline */
+.pipe { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 18px; margin-top: 8px; }
+.step { background: var(--panel); border: 1px solid var(--rule); border-radius: 16px; padding: 28px 24px; position: relative; }
+.step:not(:last-child)::after { content: ""; position: absolute; right: -9px; top: 50%; width: 10px; height: 10px; border-top: 3px solid var(--ink-3);
+  border-right: 3px solid var(--ink-3); transform: translate(50%, -50%) rotate(45deg); }
+.step .n { font: 700 18px var(--mono); color: var(--accent); }
+.step h3 { font-size: 28px; margin: 10px 0 10px; }
+.step p { font-size: 21px; line-height: 1.4; margin: 0; }
+.step .m { display: block; margin-top: 14px; font: 600 18px var(--mono); color: var(--ink); }
+
+/* bar chart */
+.chart { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 56px; align-items: end; height: 330px;
+  border-bottom: 2px solid var(--rule); padding: 0 20px; }
+.grp { display: flex; gap: 14px; align-items: flex-end; height: 100%; justify-content: center; }
+.bar { width: 120px; border-radius: 10px 10px 0 0; position: relative; }
+.bar.b { background: var(--base); } .bar.p { background: linear-gradient(180deg, var(--accent), var(--accent-2)); }
+.bar i { position: absolute; top: -44px; left: 0; right: 0; text-align: center; font: 700 28px var(--mono); font-style: normal; }
+.bar.b i { color: var(--ink-2); }
+.xl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 56px; padding: 18px 20px 0; text-align: center;
+  font: 600 24px var(--mono); color: var(--ink-2); }
+.legend { display: flex; gap: 32px; font-size: 22px; color: var(--ink-2); margin-bottom: 40px; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 18px; border-radius: 4px; margin-right: 10px; vertical-align: -2px; }
+.legend .lb::before { background: var(--base); } .legend .lp::before { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+
+.honest li { font-size: 27px; }
+.honest li b { color: var(--ink); }
+.demo li { font-size: 30px; margin-bottom: 22px; }
+.demo li code { font-size: 24px; }
+
+/* chrome */
+#bar { position: fixed; left: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .3s; }
+#count { position: fixed; right: 18px; bottom: 14px; font: 500 14px var(--mono); color: var(--ink-3); }
+#hint { position: fixed; left: 18px; bottom: 14px; font: 500 14px var(--mono); color: var(--ink-3); }
+#notes { position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%); width: min(900px, calc(100% - 32px));
+  background: rgba(24,27,34,.96); border: 1px solid var(--rule); border-radius: 12px; padding: 16px 20px;
+  font-size: 16px; line-height: 1.5; color: var(--ink-2); display: none; }
+body.shownotes #notes { display: block; }
+.note { display: none; }
+
+@media print {
+  @page { size: 1600px 900px; margin: 0; }
+  body { overflow: visible; background: var(--slide); }
+  #deck { position: static; transform: none !important; width: auto; height: auto; }
+  .slide { position: relative; opacity: 1; transform: none; page-break-after: always; break-after: page;
+    width: 1600px; height: 900px; border-radius: 0; }
+  #bar, #count, #hint, #notes { display: none !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+</head>
+<body>
+<div id="deck">
+
+<section class="slide">
+  <div class="kicker">JetBrains · Help the Developer · Agent efficiency</div>
+  <h1>Context<br><span class="grad">Packer</span></h1>
+  <p style="font-size:38px;margin-top:40px;max-width:1100px">Coding agents spend their time <b>looking</b>.<br>We hand them the right files before they start.</p>
+  <div class="foot">An IntelliJ plugin powered by TypeSafe's Jev · Taanviir · aikram42 · mahahahad</div>
+  <div class="note">Hook: every agent you've watched does the same thing first. It goes looking. We make that step disappear.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">The problem</div>
+  <h2>An agent's first minutes are a scavenger hunt</h2>
+  <div class="hunt">
+    <span class="s">grep "retry"</span><span class="r">read Client.kt</span><span class="s">grep "backoff"</span>
+    <span class="r">read Config.kt</span><span class="s">glob **/*Retry*</span><span class="r">read RetryPolicy.kt</span>
+    <span class="s">grep "delay"</span><span class="r">read ClientTest.kt</span><span class="e">edit</span>
+  </div>
+  <p>Each hop is a full LLM round-trip: tokens in, tokens out, seconds gone. On a 2,000-file project the agent reads files <b>one at a time</b> to find the three that matter.</p>
+  <p>Real Koog tasks: Claude Code averaged <b>13 turns</b> per task.</p>
+  <div class="note">The IDE already knows every file. The agent is re-discovering the project through a keyhole, one tool call at a time.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">The insight</div>
+  <h2>Use a model that <span class="grad">decides</span>, not one that writes</h2>
+  <div class="row c3">
+    <div class="card"><span class="tag">Jev</span><h3>Judges, never writes</h3><p>TypeSafe's System One model answers typed questions with calibrated probabilities. No text generation, so it's fast.</p></div>
+    <div class="card"><span class="tag">Batching</span><h3>60 files per call</h3><p>One call asks "does this task need file <code>f07</code>?" about 60 files at once, and many calls run in parallel.</p></div>
+    <div class="card"><span class="tag">Cost</span><h3>$0.042 / M tokens</h3><p>Scoring every file in a large project costs cents, so we can afford to ask about all of them.</p></div>
+  </div>
+  <p style="margin-top:44px">Let Jev do the <b>looking</b>. Leave the <b>writing</b> to the LLM.</p>
+  <div class="note">An LLM is the wrong tool for asking the same question 2,000 times. Jev is built for exactly that.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">How it works</div>
+  <h2>One parallel sweep over the whole project</h2>
+  <div class="pipe">
+    <div class="step"><div class="n">01</div><h3>Sketch</h3><p>Every file becomes a ~300-token outline: path, declarations, doc lines.</p><span class="m">2,206 files · 1.4 s</span></div>
+    <div class="step"><div class="n">02</div><h3>Pass 1</h3><p>Jev scores all sketches. BM25 keyword search ranks full text alongside.</p><span class="m">60 files / call</span></div>
+    <div class="step"><div class="n">03</div><h3>Pass 2</h3><p>The top 60 of each go back to Jev with their full source.</p><span class="m">6 files / call</span></div>
+    <div class="step"><div class="n">04</div><h3>Fuse</h3><p>Jev and BM25 count equally. Weight picked on dev tasks only.</p><span class="m">equal weight</span></div>
+    <div class="step"><div class="n">05</div><h3>Compare</h3><p>One Jev choice over the top 10: which file must be edited?</p><span class="m">+0.4 s</span></div>
+  </div>
+  <p style="margin-top:48px">Result: the top 10–20 files, tests flagged, with roles like <b>edit</b>, <b>test</b> and <b>example</b>.</p>
+  <div class="note">Jev alone on sketches actually loses to keyword search. The win comes from re-ranking on full source and fusing with BM25. We measured that, which is why the pipeline looks like this.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Where it lives</div>
+  <h2>Inside the IDE, and inside your agent</h2>
+  <div class="row c3">
+    <div class="card"><span class="tag">Tool window</span><h3>Type a task</h3><p>See ranked files with roles and scores. Pin or drop files, then copy the prompt or ask an LLM.</p></div>
+    <div class="card"><span class="tag">MCP tool</span><h3><code>pack_context</code></h3><p>Registered on IntelliJ's built-in MCP server, so any MCP agent can call it.</p></div>
+    <div class="card"><span class="tag">Claude Code hook</span><h3>Zero effort</h3><p>Runs on every prompt and injects the packed files before Claude sees the request.</p></div>
+  </div>
+  <p style="margin-top:44px">Offered only as a tool, Claude Code <b>never called it</b>. So we put the context where the agent can't miss it.</p>
+  <div class="note">This is the "wow" bit. The developer doesn't change how they work. They type a prompt as usual, and the agent already knows where to look.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Result 1 · retrieval</div>
+  <h2>Finds the right files far more often</h2>
+  <div class="legend"><span class="lb">BM25 keyword search</span><span class="lp">Context Packer</span></div>
+  <div class="chart">
+    <div class="grp"><div class="bar b" style="height:42%"><i>0.42</i></div><div class="bar p" style="height:57%"><i>0.57</i></div></div>
+    <div class="grp"><div class="bar b" style="height:53%"><i>0.53</i></div><div class="bar p" style="height:69%"><i>0.69</i></div></div>
+    <div class="grp"><div class="bar b" style="height:63%"><i>0.63</i></div><div class="bar p" style="height:80%"><i>0.80</i></div></div>
+  </div>
+  <div class="xl"><div>recall@5</div><div>recall@10</div><div>recall@20</div></div>
+  <div class="foot">70 held-out JetBrains/koog commits. The task is the commit message, the answer is the files it changed, and files are read <b>before</b> the commit. recall@10: +16 points, 95% interval +10 to +23.</div>
+  <div class="note">Real commits from JetBrains' own agent framework. Settings were tuned on 40 dev tasks, then measured once on 70 nobody had looked at.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Result 2 · inside an agent</div>
+  <h2>Claude Code needs fewer steps</h2>
+  <div class="row c4 stat">
+    <div class="card"><div class="big">−25%</div><p>turns per task<br>(interval −5.9 to −0.5 turns)</p></div>
+    <div class="card"><div class="big">−38%</div><p>search calls</p></div>
+    <div class="card"><div class="big">−15%</div><p>cost per task</p></div>
+    <div class="card"><div class="big">7/8</div><p>tasks with the same files found</p></div>
+  </div>
+  <div class="row c2" style="margin-top:44px">
+    <div class="card"><span class="tag">Per pack</span><h3>~4.4 s · ~$0.03</h3><p>For 2,206 files in the IDE, about 55 Jev calls.</p></div>
+    <div class="card"><span class="tag">vs an LLM re-ranker</span><h3>~1 s vs 29 s</h3><p>A tie on recall@10 at a fraction of the cost.</p></div>
+  </div>
+  <div class="foot">Claude Code (Sonnet) with vs without the hook, 8 held-out Koog tasks.</div>
+  <div class="note">Fewer turns means fewer round-trips and less context burned on exploration. That's agent efficiency.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">What we measured honestly</div>
+  <h2>Where it doesn't win, yet</h2>
+  <ul class="honest">
+    <li><b>Jev alone loses.</b> Scoring sketches alone gets recall@10 of 0.39 against 0.46 for keywords. Full-source re-ranking plus fusion is what wins.</li>
+    <li><b>An LLM picks the top 5 better</b> (0.61 vs 0.52) but takes 29 s, not 1 s. At 10 files they tie.</li>
+    <li><b>Wall-clock time didn't drop</b> inside Claude Code. It saves turns and cost, not minutes.</li>
+    <li><b>New codebase, frozen settings</b> (JetBrains/Exposed): recall@5 +0.10, significant. recall@10 +0.07, not significant.</li>
+    <li><b>A local model (Laya)</b> did not beat keyword search on our benchmark, so keywords remain the free offline option.</li>
+  </ul>
+  <div class="note">We'd rather show you the misses than hide them. Every number here is in the public eval report.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Live demo</div>
+  <h2>Watch the agent skip the hunt</h2>
+  <ol class="demo">
+    <li>Koog is open in IntelliJ with <b>Context Packer</b> in the side panel.</li>
+    <li>Type a real task, for example <code>Add exponential backoff to retries</code>. The ranked files appear in about 4 s, each labelled edit, test or example.</li>
+    <li>In Claude Code, send the same prompt. The hook packs the context and the IDE panel shows what the agent received.</li>
+    <li>Claude opens the right files straight away, with no scavenger hunt.</li>
+  </ol>
+  <div class="note">If the live run misbehaves, switch to the recorded backup video.</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Built by the team</div>
+  <h2>Less looking. More doing.</h2>
+  <div class="row c3">
+    <div class="card"><span class="tag">Context Packer</span><h3>Jev-ranked context</h3><p>Tool window, MCP tool and Claude Code hook, with a measured eval.</p></div>
+    <div class="card"><span class="tag">IntelliJev</span><h3>Review-first edits</h3><p>Proposed changes shown as diffs and applied only when you approve them.</p></div>
+    <div class="card"><span class="tag">Laya + keywords</span><h3>Local providers</h3><p>Offline ranking with no API key, benchmarked separately.</p></div>
+  </div>
+  <p style="margin-top:44px;font-size:28px">Code, evals and every report are open:<br>
+    <b>github.com/Taanviir/hackathon-jetbrains-202609</b><br><b>taanviir.github.io/hackathon-jetbrains-202609</b></p>
+  <div class="foot">Thank you. Questions?</div>
+  <div class="note">Close: agents are only as fast as their context. We make context instant.</div>
+</section>
+
+</div>
+<div id="bar"></div><div id="count"></div><div id="hint">← → navigate · N notes · F fullscreen</div><div id="notes"></div>
+<script>
+(() => {
+  const slides = [...document.querySelectorAll('.slide')];
+  const deck = document.getElementById('deck');
+  let i = Math.min(Math.max(parseInt(location.hash.slice(1), 10) - 1 || 0, 0), slides.length - 1);
+  function fit() {
+    const s = Math.min(innerWidth / 1600, innerHeight / 900) * 0.96;
+    deck.style.transform = `translate(-50%, -50%) scale(${s})`;
+  }
+  function show(n) {
+    i = Math.min(Math.max(n, 0), slides.length - 1);
+    slides.forEach((el, k) => el.classList.toggle('on', k === i));
+    document.getElementById('count').textContent = `${i + 1} / ${slides.length}`;
+    document.getElementById('bar').style.width = `${(i + 1) / slides.length * 100}%`;
+    const note = slides[i].querySelector('.note');
+    document.getElementById('notes').textContent = note ? note.textContent : '';
+    history.replaceState(null, '', `#${i + 1}`);
+  }
+  addEventListener('resize', fit);
+  addEventListener('keydown', e => {
+    if (['ArrowRight', 'PageDown', ' ', 'Enter'].includes(e.key)) { e.preventDefault(); show(i + 1); }
+    else if (['ArrowLeft', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); show(i - 1); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key.toLowerCase() === 'n') document.body.classList.toggle('shownotes');
+    else if (e.key.toLowerCase() === 'f') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  });
+  addEventListener('click', e => { if (!e.target.closest('a')) show(e.clientX > innerWidth / 3 ? i + 1 : i - 1); });
+  let x0 = null;
+  addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
+  addEventListener('touchend', e => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 40) show(dx < 0 ? i + 1 : i - 1); x0 = null; });
+  fit(); show(i);
+})();
+</script>
+</body>
+</html>
