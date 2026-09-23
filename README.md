@@ -16,9 +16,11 @@ engine, its evaluation harness, and local Laya adapter lives in
 IntelliJev build.
 
 On **70 held-out Koog tasks**, the Jev + BM25 context pipeline reached **0.69
-recall@10**, compared with **0.53** for BM25 keywords. In a separate eight-task
-Claude Code pilot, the Jev hook used **25% fewer agent turns** and **38% fewer
-searches**, with **15% lower observed agent spend**. These results measure Jev file
+recall@10**, compared with **0.53** for BM25 keywords. Those tasks rank Kotlin files
+only; the installed plugin ranks every supported language unless
+`CONTEXT_PACKER_EXTENSIONS=kt` is set. In a separate eight-task Claude Code pilot, the
+Jev hook used **25% fewer agent turns** and **38% fewer searches**, with **15% lower
+observed agent spend**. These results measure Jev file
 retrieval and agent exploration, not Laya performance or generated-code quality.
 Read the [published evaluation](https://taanviir.github.io/hackathon-jetbrains-202609/main/context-packer-eval/) and
 [Laya setup](./plugins/context-packer/LAYA.md).
