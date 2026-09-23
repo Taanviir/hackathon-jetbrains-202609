@@ -1,0 +1,41 @@
+{
+ "model": "sonnet",
+ "rows": [
+  {
+   "sha": "ab1703cd",
+   "task": "Update the Koog example that demonstrates a trip planning agent.",
+   "truth": [
+    "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/Agent.kt",
+    "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/Main.kt",
+    "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/Structs.kt",
+    "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/api/OpenMeteoClient.kt",
+    "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/tools/UserTools.kt",
+    "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/tools/WeatherTools.kt"
+   ],
+   "pack": {
+    "arm": "pack",
+    "wall_s": 20.2,
+    "turns": 5,
+    "cost_usd": 0.1096674,
+    "input_tokens": 8,
+    "cache_read": 111227,
+    "cache_write": 19164,
+    "output_tokens": 1075,
+    "tools": {
+     "Glob": 1,
+     "Read": 3
+    },
+    "answer": [
+     "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/Agent.kt",
+     "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/Main.kt",
+     "examples/trip-planning-example/src/main/kotlin/ai/koog/agents/examples/tripplanning/Structs.kt"
+    ],
+    "answered": true,
+    "recall": 0.5,
+    "is_error": false,
+    "stderr": "",
+    "jev_tokens": 571082
+   }
+  }
+ ]
+}

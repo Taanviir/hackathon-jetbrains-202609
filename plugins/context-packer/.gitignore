@@ -1,0 +1,11 @@
+.cache/
+spike/.venv/
+__pycache__/
+*.pyc
+.gradle/
+build/
+.intellijPlatform/
+.kotlin/
+.idea/
+*.iml
+local.properties

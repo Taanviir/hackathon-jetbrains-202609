@@ -1,0 +1,28 @@
+<idea-plugin>
+    <id>dev.contextpacker</id>
+    <name>Context Packer</name>
+    <vendor>Taanviir</vendor>
+    <description><![CDATA[
+        <p>Find relevant project source for coding tasks using Jev, local Laya, or local
+        keyword ranking. Inspect and adjust the selected files, copy a bounded source prompt,
+        or request an answer from a configured cloud model. Available from a tool window and
+        as an MCP tool for agents. Laya requires a local model server; keyword ranking needs
+        no model or API key.</p>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends optional="true" config-file="context-packer-mcp.xml">com.intellij.mcpServer</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Context Packer" anchor="right" secondary="false" icon="AllIcons.Actions.Find"
+                    factoryClass="dev.contextpacker.ui.ContextPackerToolWindowFactory"/>
+        <postStartupActivity implementation="dev.contextpacker.WarmUp"/>
+    </extensions>
+
+    <actions>
+        <action id="ContextPacker.SetKeys" class="dev.contextpacker.ui.SetKeysAction"
+                text="Context Packer: Set API Keys…" description="Store the TypeSafe and OpenRouter keys">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

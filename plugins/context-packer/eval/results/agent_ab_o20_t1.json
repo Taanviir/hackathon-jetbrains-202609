@@ -1,0 +1,72 @@
+{
+ "summary": {
+  "model": "z-ai/glm-5.3-flash",
+  "tasks": 1,
+  "offset": 20,
+  "explore": {
+   "wall_s_median": 92.0,
+   "wall_s_mean": 92.0,
+   "llm_calls_mean": 25,
+   "tokens_mean": 365669,
+   "cost_total": 0.0185,
+   "recall_mean": 0.0,
+   "answered": 0,
+   "used_pack_context": 0
+  },
+  "pack": {
+   "wall_s_median": 150.0,
+   "wall_s_mean": 150.0,
+   "llm_calls_mean": 25,
+   "tokens_mean": 458919,
+   "cost_total": 0.0224,
+   "recall_mean": 0.0,
+   "answered": 0,
+   "used_pack_context": 1
+  }
+ },
+ "rows": [
+  {
+   "sha": "54b8ecb1",
+   "task": "Update OpenAI JSON schema generation for serialization of nullable collections",
+   "truth": [
+    "prompt/prompt-executor/prompt-executor-clients/prompt-executor-openai-client-base/src/commonMain/kotlin/ai/koog/prompt/executor/clients/openai/base/structure/OpenAIStandardJsonSchemaGenerator.kt",
+    "prompt/prompt-executor/prompt-executor-clients/prompt-executor-openai-client-base/src/commonTest/kotlin/ai/koog/prompt/executor/clients/openai/structure/OpenAIStandardJsonSchemaGeneratorTest.kt"
+   ],
+   "explore": {
+    "arm": "explore",
+    "wall_s": 92.0,
+    "pack_s": 0.0,
+    "recall": 0.0,
+    "answered": false,
+    "answer": [],
+    "llm_calls": 25,
+    "prompt_tokens": 360675,
+    "completion_tokens": 4994,
+    "cost": 0.01852081,
+    "tool_calls": {
+     "list_dir": 13,
+     "grep": 16,
+     "read_file": 13
+    }
+   },
+   "pack": {
+    "arm": "pack",
+    "wall_s": 150.0,
+    "pack_s": 7.0,
+    "recall": 0.0,
+    "answered": false,
+    "answer": [],
+    "llm_calls": 25,
+    "prompt_tokens": 449116,
+    "completion_tokens": 9803,
+    "cost": 0.022364259999999997,
+    "tool_calls": {
+     "pack_context": 1,
+     "read_file": 18,
+     "grep": 17,
+     "list_dir": 6
+    }
+   }
+  }
+ ]
+}

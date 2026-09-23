@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Local Laya: results and limits</title>
+<meta name="description" content="The local Laya benchmark: 30 held-out Koog tasks, exact caching, server resources and reproducible evidence.">
+<style>
+:root { color-scheme: light dark; --page:#f9f9f7; --surface:#fff; --ink:#14202b; --muted:#53616e; --rule:#dce2e7; --accent:#1d619d; --soft:#eaf2f9; }
+@media(prefers-color-scheme:dark) { :root { --page:#10161c; --surface:#17212a; --ink:#edf3f8; --muted:#b1bdc8; --rule:#334554; --accent:#82baf1; --soft:#1c3346; } }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--page); color:var(--ink); font:16px/1.6 system-ui,sans-serif; }
+main { max-width:980px; margin:auto; padding:30px 20px 80px; }
+nav { display:flex; flex-wrap:wrap; gap:10px 22px; font-size:14px; margin-bottom:38px; }
+a { color:var(--accent); text-underline-offset:3px; }
+a:focus-visible { outline:3px solid var(--accent); outline-offset:4px; }
+h1 { font-size:clamp(32px,5vw,48px); line-height:1.1; letter-spacing:-.025em; max-width:750px; margin:8px 0 22px; }
+h2 { font-size:25px; margin:44px 0 12px; }
+h3 { font-size:18px; margin:0 0 8px; }
+p { color:var(--muted); }
+strong { color:var(--ink); }
+.eyebrow { font-size:13px; letter-spacing:.06em; text-transform:uppercase; font-weight:700; color:var(--accent); }
+.lede { max-width:800px; font-size:19px; }
+.note { padding:16px 20px; border-left:4px solid var(--accent); background:var(--soft); border-radius:0 10px 10px 0; }
+.cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin:26px 0; }
+.card { background:var(--surface); border:1px solid var(--rule); border-radius:12px; padding:20px; }
+.card b { display:block; font-size:30px; font-variant-numeric:tabular-nums; line-height:1.25; margin-bottom:8px; }
+.card span { color:var(--muted); font-size:14px; }
+.scroll { overflow-x:auto; border:1px solid var(--rule); border-radius:10px; }
+table { border-collapse:collapse; width:100%; background:var(--surface); font-size:15px; }
+th,td { padding:13px 16px; border-bottom:1px solid var(--rule); text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+th:first-child,td:first-child { text-align:left; white-space:normal; min-width:200px; }
+thead { background:var(--soft); }
+tbody tr:last-child td { border-bottom:0; }
+.small { font-size:14px; }
+li { color:var(--muted); margin:7px 0; }
+code { background:var(--soft); padding:2px 5px; border-radius:4px; overflow-wrap:anywhere; font-size:13px; }
+footer { border-top:1px solid var(--rule); padding-top:20px; margin-top:46px; font-size:14px; color:var(--muted); }
+@media(max-width:650px) { .cards { grid-template-columns:1fr; } .card { padding:16px; } .card b { font-size:28px; } }
+</style>
+</head>
+<body>
+<main>
+<nav aria-label="Reports"><a href="../../">All reports</a><a href="../context-packer-explained/">Plugin overview</a><a href="../context-packer-wiki/">Technical wiki</a><a href="../context-packer-eval/">Jev evaluation</a></nav>
+<p class="eyebrow">Context Packer · local evaluation · 23 September 2026</p>
+<h1>Laya runs locally. Keyword search currently retrieves more.</h1>
+<p class="lede">We tested a frozen two-pass Laya configuration on <strong>30 held-out Koog tasks</strong>.
+Full-source keyword search found more of the files developers actually changed. The plugin provides both options,
+so a local workflow can use the stronger measured baseline.</p>
+<div class="cards">
+  <div class="card"><b>0.553 vs 0.391</b><span>Mean recall@10: full-source BM25 versus fixed Laya + BM25.</span></div>
+  <div class="card"><b>2,329 calls</b><span>Successful uncached requests in the frozen 25-task extension. Zero errors.</span></div>
+  <div class="card"><b>$0 API fee</b><span>Local CPU inference. Hardware, electricity and cloud coding models are separate.</span></div>
+</div>
+<p class="note"><strong>Different provider, separate experiment.</strong> The team's Jev study uses different tasks,
+model settings and hardware. Its speed and quality figures cannot be compared directly with these local results.</p>
+
+<h2>Retrieval quality</h2>
+<p>Recall@10 is the fraction of a task's modified files present in the first ten results, averaged across tasks.
+The task is a real commit subject; candidate code comes from its parent, before the change.</p>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Ranking</th><th scope="col">Next 25 · @10</th><th scope="col">All 30 · @10</th><th scope="col">All 30 · @5</th></tr></thead>
+<tbody>
+<tr><td><strong>Full-source BM25</strong></td><td>0.555</td><td><strong>0.553</strong></td><td>0.410</td></tr>
+<tr><td>BM25 recomputed within top 60</td><td>0.427</td><td>0.428</td><td>0.242</td></tr>
+<tr><td>Fixed two-pass Laya + BM25</td><td>0.382</td><td>0.391</td><td>0.265</td></tr>
+<tr><td>Laya second pass alone</td><td>0.103</td><td>0.114</td><td>0.047</td></tr>
+</tbody></table></div>
+<p class="small">The original five held-out tasks and next 25 were kept separate, then combined. A secondary paired bootstrap
+of the unchanged 30-task result estimated a difference of −0.162, with a 95% interval [−0.269, −0.070].
+Laya improved 0 tasks, tied 20 and worsened 10. This interval describes the sample; it does not establish performance on other repositories.</p>
+
+<h2>What became faster</h2>
+<p>The optional exact-response cache reuses an identical task and file excerpt without new inference.
+It preserves the score. A changed input requires a new decision.</p>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Same 60 development requests</th><th scope="col">First pass</th><th scope="col">Exact repeat</th></tr></thead>
+<tbody>
+<tr><td>Median round-trip</td><td>1,303.2 ms</td><td>2.8 ms</td></tr>
+<tr><td>95th percentile</td><td>1,431.7 ms</td><td>24.5 ms</td></tr>
+<tr><td>New inference tokens</td><td>21,438</td><td>0</td></tr>
+<tr><td>Cache hits</td><td>0 / 60</td><td>60 / 60</td></tr>
+</tbody></table></div>
+<p class="small">All 120 scores matched saved uncached scores exactly, with zero errors. This is an exact-repeat latency
+diagnostic, not a quality improvement. The retrieval benchmark had caching disabled.</p>
+
+<h2>CPU cost and server reliability</h2>
+<p>The 25-task extension averaged <strong>117.2 seconds per task</strong> for two Laya passes.
+Per-call median / 95th-percentile round-trip was 1,315 / 1,560 ms, without concurrent IDE or Gradle load.</p>
+<p>A separate sequential replay of 60 saved requests compared server implementations. The persistent worker kept
+33 threads and grew from 3,028 to 3,040 MiB of private memory. The original playground grew from 35 to 450 threads
+and from 2,969 to 3,970 MiB. Both returned identical scores without errors in this replay.</p>
+<p class="small">An earlier playground attempt exited after 96 calls with 47 errors during concurrent IDE and memory pressure.
+The failed attempt is preserved separately; retries used the same frozen protocol. The resource replay implicates thread growth,
+but cannot prove a single crash cause or long-term stability.</p>
+
+<!-- BEGIN stability soak -->
+<h2>2,240 requests with cache eviction</h2>
+<p>A separate, predeclared stability run completed <strong>2,240 local requests in 57.9 minutes</strong>
+with zero request errors and exact score parity. Its 150 distinct development requests exceeded the 128-entry cache:
+14 cycles produced 2,100 misses and 140 expected hot-repeat hits.</p>
+<p>Sampled private memory was <strong>3,015→3,065 MiB</strong>, peaking at 3,088 MiB.
+Threads moved from 25 to 31, with a sampled peak of 33; C: free space stayed above 7.86 GiB.
+No IDE build overlapped the run. It finished at 04:01:41 Dubai on 23 September 2026.</p>
+<p class="small">The request order and 5 GiB private-memory / 3 GiB free-space stops were frozen in advance.
+The saved result records duration and resources; offline verification checks the frozen inputs. The run does not establish indefinite operation or improve retrieval quality.
+See the <a href="https://github.com/Taanviir/hackathon-jetbrains-202609/blob/aikram42/quality-laya/plugins/context-packer/eval/results/laya/laya-benchmark-soak.md">stability evidence</a>
+and <a href="https://github.com/Taanviir/hackathon-jetbrains-202609/blob/aikram42/quality-laya/plugins/context-packer/eval/SOAK.md">offline verification and replay instructions</a>.</p>
+<!-- END stability soak -->
+
+<h2>Checked inside IntelliJ</h2>
+<p>A headless IntelliJ Community 2025.2.6.2 session indexed a module-backed Koog fixture with
+<strong>1,705 Kotlin files</strong>. Its real <code>pack_context</code> MCP tool returned ten ranked paths through
+both local providers, rejected an unknown provider and limits outside 1–20, and preserved the ranked result on an exact repeat.</p>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Actual MCP operation</th><th scope="col">Elapsed</th><th scope="col">Local model requests</th><th scope="col">Cache hits</th></tr></thead>
+<tbody>
+<tr><td>Full-source keywords</td><td>1.234 s</td><td>0</td><td>0</td></tr>
+<tr><td>Laya, 60-file keyword shortlist</td><td>138.552 s</td><td>93</td><td>0</td></tr>
+<tr><td>Laya, identical task and source</td><td>1.302 s</td><td>93</td><td>93</td></tr>
+</tbody></table></div>
+<p class="small">Cache hits are HTTP requests that skip inference. This check reused one development task; it is functional
+evidence, not another held-out quality result or a controlled comparison with the Python benchmark. The live keyword hook
+script also returned eight source paths without model calls; Claude itself was not launched.</p>
+<p class="small">The fixture needed an IntelliJ module/content root and read access, and startup required a second project-open
+handoff. Native desktop visual interaction and cloud code generation were not verified. The
+<a href="https://github.com/Taanviir/hackathon-jetbrains-202609/blob/aikram42/quality-laya/plugins/context-packer/eval/results/laya/laya-ide-mcp-smoke.json.gz">sanitized MCP evidence</a>
+records the exact production revision, responses and limitations.</p>
+
+<h2>What you can use</h2>
+<ul>
+<li><strong>Fast keywords:</strong> full-source local ranking with no model or API key. Typing previews and the installed live hook use it by default.</li>
+<li><strong>Laya:</strong> explicit local inference from the tool window or MCP, optional exact caching, and separate new / reused token counters.</li>
+<li><strong>Source handoff:</strong> inspect results, add or drop files, and copy a bounded prompt. Cloud answer generation is a separate explicit action.</li>
+</ul>
+
+<h2>Limits and reproducibility</h2>
+<p>All held-out tasks come from one Kotlin repository and period. Short commit subjects are imperfect user requests,
+and modified files are imperfect relevance labels. Laya's English model has a 512-token window; this adapter uses the first
+1,000 characters per file, while BM25 reads full source. The 60-file prefilter and later pool also limit possible recall.</p>
+<p>The experiment used Laya 0.3.5, pinned English checkpoint <code>1c5edc17a7acd8701df6fc341c0d179f1c62c982</code>,
+PyTorch 2.14.0 on Windows CPU, and three development tasks before the frozen five + 25 held-out split.</p>
+<p><a href="https://github.com/Taanviir/hackathon-jetbrains-202609/blob/aikram42/quality-laya/plugins/context-packer/eval/LAYA_RESULTS.md">Read the full methods, incidents and audit links</a>.
+Raw per-task scores, timings, token counts, fixed manifests and SHA-256 digests are committed alongside that report.</p>
+<footer>These measurements support the shipped local options. They do not measure downstream code correctness, agent success or a visual IDE workflow.</footer>
+</main>
+</body>
+</html>

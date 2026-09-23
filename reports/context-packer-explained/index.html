@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Context Packer, explained</title>
+<meta name="description" content="What Context Packer does, why it matters, and what we measured, without the jargon.">
+<style>
+:root {
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #75746f; --rule: #e4e3de;
+  --s1: #2a78d6; --s2: #eb6834; --s1-soft: #e3eefb; --s2-soft: #fbe9e1; --good: #0ca30c; --code: #f0efec;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #9b9a92; --rule: #34332f;
+  --s1: #3987e5; --s2: #d95926; --s1-soft: #16283d; --s2-soft: #3a2117; --code: #262624;
+} }
+:root[data-theme="dark"] {
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #9b9a92; --rule: #34332f;
+  --s1: #3987e5; --s2: #d95926; --s1-soft: #16283d; --s2-soft: #3a2117; --code: #262624;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 17px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 900px; margin: 0 auto; padding: 32px 16px 96px; }
+nav { font-size: 14px; color: var(--ink-3); display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 40px; }
+nav a { color: inherit; } nav a[aria-current] { color: var(--ink); font-weight: 600; text-decoration: none; }
+.eyebrow { font-size: 14px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--s1); margin: 0 0 12px; }
+h1 { font-size: clamp(32px, 6vw, 52px); line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 20px; }
+h2 { font-size: clamp(24px, 4vw, 32px); line-height: 1.2; letter-spacing: -0.01em; margin: 80px 0 16px; }
+p { color: var(--ink-2); margin: 0 0 16px; } p strong { color: var(--ink); }
+.lede { font-size: 20px; max-width: 680px; }
+a { color: var(--s1); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 32px 0; }
+.stat { background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 20px; }
+.stat .n { font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.stat .l { font-size: 14px; color: var(--ink-3); margin-top: 8px; }
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; }
+@media (max-width: 640px) { .compare { grid-template-columns: 1fr; } }
+.side { border-radius: 14px; padding: 20px; border: 1px solid var(--rule); background: var(--surface); }
+.side h3 { margin: 0 0 8px; font-size: 17px; }
+.side.before h3 { color: var(--s2); } .side.after h3 { color: var(--s1); }
+.side ol { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: 15px; } .side li { margin: 4px 0; }
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 24px 0; }
+@media (max-width: 720px) { .steps { grid-template-columns: 1fr; } }
+.step { background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 20px; }
+.step .k { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--s1-soft); color: var(--s1); font-weight: 700; margin-bottom: 12px; }
+.step h3 { margin: 0 0 6px; font-size: 18px; } .step p { font-size: 15px; margin: 0; }
+.funnel { width: 100%; height: auto; display: block; margin: 8px 0 24px; }
+.funnel .bar { fill: var(--s1-soft); stroke: var(--s1); stroke-width: 1.5; }
+.funnel .t { fill: var(--ink); font-size: 15px; font-weight: 600; } .funnel .s { fill: var(--ink-3); font-size: 13px; }
+figure { margin: 24px 0; } figure img { width: 100%; border-radius: 12px; border: 1px solid var(--rule); display: block; }
+figcaption { font-size: 14px; color: var(--ink-3); margin-top: 8px; }
+.proof { display: grid; gap: 12px; margin: 24px 0; }
+.claim { background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 18px 20px; display: grid; grid-template-columns: 110px 1fr; gap: 16px; align-items: center; }
+@media (max-width: 560px) { .claim { grid-template-columns: 1fr; } }
+.claim .big { font-size: 30px; font-weight: 700; color: var(--s1); font-variant-numeric: tabular-nums; }
+.claim p { margin: 0; font-size: 15px; }
+.bars { margin: 8px 0 0; }
+.bars .row { display: grid; grid-template-columns: 130px 1fr 44px; gap: 10px; align-items: center; font-size: 14px; color: var(--ink-2); margin: 6px 0; }
+.bars .track { height: 12px; background: var(--code); border-radius: 6px; overflow: hidden; }
+.bars .fill { height: 100%; border-radius: 6px; }
+.honest { border-left: 3px solid var(--s2); background: var(--s2-soft); border-radius: 0 12px 12px 0; padding: 16px 20px; }
+.honest ul { margin: 0; padding-left: 20px; color: var(--ink-2); } .honest li { margin: 6px 0; }
+.quote { font-size: clamp(22px, 3.5vw, 30px); line-height: 1.3; font-weight: 650; letter-spacing: -0.01em; margin: 24px 0; }
+.quote span { color: var(--s1); }
+footer { margin-top: 80px; font-size: 14px; color: var(--ink-3); border-top: 1px solid var(--rule); padding-top: 20px; }
+</style>
+</head>
+<body>
+<main>
+<nav><a href="../../">All reports</a><a href="../context-packer-explained/" aria-current="page">Explained</a><a href="../context-packer-wiki/">Technical wiki</a><a href="../context-packer-qa/">Jury Q&amp;A</a><a href="../context-packer-eval/">Eval report</a></nav>
+
+<p class="eyebrow">Context Packer · part of IntelliJev</p>
+<h1>Give your coding agent the right files sooner.</h1>
+<p class="lede">Context Packer is an IntelliJ plugin. You describe a change; it reads every file in the project and hands back
+the handful that change will touch, ranked, with the reason each one matters. People use it from a panel in the IDE,
+and AI agents get it automatically before they start.</p>
+<p><strong>Provider scope:</strong> the measurements and pipeline below use <strong>Jev</strong>. The combined plugin also
+offers Fast keywords and local Laya. Those have a <a href="../context-packer-laya/">separate local benchmark</a>;
+the Jev speed and quality figures do not apply to them. Automatic agent delivery requires installing the hook.</p>
+
+<div class="stats">
+  <div class="stat"><div class="n">4 s</div><div class="l">measured Jev pack on a 1,700-file Kotlin project</div></div>
+  <div class="stat"><div class="n">69%</div><div class="l">of the files a real change touched land in its top 10. Keyword search: 53%.</div></div>
+  <div class="stat"><div class="n">−25%</div><div class="l">fewer steps for Claude Code to reach the same answer</div></div>
+  <div class="stat"><div class="n">$0.03</div><div class="l">per ranking, all of it for the AI that does the judging</div></div>
+</div>
+
+<h2>The problem</h2>
+<p>Ask an AI coding agent to "add exponential backoff to the retry logic" and it doesn't know where that logic lives.
+So it does what a new colleague would: searches for a word, opens a file, decides it's the wrong one, opens another.
+Every one of those steps is a round trip to a large language model, which is slow and costs money.</p>
+<div class="compare">
+  <div class="side before"><h3>Without Context Packer</h3><ol>
+    <li>Search the code for "retry"</li><li>Open a file, wrong one</li><li>Search for "backoff"</li>
+    <li>Open another, closer</li><li>List a folder</li><li>Find the test</li><li>… then start the actual work</li></ol></div>
+  <div class="side after"><h3>With Context Packer</h3><ol>
+    <li>The request arrives already carrying a ranked list: the file to edit, the test that checks it, an example to copy</li>
+    <li>Read the top files</li><li>Start the actual work</li></ol></div>
+</div>
+
+<h2>The idea: one AI decides, another writes</h2>
+<p class="quote">There are two kinds of AI in this. <span>Jev decides. The LLM writes.</span></p>
+<p><strong>Jev</strong>, from TypeSafe, is a new kind of model that can't write a single sentence. It only answers
+questions, as probabilities: "how likely is it that this change needs this file?" Because that's all it does, it's
+fast and very cheap, cheap enough to ask the same question about <em>every file</em> in a project, every time.</p>
+<p>The <strong>large language model</strong> (Claude, GPT and so on) is the one that writes code. It's powerful but slow and
+expensive, so you want it spending its effort on the right files, not on finding them. Context Packer lets Jev do the
+looking, so the LLM only does the writing.</p>
+
+<h2>How it works, in three steps</h2>
+<svg class="funnel" viewBox="0 0 860 190" role="img" aria-labelledby="ft">
+  <title id="ft">From 1,705 files to the 10 that matter</title>
+  <rect class="bar" x="10" y="20" width="840" height="44" rx="10"/><text class="t" x="28" y="48">1,705 files</text><text class="s" x="140" y="48">every Kotlin file, skimmed by keyword search and by Jev reading a short summary of each</text>
+  <rect class="bar" x="190" y="78" width="480" height="44" rx="10"/><text class="t" x="208" y="106">~100 files</text><text class="s" x="300" y="106">the shortlist, read properly in full</text>
+  <rect class="bar" x="330" y="136" width="200" height="44" rx="10"/><text class="t" x="348" y="164">top 10</text><text class="s" x="408" y="164">compared</text>
+</svg>
+<div class="steps">
+  <div class="step"><div class="k">1</div><h3>Skim everything</h3><p>Two scouts go through every file at once. One matches words (the classic search engine
+  trick). The other is Jev, reading a one-paragraph summary of each file and judging whether the change needs it. About 2 seconds.</p></div>
+  <div class="step"><div class="k">2</div><h3>Read the shortlist</h3><p>The best 60 from each scout, about 100 files, get read in full by Jev, which catches
+  things a summary hides, like a field buried inside a function. About 1 second.</p></div>
+  <div class="step"><div class="k">3</div><h3>Compare the finalists</h3><p>Jev looks at the top 10 side by side and picks the one most likely to be edited,
+  and labels the others: the test, an example to follow, an API it depends on. Under half a second.</p></div>
+</div>
+
+<h2>What it looks like</h2>
+<figure><img src="tool-window-roles.png" alt="IntelliJ with the Context Packer panel on the right, listing ranked files with role labels such as edit, test and dependency">
+<figcaption>An agent asked for "Support reasoning_content in Delta for OpenAI". The panel on the right fills itself: the
+file to <strong>edit</strong> at the top, then the <strong>tests</strong> and <strong>dependencies</strong> around it.</figcaption></figure>
+<figure><img src="tool-window-ask-llm.png" alt="The Context Packer panel with an LLM answer at the bottom that names the exact method to change">
+<figcaption>Press <strong>Ask LLM</strong> and a language model answers from just those files, in one go: it names the method to
+change and says which files it would still want.</figcaption></figure>
+
+<h2>Does it actually work?</h2>
+<p>We didn't want a claim, we wanted a measurement. So we used real history: each test is a real change someone made to
+<strong>Koog</strong>, JetBrains' own AI-agent framework. We give Context Packer the change's one-line description, show it the
+code exactly as it was <em>before</em> the change, and check whether it finds the files the developer actually edited. We
+tuned it on one set of changes and then tested it once on 70 it had never seen.</p>
+<div class="proof">
+  <div class="claim"><div class="big">+16 pts</div><div><p><strong>Better than keyword search.</strong> Of the files each change touched, 69% show up in
+  Context Packer's top 10, against 53% for the classic search approach. The margin is large enough that it isn't luck.</p>
+  <div class="bars"><div class="row"><span>Keyword search</span><div class="track"><div class="fill" style="width:53%;background:var(--s2)"></div></div><span>53%</span></div>
+  <div class="row"><span>Jev + BM25</span><div class="track"><div class="fill" style="width:69%;background:var(--s1)"></div></div><span>69%</span></div></div></div></div>
+  <div class="claim"><div class="big">2 repos</div><div><p><strong>Not tuned to one codebase.</strong> On a second JetBrains project, Exposed, which it was
+  never tuned on, it still beat keyword search clearly in its top 5 (54% against 43%).</p></div></div>
+  <div class="claim"><div class="big">30×</div><div><p><strong>As good as asking an LLM, far faster.</strong> Having a language model re-rank the same
+  shortlist gets the same top-10 result, but takes about 29 seconds per request instead of 1. The LLM is still a bit better at
+  picking the top five.</p></div></div>
+  <div class="claim"><div class="big">−25%</div><div><p><strong>Agents take fewer steps.</strong> Claude Code, given the ranked files before it starts,
+  needed a quarter fewer steps and 38% fewer searches to reach the same answer, on 8 real tasks.</p></div></div>
+</div>
+
+<h2>What it isn't, yet</h2>
+<div class="honest"><ul>
+  <li><strong>It doesn't make agents finish sooner.</strong> Fewer steps and less spend, yes; less waiting, not in our tests. Good agents are already quick at searching for words the task mentions.</li>
+  <li><strong>Agents won't use it on their own.</strong> Offered as a tool, Claude Code ignored it every time. So it's delivered automatically, before the agent starts.</li>
+  <li><strong>Jev measured on Kotlin, in two repositories.</strong> Candidate collection supports several source languages, but only Kotlin is measured.</li>
+  <li><strong>It finds existing files.</strong> A change that's mostly brand-new files has nothing to find yet.</li>
+</ul></div>
+
+<h2>Where it fits</h2>
+<p><strong>IntelliJev</strong> is the team's bigger idea: a decision layer inside the IDE where a fast, cheap model makes the
+thousands of small judgements, and the expensive model is called only when it's earned. Context Packer is the first piece of
+that built and measured end to end. Every other "finder" in IntelliJev runs on the same principle.</p>
+
+<footer>Numbers come from the <a href="../context-packer-eval/">eval report</a>, which shows how each one was measured, including
+the attempts that didn't work. For how it works under the hood, see the <a href="../context-packer-wiki/">technical wiki</a>; for
+likely jury questions, the <a href="../context-packer-qa/">Q&amp;A</a>.</footer>
+</main>
+</body>
+</html>
