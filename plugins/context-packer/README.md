@@ -153,7 +153,7 @@ After a short pause while typing, the list shows a **local keyword preview**. Th
 Jev or Laya requests, does not change the saved provider, and does not replace the latest
 explicit pack returned to an agent. Press Pack for the selected provider's full ranking.
 
-![An agent's pack shown in the tool window](docs/tool-window-agent-pack.png)
+![An agent's pack shown in the tool window](../../reports/context-packer-explained/tool-window-agent-pack.png)
 
 *An agent called `pack_context` over MCP; the tool window shows what it was handed, 4.4 s later.*
 

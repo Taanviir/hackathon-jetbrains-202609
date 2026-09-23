@@ -4,15 +4,11 @@ on:
   pull_request:
     paths:
       - "plugins/context-packer/**"
-      - "tools/laya_server.py"
-      - "tools/test_laya_server.py"
       - ".github/workflows/context-packer-tests.yml"
   push:
     branches: [main]
     paths:
       - "plugins/context-packer/**"
-      - "tools/laya_server.py"
-      - "tools/test_laya_server.py"
       - ".github/workflows/context-packer-tests.yml"
 
 permissions:
@@ -53,7 +49,7 @@ jobs:
         with:
           python-version: "3.10"
       - name: Test the local HTTP contract without model weights
-        run: python -m unittest discover -s tools -p test_laya_server.py -v
+        run: python -m unittest discover -s plugins/context-packer/tools -p test_laya_server.py -v
       - name: Test the frozen retrieval protocol offline
         run: python -m unittest discover -s plugins/context-packer/eval -p test_laya_benchmark.py -v
       - name: Test the agent hook without an IDE or model

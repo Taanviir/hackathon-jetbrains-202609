@@ -5,7 +5,7 @@
 > build/run guide. This file keeps the team roster, the shared links, the Jev reference,
 > the three candidate ideas, and the diagrams index, because all of that is still useful
 > context. For current state see [the README](../README.md); for what is actually
-> implemented see [the build specification](../INTELLIJEV_BUILD_SPEC.md).
+> implemented see [the build specification](../plugins/intellijev/BUILD_SPEC.md).
 >
 > Two things below are now out of date: the endpoint described under "What Jev is" is the
 > OpenRouter decisions route, whereas the plugin currently calls TypeSafe directly (see

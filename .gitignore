@@ -8,5 +8,5 @@ out/
 local.properties
 __pycache__/
 *.pyc
-tmp/gradle-*.zip
-tmp/gradle-*/
+.claude/worktrees/
+.kotlin/
