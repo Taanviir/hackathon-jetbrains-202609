@@ -34,6 +34,7 @@ kotlin { jvmToolchain(21) }
 // Keep its source in place so the evaluation tools and teammate work remain undisturbed.
 kotlin.sourceSets.named("main") { kotlin.srcDir("../context-packer/src/main/kotlin") }
 kotlin.sourceSets.named("test") { kotlin.srcDir("../context-packer/src/test/kotlin") }
+sourceSets.named("test") { resources.srcDir("../context-packer/src/test/resources") }
 
 intellijPlatform {
     pluginConfiguration {
