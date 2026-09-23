@@ -76,7 +76,7 @@ It preserves the score. A changed input requires a new decision.</p>
 <div class="scroll"><table>
 <thead><tr><th scope="col">Same 60 development requests</th><th scope="col">First pass</th><th scope="col">Exact repeat</th></tr></thead>
 <tbody>
-<tr><td>Median round-trip</td><td>1,303.3 ms</td><td>2.8 ms</td></tr>
+<tr><td>Median round-trip</td><td>1,303.2 ms</td><td>2.8 ms</td></tr>
 <tr><td>95th percentile</td><td>1,431.7 ms</td><td>24.5 ms</td></tr>
 <tr><td>New inference tokens</td><td>21,438</td><td>0</td></tr>
 <tr><td>Cache hits</td><td>0 / 60</td><td>60 / 60</td></tr>
@@ -93,6 +93,39 @@ and from 2,969 to 3,970 MiB. Both returned identical scores without errors in th
 <p class="small">An earlier playground attempt exited after 96 calls with 47 errors during concurrent IDE and memory pressure.
 The failed attempt is preserved separately; retries used the same frozen protocol. The resource replay implicates thread growth,
 but cannot prove a single crash cause or long-term stability.</p>
+
+<!-- BEGIN stability soak -->
+<h2>2,240 requests with cache eviction</h2>
+<p>A separate, predeclared stability run completed <strong>2,240 local requests in 57.9 minutes</strong>
+with zero request errors and exact score parity. Its 150 distinct development requests exceeded the 128-entry cache:
+14 cycles produced 2,100 misses and 140 expected hot-repeat hits.</p>
+<p>Sampled private memory was <strong>3,015→3,065 MiB</strong>, peaking at 3,088 MiB.
+Threads moved from 25 to 31, with a sampled peak of 33; C: free space stayed above 7.86 GiB.
+No IDE build overlapped the run. It finished at 04:01:41 Dubai on 23 September 2026.</p>
+<p class="small">The request order and 5 GiB private-memory / 3 GiB free-space stops were frozen in advance.
+The saved result records duration and resources; offline verification checks the frozen inputs. The run does not establish indefinite operation or improve retrieval quality.
+See the <a href="https://github.com/Taanviir/hackathon-jetbrains-202609/blob/aikram42/quality-laya/plugins/context-packer/eval/results/laya/laya-benchmark-soak.md">stability evidence</a>
+and <a href="https://github.com/Taanviir/hackathon-jetbrains-202609/blob/aikram42/quality-laya/plugins/context-packer/eval/SOAK.md">offline verification and replay instructions</a>.</p>
+<!-- END stability soak -->
+
+<h2>Checked inside IntelliJ</h2>
+<p>A headless IntelliJ Community 2025.2.6.2 session indexed a module-backed Koog fixture with
+<strong>1,705 Kotlin files</strong>. Its real <code>pack_context</code> MCP tool returned ten ranked paths through
+both local providers, rejected an unknown provider and limits outside 1–20, and preserved the ranked result on an exact repeat.</p>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Actual MCP operation</th><th scope="col">Elapsed</th><th scope="col">Local model requests</th><th scope="col">Cache hits</th></tr></thead>
+<tbody>
+<tr><td>Full-source keywords</td><td>1.234 s</td><td>0</td><td>0</td></tr>
+<tr><td>Laya, 60-file keyword shortlist</td><td>138.552 s</td><td>93</td><td>0</td></tr>
+<tr><td>Laya, identical task and source</td><td>1.302 s</td><td>93</td><td>93</td></tr>
+</tbody></table></div>
+<p class="small">Cache hits are HTTP requests that skip inference. This check reused one development task; it is functional
+evidence, not another held-out quality result or a controlled comparison with the Python benchmark. The live keyword hook
+script also returned eight source paths without model calls; Claude itself was not launched.</p>
+<p class="small">The fixture needed an IntelliJ module/content root and read access, and startup required a second project-open
+handoff. Native desktop visual interaction and cloud code generation were not verified. The
+<a href="https://github.com/Taanviir/hackathon-jetbrains-202609/blob/aikram42/quality-laya/plugins/context-packer/eval/results/laya/laya-ide-mcp-smoke.json.gz">sanitized MCP evidence</a>
+records the exact production revision, responses and limitations.</p>
 
 <h2>What you can use</h2>
 <ul>

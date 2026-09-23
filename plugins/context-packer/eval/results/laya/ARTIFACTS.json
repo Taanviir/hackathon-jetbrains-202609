@@ -91,6 +91,24 @@
       "uncompressed_sha256": "e568bc008863381ed7b5e4214ca42798bfd856988897c06cedc82c5ae53a407d"
     },
     {
+      "file": "laya-benchmark-soak.json.gz",
+      "format": "gzip JSON, mtime=0, no embedded filename",
+      "source_name": "laya-benchmark-soak.json",
+      "stored_bytes": 155559,
+      "stored_sha256": "b235152c4b1d9604106e4eb4d6474d09126e074219993bcf914cef76db93f855",
+      "uncompressed_bytes": 1165476,
+      "uncompressed_sha256": "23d16f705d72e79fb5da343bc8d96e92d7d566d0cfd6fe596c0b18bc091da37a"
+    },
+    {
+      "file": "laya-ide-mcp-smoke.json.gz",
+      "format": "gzip JSON, mtime=0, no embedded filename",
+      "source_name": "laya-ide-mcp-smoke.json",
+      "stored_bytes": 2400,
+      "stored_sha256": "899c87b4860b31dadcae4c0c409d0a2e81bc19b7e3fbe90f64971a76840ecea5",
+      "uncompressed_bytes": 12260,
+      "uncompressed_sha256": "86626ea22cf209e58bf79cd39527e8a5908b9211df6b11dbbda753e55584b4c1"
+    },
+    {
       "file": "laya-benchmark.md",
       "format": "Markdown",
       "source_name": "laya-benchmark.md",
@@ -131,6 +149,13 @@
       "source_name": "laya-benchmark-uncertainty.md",
       "stored_bytes": 936,
       "stored_sha256": "7251e622f824bb4ce77779d093def078708e1452021c91aa5ae3bb2f8cc09013"
+    },
+    {
+      "file": "laya-benchmark-soak.md",
+      "format": "Markdown",
+      "source_name": "laya-benchmark-soak.md",
+      "stored_bytes": 1882,
+      "stored_sha256": "0a36715e72816b306fee1d5111743a650237371f0c2d669dfe338b66029d4315"
     }
   ],
   "scope": "Public Koog/Laya benchmark evidence; no model weights, credentials, or private prompts"

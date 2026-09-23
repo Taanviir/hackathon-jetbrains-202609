@@ -245,13 +245,15 @@ top 10, so it can't change recall@10 or @20.</p>
 <h2 id="ide">IntelliJ internals</h2>
 <ul>
   <li><strong>Collecting files:</strong> <code>ProjectFileIndex.iterateContent</code>, skipping excluded, ignored, library and
-  generated sources, binaries, docs/config and files over 100 KB. <code>CONTEXT_PACKER_EXTENSIONS=kt</code> restricts it to the
-  exact set the eval measured.</li>
+  generated sources, binaries, docs/config and files over 100,000 bytes on disk or 100,000 unsaved editor characters.
+  Project containment also applies to manual pins and source export. <code>CONTEXT_PACKER_EXTENSIONS=kt</code> restricts
+  discovery to the language used in the evaluation.</li>
   <li><strong>Threading:</strong> file text and sketches are read in many short parallel <em>read actions</em>, never one long one,
-  and never with a network call inside, so typing is never blocked. Network runs on <code>Dispatchers.IO</code>, UI updates on the
+  and never with a network call inside, to limit interference with editing. Network runs on <code>Dispatchers.IO</code>, UI updates on the
   EDT, and cancellation always propagates.</li>
   <li><strong>Caching and warm-up:</strong> sketches are cached by modification stamp and built when the project opens (a
-  <code>ProjectActivity</code>, no Jev calls). Unsaved editor text is used when a file is open.</li>
+  <code>ProjectActivity</code>, no model calls). Fast keywords skips sketch warm-up. Switching Jev/Laya sketch formats
+  invalidates that cache. Unsaved editor text is used when a file is open, within the source-size limit.</li>
   <li><strong>Tool window:</strong> task field, search-as-you-type preview (after 700 ms: full-source local BM25, zero model
   calls, labelled preview), explicit provider choice and Pack, Jev role chips, Add open file / Drop, Copy prompt, Ask LLM.</li>
   <li><strong>MCP:</strong> <code>pack_context(task, limit, provider)</code> is registered on the IDE's built-in MCP server through the

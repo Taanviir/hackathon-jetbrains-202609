@@ -35,6 +35,10 @@ Both local methods have $0 API fee, excluding hardware and electricity. These ta
 Windows CPU differ from the Jev evaluation above; this is not a Laya-versus-Jev comparison.
 See [the measured Laya report](eval/LAYA_RESULTS.md) and [local setup](LAYA.md).
 
+The [stability replay guide](eval/SOAK.md) provides an offline check of every frozen
+request and a separate Windows replay command. Run `python eval/verify_artifacts.py`
+to verify the committed evidence's stored and decompressed hashes; CI checks these too.
+
 ## How it works
 
 Jev is TypeSafe's decision model. It can't write text; it answers typed questions with calibrated
@@ -43,7 +47,8 @@ thousands of files, and the wrong one for writing the fix. So the fix is left to
 plugin does the looking.
 
 1. **Collect.** Every source file in the project, minus excluded, generated, library, binary and
-   files over 100 KB.
+   files over 100,000 bytes on disk or 100,000 unsaved editor characters. Source outside the
+   project, including linked descendants, is excluded from collection and manual source access.
 2. **Sketch.** Each file becomes a ~300-token summary: path, package, and declarations two levels
    deep with the first line of each doc comment. It's the same sketcher the eval measured (a
    parity test checks the Kotlin port against it), it takes about 1.4 s for 2,206 files, and it's
@@ -208,5 +213,7 @@ MCP server on, run `OPEN_PROJECT=/path/to/project ./gradlew runIdeCommunity`.
 - Claims are measured on Kotlin only, in one repository. Sketching works for other languages but
   isn't evaluated there.
 - Tasks that mostly add new files are out of scope. There's nothing yet to find.
-- Sketches are built in the background after a project opens. A pack requested before warm-up
-  completes can still include that setup time. After that, only changed files are re-read.
+- Jev and Laya sketches are built in the background after a project opens. A pack requested
+  before warm-up completes can still include that setup time. Fast keywords skips sketch
+  warm-up. Switching between Jev and Laya rebuilds sketches when their formats differ;
+  otherwise the modification-stamp cache reuses unchanged file text and sketches.

@@ -58,6 +58,10 @@ jobs:
         run: python -m unittest discover -s plugins/context-packer/eval -p test_laya_benchmark.py -v
       - name: Test the agent hook without an IDE or model
         run: python -m unittest discover -s plugins/context-packer/agent -p test_pack_hook.py -v
+      - name: Test frozen soak replay validation without a model
+        run: python -m unittest discover -s plugins/context-packer/eval -p test_soak_replay.py -v
+      - name: Verify all published Laya evidence hashes
+        run: python plugins/context-packer/eval/verify_artifacts.py
       - name: Reproduce the published paired recall interval
         run: |
           python plugins/context-packer/eval/paired_recall.py --input plugins/context-packer/eval/results/laya/laya-benchmark-extended.json.gz --output "$RUNNER_TEMP/paired-recall.json"
