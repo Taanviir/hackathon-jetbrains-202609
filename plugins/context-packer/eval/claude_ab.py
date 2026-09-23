@@ -10,7 +10,6 @@ Runs one at a time so the Jev ledger stays exact.
 
 import argparse
 import json
-import os
 import re
 import statistics as st
 import subprocess
@@ -47,7 +46,7 @@ def run(task: koog.Task, text: str, with_pack: bool, model: str, budget: int) ->
     t0 = time.perf_counter()
     p = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=600)
     wall = time.perf_counter() - t0
-    tools, result, init = {}, {}, {}
+    tools, result = {}, {}
     for line in p.stdout.splitlines():
         try:
             ev = json.loads(line)

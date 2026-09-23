@@ -9,7 +9,6 @@ as shipped. Run it once and report whatever comes out.
 import argparse
 import asyncio
 import json
-import os
 import random
 import statistics as st
 import sys
