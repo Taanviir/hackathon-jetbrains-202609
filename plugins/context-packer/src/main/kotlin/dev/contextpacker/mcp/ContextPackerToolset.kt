@@ -27,7 +27,9 @@ class ContextPackerToolset : McpToolset {
         as likely edit, test, example or dependency. It does not edit files.
         Use provider=keywords for full-corpus local BM25 with no model or API key, provider=laya for
         the local decision model, provider=jev for the configured API, or configured for the IDE preference.
-        Laya scores short excerpts from a keyword shortlist of at most 60 files; keywords ranks every
+        Each model uses its own saved IDE provider profile. Laya defaults to 500 task characters,
+        1000 excerpt characters (including path metadata) and a 60-file keyword shortlist; Jev supports 8000 task characters,
+        larger source excerpts and batched scoring without that shortlist cap. Keywords ranks every
         eligible file. Model scores are ranking signals, not correctness confidence. Read picks before editing.
         """,
     )
@@ -85,6 +87,7 @@ class ContextPackerToolset : McpToolset {
             }
         }
         append("Provider: ${report.jevModel}; ${if (report.provider == DecisionProvider.KEYWORDS) "ranked" else "scored"} ${report.scoredCandidates} candidates. ")
+        if (report.profileDescription.isNotEmpty()) append("${report.profileDescription} ")
         append(when (report.provider) {
             DecisionProvider.KEYWORDS -> "Full-corpus lexical rank only; no model relevance or confidence. No model requests, 0 API tokens, API fee $0; local compute cost is excluded. "
             DecisionProvider.LAYA -> "Laya reads short excerpts after a keyword prefilter. API fee is $0; local compute cost is excluded. "

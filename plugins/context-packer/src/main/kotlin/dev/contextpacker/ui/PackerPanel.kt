@@ -23,6 +23,7 @@ import dev.contextpacker.DecisionProvider
 import dev.contextpacker.Keys
 import dev.contextpacker.MissingKeyException
 import dev.contextpacker.PackReport
+import dev.contextpacker.PackerSettings
 import dev.contextpacker.Prompt
 import dev.contextpacker.llm.ChatClient
 import dev.contextpacker.pack.PackedFile
@@ -55,6 +56,8 @@ private const val PREVIEW_DEBOUNCE_MS = 700L
 /** Type a task, pack, check the picks, then copy them as a prompt or ask an LLM directly. */
 class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Disposable {
     private val service = project.service<ContextPackerService>()
+    private val settings = project.service<PackerSettings>()
+    private var displayedProvider = service.provider
 
     private val task = JBTextArea(3, 40).apply {
         font = JBUI.Fonts.label()
@@ -84,12 +87,36 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         }
     }
     private val provider = JComboBox(DecisionProvider.entries.toTypedArray()).apply {
-        selectedItem = service.provider
+        selectedItem = displayedProvider
         toolTipText = "Fast keywords reads source locally with no model. Laya uses a local server; Jev uses your configured API."
         addActionListener {
-            service.provider = selectedItem as DecisionProvider
-            cancelPreview()
+            val selected = selectedItem as? DecisionProvider ?: return@addActionListener
+            if (selected != displayedProvider) {
+                service.provider = selected
+                displayedProvider = selected
+                invalidateProviderContext("Switched to ${selected.label}; pack again")
+            }
         }
+    }
+    private val settingsButton = JButton("Settings…").apply {
+        toolTipText = "Edit Jev and Laya separately; API keys stay in the IDE password store."
+        addActionListener {
+            val selected = provider.selectedItem as DecisionProvider
+            if (ProviderSettingsDialog(project, settings, selected).showAndGet()) {
+                displayedProvider = settings.provider
+                provider.selectedItem = displayedProvider
+                invalidateProviderContext("Provider settings saved; pack again")
+            }
+        }
+    }
+    private val providerSummary = JBTextArea(2, 40).apply {
+        isEditable = false
+        isFocusable = false
+        isOpaque = false
+        lineWrap = true
+        wrapStyleWord = true
+        font = JBUI.Fonts.label()
+        foreground = JBUI.CurrentTheme.ContextHelp.FOREGROUND
     }
     private val status = JBTextArea(5, 24).apply {
         text = " "
@@ -164,8 +191,9 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             add(JBScrollPane(task), BorderLayout.CENTER)
             add(JPanel(BorderLayout(0, 4)).apply {
                 add(JPanel(WrapLayout(FlowLayout.LEFT, 4, 0)).apply {
-                    add(provider); add(packButton); add(cancelButton)
+                    add(provider); add(settingsButton); add(packButton); add(cancelButton)
                 }, BorderLayout.NORTH)
+                add(providerSummary, BorderLayout.CENTER)
                 add(status, BorderLayout.SOUTH)
             }, BorderLayout.SOUTH)
         }
@@ -187,6 +215,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         }
         add(top, BorderLayout.NORTH)
         add(split, BorderLayout.CENTER)
+        updateProviderSummary()
 
         // An agent's pack shows up here too, so the human can see exactly what context it was handed,
         // including one made before this window was first opened.
@@ -194,7 +223,9 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             val localIntent = requestSerial
             val inputAtNotice = inputSerial
             if (report.source != "tool window" && !report.result.preview) service.scope.launch(Dispatchers.EDT) {
-                if (!disposed && localIntent == requestSerial && inputAtNotice == inputSerial && service.lastReport === report) {
+                if (!disposed && localIntent == requestSerial && inputAtNotice == inputSerial &&
+                    service.lastReport === report && report.settingsRevision == settings.revision
+                ) {
                     showExternalReport(report)
                 }
             }
@@ -212,11 +243,50 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         previewJob = null
     }
 
+    private fun updateProviderSummary() {
+        val selected = provider.selectedItem as DecisionProvider
+        val configuration = try { settings.configuration(selected) } catch (e: IllegalArgumentException) {
+            providerSummary.text = "${selected.label} settings need attention: ${e.message}"
+            return
+        }
+        val length = task.text.trim().length
+        val overLimit = if (length > configuration.taskLimit) " · Task is $length characters; shorten before packing" else ""
+        providerSummary.text = configuration.description + overLimit
+    }
+
+    /** A provider or profile change makes every previous result and handoff stale, but keeps the task text. */
+    private fun invalidateProviderContext(message: String) {
+        cancelPreview()
+        requestSerial++
+        inputSerial++
+        promptSerial++
+        answerSerial++
+        job?.cancel()
+        promptJob?.cancel()
+        answerJob?.cancel()
+        job = null
+        promptJob = null
+        answerJob = null
+        lastReport = null
+        replacingPicks = true
+        try { picks.clear() } finally { replacingPicks = false }
+        answer.text = ""
+        packButton.isEnabled = true
+        cancelButton.isEnabled = false
+        status.toolTipText = null
+        status.text = message
+        updateProviderSummary()
+        schedulePreview()
+    }
+
     /** Search-as-you-type uses local full-corpus keywords only; Pack uses the selected provider. */
     private fun schedulePreview() {
         cancelPreview()
         val text = task.text.trim()
+        val selected = provider.selectedItem as DecisionProvider
+        val limit = runCatching { settings.configuration(selected).taskLimit }.getOrNull() ?: return
         if (disposed || text.length < 12 || text.split(Regex("\\s+")).size < 3 ||
+            text.length > limit ||
             (0 until picks.size()).any { picks[it].bm25Rank == null }
         ) return
         val serial = previewSerial
@@ -267,11 +337,13 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private fun onTaskChanged() {
         taskSerial++
         invalidatePromptAndAnswer()
+        updateProviderSummary()
         if (job?.isActive == true) {
             requestSerial++
             job?.cancel()
             packButton.isEnabled = true
             provider.isEnabled = true
+            settingsButton.isEnabled = true
             cancelButton.isEnabled = false
             status.text = "Task changed; pack again"
         }
@@ -300,6 +372,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         invalidatePromptAndAnswer()
         packButton.isEnabled = true
         provider.isEnabled = true
+        settingsButton.isEnabled = true
         cancelButton.isEnabled = false
         setTask(report.result.task)
         show(report)
@@ -318,6 +391,16 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private fun runPack() {
         val text = task.text.trim().ifEmpty { return }
         cancelPreview()
+        val selectedProvider = provider.selectedItem as DecisionProvider
+        val taskLimit = try { settings.configuration(selectedProvider).taskLimit } catch (e: IllegalArgumentException) {
+            status.text = "Provider settings need attention: ${e.message}"
+            return
+        }
+        if (text.length > taskLimit) {
+            status.text = "${selectedProvider.label} accepts at most $taskLimit task characters; shorten this task by ${text.length - taskLimit}."
+            status.toolTipText = null
+            return
+        }
         job?.cancel()
         promptSerial++
         promptJob?.cancel()
@@ -325,9 +408,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         answerJob?.cancel()
         val serial = ++requestSerial
         val taskAtStart = taskSerial
-        val selectedProvider = provider.selectedItem as DecisionProvider
         packButton.isEnabled = false
-        provider.isEnabled = false
         status.toolTipText = null
         lastReport = null
         answer.text = ""
@@ -360,7 +441,6 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 withContext(NonCancellable + Dispatchers.EDT) {
                     if (!disposed && serial == requestSerial) {
                         packButton.isEnabled = true
-                        provider.isEnabled = true
                         cancelButton.isEnabled = answerJob?.isActive == true
                     }
                 }
@@ -400,7 +480,7 @@ class PackerPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             else "${report.jevCalls} ${report.provider.name} requests" +
                 if (report.cachedRequests > 0) " · ${report.cachedRequests} cached" else ""
         status.text = listOfNotNull(
-            if (report.source == "tool window") null else "Asked by ${report.source}",
+            if (report.source == "tool window") null else "Asked by ${report.source} · ${report.provider.label}",
             "%d of %,d files · %.1f s".format(r.files.size, r.candidates, report.totalMs / 1000.0),
             "$calls · $tokens",
             "$cost$failed",
