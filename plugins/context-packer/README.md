@@ -116,6 +116,32 @@ Needs an IntelliJ-based IDE, 2025.2 or newer.
 
 ## Use it
 
+**Switch providers.** Use the provider dropdown beside **Settings…** in the Context Packer tool
+window. Settings saves independent project profiles for Jev and Laya; switching restores that
+provider's controls and preserves your task. A change cancels the tool window's current pack and
+clears stale results. An MCP `provider` override uses the requested profile for that call without
+changing your saved choice; its result is labeled with the provider actually used.
+
+| Setting | Jev | Laya local adapter |
+| --- | --- | --- |
+| Task limit | 8,000 characters | 500 characters; longer tasks are rejected, never silently shortened |
+| Candidate coverage | All eligible files | Configurable keyword shortlist, default 60 |
+| Per-request work | Default 60 sketches or 6 source files | One file, sequential requests |
+| Text budget | Default 6,000 source characters/file, adjustable with a per-request guard | Default/max 1,000 excerpt characters/file, including sketch/path metadata |
+| Rerank pool | Default 60 | Default 20 |
+| Extra decisions | Top-file comparison and file roles, independently enabled | Relevance scoring |
+| Connection | Inherit launcher, Auto, TypeSafe or Gateway; configurable timeout | Loopback HTTP endpoint, model ID and timeout |
+
+Blank Laya endpoint/model fields and **Inherit launcher** for Jev keep using the launcher environment
+(`CONTEXT_PACKER_LAYA_URL`, `CONTEXT_PACKER_LAYA_MODEL`, `JEV_BACKEND`). Explicit profile values
+override it. Restore defaults applies only to its provider, including restoring inheritance.
+Credentials remain in the existing **Set API Keys…** action/IDE password store or environment.
+The current Laya adapter retains its English-model input envelope even when the model ID changes;
+a model name alone does not establish support for a larger window. Character budgets are not
+token counts, and very small excerpt budgets can contain only path/sketch metadata.
+Jev's batching, full-corpus coverage and comparative stages do not inherit Laya's limits.
+The published benchmarks apply to their recorded defaults; custom profiles have not been re-evaluated.
+
 **In the IDE.** Open the **Context Packer** tool window (magnifier icon, right stripe), describe
 the change and press **Pack context** or Ctrl+Enter. Double-click a pick to open it, press Delete
 to drop one, and use **Add open file** to pin one it missed. Then **Copy prompt** puts the task

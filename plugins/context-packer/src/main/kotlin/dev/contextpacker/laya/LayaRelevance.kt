@@ -31,7 +31,11 @@ class LayaRelevance(
     val model: String = System.getenv("CONTEXT_PACKER_LAYA_MODEL") ?: "english",
     private val timeout: Duration = Duration.ofSeconds(90),
     private val http: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build(),
+    private val maxExcerptChars: Int = MAX_EXCERPT_CHARS,
 ) : RelevanceScorer {
+    init {
+        require(maxExcerptChars in 1..MAX_EXCERPT_CHARS) { "Laya excerpt size must be between 1 and $MAX_EXCERPT_CHARS characters." }
+    }
     private val uri = URI.create(endpoint).also {
         require(it.scheme == "http" && it.host in setOf("127.0.0.1", "localhost", "[::1]", "::1") && it.userInfo == null) {
             "Laya must use a local HTTP endpoint, e.g. http://127.0.0.1:8770/api/predict"
@@ -51,7 +55,7 @@ class LayaRelevance(
     private suspend fun predict(task: String, path: String, text: String): Double {
         val body = buildJsonObject {
             put("model", model)
-            put("state", "File: ${path.take(240)}\n${text.take(MAX_EXCERPT_CHARS)}")
+            put("state", "File: ${path.take(240)}\n${text.take(maxExcerptChars)}")
             put("questions", buildJsonObject {
                 put("relevant", buildJsonObject {
                     put("type", "noul")

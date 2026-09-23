@@ -21,7 +21,6 @@ import dev.contextpacker.pack.Candidates
 import dev.contextpacker.pack.FileDoc
 import dev.contextpacker.pack.KeywordPacker
 import dev.contextpacker.pack.PackResult
-import dev.contextpacker.pack.PackConfig
 import dev.contextpacker.pack.Packer
 import dev.contextpacker.pack.RegexSketcher
 import dev.contextpacker.pack.Sketcher
@@ -35,6 +34,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
+import java.time.Duration
 import kotlin.coroutines.cancellation.CancellationException
 
 data class PackReport(
@@ -52,6 +52,8 @@ data class PackReport(
     val usageKnown: Boolean = true,
     val cachedRequests: Int = 0,
     val cachedInputTokens: Long = 0,
+    val settingsRevision: Long = 0,
+    val profileDescription: String = "",
 ) {
     /** API fee estimate only. Local hardware/electricity are not included. */
     val costUsd: Double? get() = when {
@@ -95,8 +97,10 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
      */
     private val psiSketches = System.getenv("CONTEXT_PACKER_PSI_SKETCH") == "1"
     @Volatile private var jev: JevClient? = null
-    private val laya by lazy { LayaRelevance() }
+    private var laya: LayaRelevance? = null
+    private var layaConfiguration: ProviderConfiguration? = null
     @Volatile private var jevKey: String? = null
+    @Volatile private var jevTimeoutSeconds = 30
 
     /** Reported Jev tokens in this session; checked between packs, not a strict in-flight spending cap. */
     val sessionTokens get() = retiredTokens + (jev?.calls?.sumOf { it.inputTokens.toLong() } ?: 0L)
@@ -128,6 +132,8 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
 
     private fun publish(report: PackReport): PackReport {
         synchronized(listenerLock) {
+            // A caller still receives its captured result, but a changed profile must not replay it into the UI.
+            if (report.settingsRevision != settings.revision) return report
             lastReport = report
             listeners.toList().forEach { notifyListener(it, report) }
         }
@@ -141,10 +147,11 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         onProgress: (String) -> Unit = {},
     ): PackReport = packLock.withLock {
         require(task.isNotBlank()) { "Describe a coding task before packing context." }
-        require(task.length <= 8_000) { "Keep the task description under 8,000 characters." }
+        val settingsRevision = settings.revision
         val selectedProvider = requestedProvider ?: provider
-        require(selectedProvider != DecisionProvider.LAYA || task.length <= LayaRelevance.MAX_TASK_CHARS) {
-            "Laya has a small input window. Keep the task under ${LayaRelevance.MAX_TASK_CHARS} characters."
+        val configuration = settings.configuration(selectedProvider)
+        require(task.length <= configuration.taskLimit) {
+            "${selectedProvider.label} supports task descriptions up to ${configuration.taskLimit} characters. The task was not truncated; shorten it or choose another provider."
         }
         if (selectedProvider == DecisionProvider.KEYWORDS) {
             onProgress("Reading project source files")
@@ -156,11 +163,14 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
                 KeywordPacker.pack(task, texts, checkCancelled = { ensureActive() })
             }
             thisLogger().info("pack: ${texts.size} files · collect ${collectMs} ms · full-corpus BM25 ${result.totalMs} ms · no model calls")
-            return@withLock publish(keywordReport(result, source, collectMs))
+            return@withLock publish(keywordReport(result, source, collectMs).copy(
+                settingsRevision = settingsRevision, profileDescription = configuration.description,
+            ))
         }
-        val client = if (selectedProvider == DecisionProvider.JEV) jevClient() else null
+        val client = if (selectedProvider == DecisionProvider.JEV) jevClient(configuration) else null
+        val local = if (selectedProvider == DecisionProvider.LAYA) layaClient(configuration) else null
         if (client != null && sessionTokens >= sessionBudget) throw BudgetExceededException(sessionTokens, sessionBudget)
-        val ledger = client?.calls ?: laya.calls
+        val ledger = client?.calls ?: requireNotNull(local).calls
         val before = ledger.size
         onProgress("Sketching project files")
         val started = System.nanoTime()
@@ -168,23 +178,21 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
         val sketchMs = (System.nanoTime() - started) / 1_000_000
         val prefilterStarted = System.nanoTime()
         // Laya is a small local encoder: bound CPU work and report this lexical prefilter openly.
-        val scoringDocs = if (selectedProvider == DecisionProvider.LAYA && docs.size > LayaRelevance.MAX_CANDIDATES) {
+        val candidateLimit = configuration.maxCandidates
+        val scoringDocs = if (candidateLimit != null && docs.size > candidateLimit) {
             val paths = withContext(Dispatchers.Default) {
                 Bm25.rank(task, docs.associate { it.path to it.text }, checkCancelled = { ensureActive() })
-            }.take(LayaRelevance.MAX_CANDIDATES)
+            }.take(candidateLimit)
             val byPath = docs.associateBy { it.path }
             paths.map(byPath::getValue)
         } else docs
         val prefilterMs = (System.nanoTime() - prefilterStarted) / 1_000_000
         val packer = if (client != null) {
             val jevScorer = JevRelevance(client)
-            Packer(jevScorer, chooser = jevScorer, roler = jevScorer)
-        } else Packer(
-            laya, PackConfig(
-                batch = 1, pool = 20, perCall = 1, fullChars = LayaRelevance.MAX_EXCERPT_CHARS,
-                overlapPasses = false, requireFullSourceScores = true,
-            ),
-        )
+            Packer(jevScorer, configuration.pack,
+                chooser = jevScorer.takeIf { configuration.compareTop },
+                roler = jevScorer.takeIf { configuration.assignRoles })
+        } else Packer(requireNotNull(local), configuration.pack)
         val scored = packer.pack(task, scoringDocs, onProgress)
         val result = scored.copy(
             candidates = docs.size, pass1Ms = scored.pass1Ms + prefilterMs, totalMs = scored.totalMs + prefilterMs,
@@ -204,12 +212,14 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
             jevCalls = calls.size,
             inputTokens = calls.sumOf { it.inputTokens.toLong() },
             failedCalls = calls.count { it.error != null },
-            jevModel = client?.let { "${it.model} via ${it.backend.name.lowercase()}" } ?: "Laya ${laya.model} (local, short excerpts)",
+            jevModel = client?.let { "${it.model} via ${it.backend.name.lowercase()}" } ?: "Laya ${requireNotNull(local).model} (local, short excerpts)",
             provider = selectedProvider,
             scoredCandidates = scoringDocs.size,
             usageKnown = calls.all { it.usageKnown },
             cachedRequests = calls.count { it.cacheHit && it.error == null },
             cachedInputTokens = calls.filter { it.cacheHit && it.error == null }.sumOf { it.cachedInputTokens.toLong() },
+            settingsRevision = settingsRevision,
+            profileDescription = configuration.description,
         ).let(::publish)
     }
 
@@ -277,22 +287,40 @@ class ContextPackerService(private val project: Project, val scope: CoroutineSco
      * TypeSafe's own API by default: ~2.5 s a pack. Vercel AI Gateway only with `JEV_BACKEND=gateway`,
      * or when no TypeSafe key is set; it serves the same model but rate-limits hard (30-60 s a pack).
      */
-    private suspend fun jevClient(): JevClient = withContext(Dispatchers.IO) {
-        val wantGateway = System.getenv("JEV_BACKEND")?.equals("gateway", ignoreCase = true) == true
-        val typesafe = Keys.TYPESAFE.get().takeUnless { wantGateway }
-        val gateway = Keys.GATEWAY.get()
-        val (key, backend) = when {
-            typesafe != null -> typesafe to JevBackend.TYPESAFE
-            gateway != null -> gateway to JevBackend.GATEWAY
-            else -> throw MissingKeyException(Keys.TYPESAFE, Keys.GATEWAY)
+    private suspend fun jevClient(configuration: ProviderConfiguration): JevClient = withContext(Dispatchers.IO) {
+        val (key, backend) = when (configuration.jevBackend) {
+            "typesafe" -> (Keys.TYPESAFE.get() ?: throw MissingKeyException(Keys.TYPESAFE)) to JevBackend.TYPESAFE
+            "gateway" -> (Keys.GATEWAY.get() ?: throw MissingKeyException(Keys.GATEWAY)) to JevBackend.GATEWAY
+            else -> {
+                val typesafe = Keys.TYPESAFE.get()
+                val gateway = if (typesafe == null) Keys.GATEWAY.get() else null
+                when {
+                    typesafe != null -> typesafe to JevBackend.TYPESAFE
+                    gateway != null -> gateway to JevBackend.GATEWAY
+                    else -> throw MissingKeyException(Keys.TYPESAFE, Keys.GATEWAY)
+                }
+            }
         }
         // Reuse the client (and its spend history) until the key changes, e.g. after "Set API Keys".
-        jev?.takeIf { jevKey == key && it.backend == backend }
-            ?: JevClient(key, backend, concurrency = if (backend == JevBackend.GATEWAY) 2 else 48).also {
+        jev?.takeIf { jevKey == key && it.backend == backend && jevTimeoutSeconds == configuration.timeoutSeconds }
+            ?: JevClient(key, backend, concurrency = if (backend == JevBackend.GATEWAY) 2 else 48,
+                timeout = Duration.ofSeconds(configuration.timeoutSeconds.toLong())).also {
                 jev?.let { old -> retiredTokens += old.calls.sumOf { c -> c.inputTokens.toLong() } }
                 jev = it
                 jevKey = key
+                jevTimeoutSeconds = configuration.timeoutSeconds
             }
+    }
+
+    /** Called under packLock; endpoint/model/timeouts are replaced between complete packs. */
+    private fun layaClient(configuration: ProviderConfiguration): LayaRelevance {
+        if (laya == null || layaConfiguration != configuration) {
+            laya = LayaRelevance(configuration.layaEndpoint, configuration.layaModel,
+                timeout = Duration.ofSeconds(configuration.timeoutSeconds.toLong()),
+                maxExcerptChars = configuration.pack.fullChars)
+            layaConfiguration = configuration
+        }
+        return requireNotNull(laya)
     }
 
     /** Preserve reported spend after a key change; packLock serializes client replacement and requests. */
