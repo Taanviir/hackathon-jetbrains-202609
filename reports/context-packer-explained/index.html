@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Context Packer, explained</title>
-<meta name="description" content="What Context Packer does, why it matters, and what we measured, without the jargon.">
+<title>IntelliJev context engine, explained</title>
+<meta name="description" content="How IntelliJev finds task-relevant files, why it matters, and what the Jev evaluation measured.">
 <style>
 :root {
   --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #75746f; --rule: #e4e3de;
@@ -69,9 +69,9 @@ footer { margin-top: 80px; font-size: 14px; color: var(--ink-3); border-top: 1px
 <main>
 <nav><a href="../../">All reports</a><a href="../context-packer-explained/" aria-current="page">Explained</a><a href="../context-packer-wiki/">Technical wiki</a><a href="../context-packer-qa/">Jury Q&amp;A</a><a href="../context-packer-eval/">Eval report</a></nav>
 
-<p class="eyebrow">Context Packer · part of IntelliJev</p>
+<p class="eyebrow">IntelliJev · Find context</p>
 <h1>Give your coding agent the right files sooner.</h1>
-<p class="lede">Context Packer is an IntelliJ plugin. You describe a change; it reads every file in the project and hands back
+<p class="lede">IntelliJev is one IntelliJ plugin. In its Find context workspace, you describe a change; its Jev engine ranks the project's source files and hands back
 the handful that change will touch, ranked, with the reason each one matters. People use it from a panel in the IDE,
 and AI agents get it automatically before they start.</p>
 <p><strong>Provider scope:</strong> the measurements and pipeline below use <strong>Jev</strong>. The combined plugin also
@@ -90,10 +90,10 @@ the Jev speed and quality figures do not apply to them. Automatic agent delivery
 So it does what a new colleague would: searches for a word, opens a file, decides it's the wrong one, opens another.
 Every one of those steps is a round trip to a large language model, which is slow and costs money.</p>
 <div class="compare">
-  <div class="side before"><h3>Without Context Packer</h3><ol>
+  <div class="side before"><h3>Without IntelliJev context</h3><ol>
     <li>Search the code for "retry"</li><li>Open a file, wrong one</li><li>Search for "backoff"</li>
     <li>Open another, closer</li><li>List a folder</li><li>Find the test</li><li>… then start the actual work</li></ol></div>
-  <div class="side after"><h3>With Context Packer</h3><ol>
+  <div class="side after"><h3>With IntelliJev context</h3><ol>
     <li>The request arrives already carrying a ranked list: the file to edit, the test that checks it, an example to copy</li>
     <li>Read the top files</li><li>Start the actual work</li></ol></div>
 </div>
@@ -104,7 +104,7 @@ Every one of those steps is a round trip to a large language model, which is slo
 questions, as probabilities: "how likely is it that this change needs this file?" Because that's all it does, it's
 fast and very cheap, cheap enough to ask the same question about <em>every file</em> in a project, every time.</p>
 <p>The <strong>large language model</strong> (Claude, GPT and so on) is the one that writes code. It's powerful but slow and
-expensive, so you want it spending its effort on the right files, not on finding them. Context Packer lets Jev do the
+expensive, so you want it spending its effort on the right files, not on finding them. IntelliJev lets Jev do the
 looking, so the LLM only does the writing.</p>
 
 <h2>How it works, in three steps</h2>
@@ -133,12 +133,12 @@ change and says which files it would still want.</figcaption></figure>
 
 <h2>Does it actually work?</h2>
 <p>We didn't want a claim, we wanted a measurement. So we used real history: each test is a real change someone made to
-<strong>Koog</strong>, JetBrains' own AI-agent framework. We give Context Packer the change's one-line description, show it the
+<strong>Koog</strong>, JetBrains' own AI-agent framework. We give IntelliJev's Jev context engine the change's one-line description, show it the
 code exactly as it was <em>before</em> the change, and check whether it finds the files the developer actually edited. We
 tuned it on one set of changes and then tested it once on 70 it had never seen.</p>
 <div class="proof">
   <div class="claim"><div class="big">+16 pts</div><div><p><strong>Better than keyword search.</strong> Of the files each change touched, 69% show up in
-  Context Packer's top 10, against 53% for the classic search approach. The margin is large enough that it isn't luck.</p>
+  the Jev pipeline's top 10, against 53% for the classic search approach. The margin is large enough that it isn't luck.</p>
   <div class="bars"><div class="row"><span>Keyword search</span><div class="track"><div class="fill" style="width:53%;background:var(--s2)"></div></div><span>53%</span></div>
   <div class="row"><span>Jev + BM25</span><div class="track"><div class="fill" style="width:69%;background:var(--s1)"></div></div><span>69%</span></div></div></div></div>
   <div class="claim"><div class="big">2 repos</div><div><p><strong>Not tuned to one codebase.</strong> On a second JetBrains project, Exposed, which it was
@@ -159,9 +159,10 @@ tuned it on one set of changes and then tested it once on 70 it had never seen.<
 </ul></div>
 
 <h2>Where it fits</h2>
-<p><strong>IntelliJev</strong> is the team's bigger idea: a decision layer inside the IDE where a fast, cheap model makes the
-thousands of small judgements, and the expensive model is called only when it's earned. Context Packer is the first piece of
-that built and measured end to end. Every other "finder" in IntelliJev runs on the same principle.</p>
+<p><strong>IntelliJev</strong> is one installable plugin with a context-finding workspace and a reviewed-edit workspace.
+In the measured Jev mode, a fast decision model helps select files before a coding model proposes changes. The developer
+inspects the diff and decides whether to apply the edit. Local Laya and keyword modes are also available for context finding;
+the Jev results on this page do not describe their performance.</p>
 
 <footer>Numbers come from the <a href="../context-packer-eval/">eval report</a>, which shows how each one was measured, including
 the attempts that didn't work. For how it works under the hood, see the <a href="../context-packer-wiki/">technical wiki</a>; for

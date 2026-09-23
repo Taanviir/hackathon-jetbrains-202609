@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Context Packer wiki</title>
-<meta name="description" content="How Context Packer works: Jev, BM25, sketches, re-ranking, fusion, stage 3, the eval, and the IntelliJ internals.">
+<title>IntelliJev context engine wiki</title>
+<meta name="description" content="How IntelliJev's Jev context engine works: BM25, sketches, re-ranking, fusion, stage 3, evaluation, and IntelliJ internals.">
 <style>
 :root {
   --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #75746f; --rule: #e4e3de;
@@ -71,7 +71,7 @@ footer { margin-top: 64px; font-size: 14px; color: var(--ink-3); }
 </aside>
 <main>
 <nav class="top"><a href="../../">All reports</a><a href="../context-packer-explained/">Explained</a><a href="../context-packer-wiki/" aria-current="page">Technical wiki</a><a href="../context-packer-qa/">Jury Q&amp;A</a><a href="../context-packer-eval/">Eval report</a></nav>
-<h1>Context Packer wiki</h1>
+<h1>IntelliJev context engine wiki</h1>
 <p class="lede">Everything you need to explain how it works and why each design choice was made. The eval report has the
 full numbers; this page explains them.</p>
 <div class="box"><p><strong>Provider scope.</strong> The architecture and measured results below describe the Jev pipeline.
@@ -80,7 +80,7 @@ explicit Pack/MCP calls use the requested provider. See the <a href="../context-
 separate frozen protocol, CPU timings and limitations. The provider studies are not a head-to-head comparison.</p></div>
 
 <h2 id="tldr">In one minute</h2>
-<p>Given a task in plain English, Context Packer ranks every source file in the project by how likely the task is to need it.
+<p>Given a task in plain English, IntelliJev's Jev context engine ranks every eligible source file in the project by how likely the task is to need it.
 It combines two very different signals: <strong>BM25</strong>, a classic keyword-matching formula, and <strong>Jev</strong>, a
 model that answers yes/no questions with calibrated probabilities. Jev first judges a short summary (a <em>sketch</em>) of
 every file; the best candidates from both signals are then re-read by Jev in full, the two scores are combined, and a final

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Context Packer jury Q&amp;A</title>
+<title>IntelliJev jury Q&amp;A</title>
 <meta name="description" content="The 30-second pitch, the numbers to remember, and honest answers to the questions a jury is likely to ask.">
 <style>
 :root {
@@ -49,19 +49,19 @@ footer { margin-top: 64px; font-size: 14px; color: var(--ink-3); }
 <body>
 <main>
 <nav><a href="../../">All reports</a><a href="../context-packer-explained/">Explained</a><a href="../context-packer-wiki/">Technical wiki</a><a href="../context-packer-qa/" aria-current="page">Jury Q&amp;A</a><a href="../context-packer-eval/">Eval report</a></nav>
-<h1>Jury Q&amp;A</h1>
+<h1>IntelliJev jury Q&amp;A</h1>
 <p>What to say, what to remember, and honest answers to the likely questions. Click a question to open it. The ones marked
 <span class="tag hard">tough</span> are where a sharp juror will push.</p>
 <p><strong>Scope:</strong> the headline evaluation below uses Jev. Fast keywords and local Laya are also available, with
 <a href="../context-packer-laya/">separate local results</a>. Their tasks and runtime differ; this is not a provider comparison.</p>
 
 <h2>The 30-second pitch</h2>
-<div class="pitch">Coding agents spend most of their effort finding the right files, one search at a time. <strong>Context Packer</strong>
-ranks every file in the project in about four seconds, using <strong>Jev</strong>, a model that can't write but judges fast and
-cheaply, together with classic keyword search. On 70 real JetBrains commits it had never seen, it puts 69% of the files the
-developer actually touched into its top 10, against 53% for keyword search. It matches an LLM re-ranker at the top 10 at
-about 30× the speed, and Claude Code, handed its ranking up front, needs a quarter fewer steps to reach the same answer.
-<strong>Jev decides. The LLM writes.</strong></div>
+<div class="pitch">Coding agents spend too many steps finding the right files. <strong>IntelliJev</strong> is one IntelliJ plugin
+that finds task context and lets a developer review proposed changes before applying them. Its Jev + BM25 mode ranks the
+project's eligible files in about four seconds. On 70 held-out JetBrains/koog tasks, it found 69% of the changed files in
+its top 10, against 53% for keywords; a separate eight-task Claude Code pilot needed 25% fewer turns with the Jev hook.
+Developers can also select local Laya or fast keywords for context. <strong>Jev decides where to look. The coding model
+proposes. The developer approves.</strong></div>
 
 <h2>Numbers to remember</h2>
 <div class="nums">
@@ -119,10 +119,10 @@ keyword search. We didn't benchmark an embedding baseline; the baselines we did 
 
 <h2>Practicalities</h2>
 <details><summary>How does it fit into JetBrains tools?</summary><div>
-<p>It's a real IntelliJ plugin. It uses the IDE's own project index to pick files (skipping generated and excluded code), reads
-unsaved editor text, and builds its summaries in the background when the project opens. It has a tool window, and it registers
-<code>pack_context</code> on IntelliJ's built-in MCP server, so any MCP agent can call it. It's part of IntelliJev: one decision
-layer, many "finders".</p></div></details>
+<p>IntelliJev is one IntelliJ plugin with <strong>Find context</strong> and <strong>Review changes</strong> in the same tool window.
+The context engine scans eligible project files, skips generated and excluded code, reads unsaved editor text, and builds
+summaries in the background. It also registers <code>pack_context</code> on IntelliJ's built-in MCP server. Selected context
+can be handed to the reviewed-edit workspace, where the developer inspects a proposed diff before applying a change.</p></div></details>
 <details><summary>What does it cost to run?</summary><div>
 <p>The measured Jev ranking cost about $0.03 on a 1,700-file project. The plugin checks a 20M reported-token session
 threshold before starting another Jev pack. An in-flight pack can exceed it, and missing usage makes spend uncertain;
@@ -139,8 +139,8 @@ failed later stage) only degrade the ranking, with incomplete scoring disclosed.
 The live hook defaults to local keywords, has a 25 s deadline, and exits silently on failure. Explicit Laya hook use
 needs a longer deadline on this CPU; explicit Jev use may incur API charges.</p></div></details>
 <details><summary>What's next?</summary><div>
-<p>More languages and repositories in the eval; making the ranking faster so agents also finish sooner; and the other IntelliJev
-finders on the same decision layer.</p></div></details>
+<p>Broader language and repository evaluations, faster ranking, and more task-aware decisions inside the same IntelliJev
+workflow.</p></div></details>
 
 <h2>If the demo breaks</h2>
 <ul class="plan">

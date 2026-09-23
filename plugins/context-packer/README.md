@@ -89,12 +89,14 @@ the Jev pipeline on that task set; they do not establish which mode will be best
 or task. **Copy prompt** and **Ask OpenRouter (cloud)** remain separate actions; the latter still
 sends selected file contents to OpenRouter when clicked.
 
-## Install
+## Install IntelliJev
 
 Needs an IntelliJ-based IDE, 2025.2 or newer.
 
-1. Get `build/distributions/context-packer-0.1.0.zip`, or build it with `./gradlew buildPlugin`.
-2. **Settings | Plugins | ⚙ | Install Plugin from Disk…** and pick the zip.
+1. From `plugins/intellijev/`, run `./gradlew test buildPlugin` to make the single
+   `build/distributions/intellijev-0.1.0.zip`. This build includes the context engine
+   from this directory and the reviewed-edit workspace.
+2. **Settings | Plugins | ⚙ | Install Plugin from Disk…** and pick that IntelliJev zip.
 3. **Tools | IntelliJev: Set API Keys…**:
    - `TYPESAFE_API_KEY` for Jev, through TypeSafe's own API. This is the fast path.
    - `AI_GATEWAY_API_KEY` is the fallback when there's no TypeSafe key, or when
@@ -146,7 +148,9 @@ The published benchmarks apply to their recorded defaults; custom profiles have 
 
 **In the IDE.** Open the **IntelliJev** tool window and select **Find context**, then describe
 the change and press **Pack context** or Ctrl+Enter. Double-click a pick to open it, press Delete
-to drop one, and use **Add open file** to pin one it missed. Then **Copy prompt** puts the task
+to drop one, and use **Add open file** to pin one it missed. Press **Review changes** to
+transfer the task and selected context into the plugin's review-first coding workspace.
+Alternatively, **Copy prompt** puts the task
 plus every picked file on the clipboard, or **Ask OpenRouter (cloud)** sends it to `z-ai/glm-5.3-flash` through
 OpenRouter. Set `CONTEXT_PACKER_LLM_MODEL` to use a different model.
 
